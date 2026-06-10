@@ -1,0 +1,1464 @@
+<!-- Address Book -->
+<!DOCTYPE html>
+
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Address Book | The Archivist</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;700;800;900&amp;family=Manrope:wght@400;500;600;700&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-low": "#f4f4f3",
+                        "tertiary-container": "#38604d",
+                        "background": "#f9f9f8",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-high": "#e8e8e7",
+                        "on-surface-variant": "#414750",
+                        "primary": "#004275",
+                        "on-primary-container": "#afd1ff",
+                        "surface-container-highest": "#e2e2e2",
+                        "error": "#ba1a1a",
+                        "surface-variant": "#e2e2e2",
+                        "on-primary-fixed-variant": "#00487f",
+                        "on-error": "#ffffff",
+                        "primary-container": "#005a9c",
+                        "on-surface": "#1a1c1c",
+                        "on-secondary-container": "#690004",
+                        "surface-container": "#eeeeed",
+                        "on-primary": "#ffffff",
+                        "secondary-container": "#ff6758",
+                        "outline-variant": "#c1c7d2",
+                        "secondary-fixed-dim": "#ffb4aa",
+                        "on-tertiary-fixed": "#002114",
+                        "on-primary-fixed": "#001c37",
+                        "on-tertiary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "surface-tint": "#1261a3",
+                        "on-tertiary-container": "#add8c1",
+                        "outline": "#727781",
+                        "tertiary-fixed": "#c1ecd4",
+                        "on-secondary-fixed": "#410001",
+                        "on-secondary-fixed-variant": "#8e1311",
+                        "primary-fixed-dim": "#a1c9ff",
+                        "inverse-surface": "#2f3130",
+                        "inverse-on-surface": "#f1f1f0",
+                        "on-secondary": "#ffffff",
+                        "inverse-primary": "#a1c9ff",
+                        "primary-fixed": "#d2e4ff",
+                        "surface-dim": "#dadad9",
+                        "on-error-container": "#93000a",
+                        "secondary": "#b02e26",
+                        "secondary-fixed": "#ffdad5",
+                        "on-background": "#1a1c1c",
+                        "tertiary": "#204837",
+                        "surface-bright": "#f9f9f8",
+                        "surface": "#f9f9f8",
+                        "on-tertiary-fixed-variant": "#274e3d",
+                        "tertiary-fixed-dim": "#a5d0b9"
+                    },
+                    fontFamily: {
+                        "headline": ["Epilogue"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "1rem", "xl": "1.25rem", "md": "0.75rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        .scale-98-active:active {
+            transform: scale(0.98);
+        }
+
+        .ghost-border:hover {
+            outline: 1px solid rgba(114, 119, 129, 0.15);
+        }
+    </style>
+</head>
+
+<body class="bg-background text-on-surface font-body min-h-screen">
+    <!-- SideNavBar Shell -->
+    <aside class="h-screen w-64 left-0 top-0 fixed bg-stone-100 flex flex-col py-6 border-r border-stone-200/15 z-40">
+        <div class="px-6 mb-10">
+            <h1 class="text-lg font-bold text-stone-900 font-headline uppercase tracking-tighter">The Archivist</h1>
+            <p class="text-[10px] text-stone-500 font-label tracking-widest mt-1">Digital Curator v1.0</p>
+        </div>
+        <nav class="flex-1 space-y-1">
+            <!-- Active State: Address Book -->
+            <a class="flex items-center gap-3 text-blue-800 font-bold border-l-4 border-blue-800 pl-4 py-3 bg-stone-200/50 transition-all duration-200 ease-in-out"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="contact_page">contact_page</span>
+                <span class="font-label text-sm uppercase tracking-widest">Address Book</span>
+            </a>
+            <a class="flex items-center gap-3 text-stone-500 pl-5 py-3 hover:bg-stone-200/30 hover:translate-x-1 transition-all duration-200 ease-in-out"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="search">search</span>
+                <span class="font-label text-sm uppercase tracking-widest">Global Search</span>
+            </a>
+            <a class="flex items-center gap-3 text-stone-500 pl-5 py-3 hover:bg-stone-200/30 hover:translate-x-1 transition-all duration-200 ease-in-out"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+                <span class="font-label text-sm uppercase tracking-widest">Recent Chats</span>
+            </a>
+        </nav>
+        <div class="px-6 mb-8">
+            <button
+                class="w-full py-3 bg-gradient-to-b from-primary to-primary-container text-white rounded-md font-label text-xs uppercase tracking-widest shadow-md hover:shadow-lg transition-all duration-200 scale-98-active">
+                New Entry
+            </button>
+        </div>
+        <div class="mt-auto border-t border-stone-200/10 pt-4">
+            <a class="flex items-center gap-3 text-stone-500 pl-5 py-3 hover:bg-stone-200/30 hover:translate-x-1 transition-all duration-200 ease-in-out"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="help">help</span>
+                <span class="font-label text-sm uppercase tracking-widest">Support</span>
+            </a>
+            <a class="flex items-center gap-3 text-stone-500 pl-5 py-3 hover:bg-stone-200/30 hover:translate-x-1 transition-all duration-200 ease-in-out"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="history">history</span>
+                <span class="font-label text-sm uppercase tracking-widest">Logs</span>
+            </a>
+        </div>
+    </aside>
+    <!-- Main Content Canvas -->
+    <main class="ml-64 min-h-screen p-12">
+        <header class="mb-16">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="w-8 h-[2px] bg-primary"></span>
+                <span class="text-[10px] font-label font-bold uppercase tracking-[0.2em] text-primary">Registry
+                    Alpha-01</span>
+            </div>
+            <h2 class="text-6xl font-headline font-black text-on-surface tracking-tight leading-none">Address Book</h2>
+            <p class="mt-6 text-on-surface-variant max-w-xl leading-relaxed">
+                Your private collection of verified contributors and digital personas. Every entry is archived with
+                end-to-end provenance.
+            </p>
+        </header>
+        <!-- Search & Filter Bar (Contextual) -->
+        <div class="flex items-center justify-between mb-10 gap-4">
+            <div class="relative flex-1 max-w-md group">
+                <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none text-outline">
+                    <span class="material-symbols-outlined text-sm" data-icon="search">search</span>
+                </div>
+                <input
+                    class="w-full bg-surface-container-low border-none rounded-md py-3 pl-12 pr-4 text-sm focus:ring-0 group-hover:bg-surface-container focus:bg-surface-container-highest transition-colors duration-200 placeholder:text-outline/60"
+                    placeholder="Filter index..." type="text" />
+                <div
+                    class="absolute inset-y-0 left-0 w-0.5 bg-primary opacity-0 group-focus-within:opacity-100 transition-opacity duration-200">
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button
+                    class="p-3 text-on-surface-variant hover:bg-surface-container rounded-md transition-colors duration-200">
+                    <span class="material-symbols-outlined" data-icon="sort_by_alpha">sort_by_alpha</span>
+                </button>
+                <button
+                    class="p-3 text-on-surface-variant hover:bg-surface-container rounded-md transition-colors duration-200">
+                    <span class="material-symbols-outlined" data-icon="filter_list">filter_list</span>
+                </button>
+            </div>
+        </div>
+        <!-- Contact Grid (Bento Style Layout) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+            <!-- Index Card 1 -->
+            <div
+                class="bg-surface-container-lowest rounded-lg p-8 shadow-[0_12px_40px_rgba(26,28,28,0.04)] hover:shadow-[0_12px_40px_rgba(26,28,28,0.08)] ghost-border transition-all duration-300 group flex flex-col h-full">
+                <div class="flex justify-between items-start mb-10">
+                    <div
+                        class="w-16 h-16 rounded-xl overflow-hidden bg-surface-container-high border border-outline-variant/15">
+                        <img class="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500"
+                            data-alt="Close-up studio portrait of a distinguished man with spectacles and graying hair against a warm neutral background"
+                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbvjso45H_NrtdAWg-QDvCBIpeyh4QuHI9aIFZIv6MRrBNAXkjk3ivkp4CAaAK3xj653xJInxFIZflwc4DCjQM__jmxTm-FOdS5T2CF69dIIUN33klUnPFrfEFd5in7WUUbg6g_Kys4z1oiIhjbssI0vg00nZVtm4Ak3YCQ0qfyFgZ9gdQXM3fYrmO6ajPrWpnMynbM_dgnxfI0Vh-NAT7K0a9me9HfsCFZz-9vEZcONu141TQmnVz0H1bEf-cwG3cifqZnB01nMU" />
+                    </div>
+                    <span
+                        class="text-[10px] font-label font-bold text-outline uppercase tracking-widest border border-outline-variant/20 px-2 py-1 rounded">CURATOR</span>
+                </div>
+                <div class="flex-grow">
+                    <h3
+                        class="text-2xl font-headline font-bold text-on-surface mb-1 group-hover:text-primary transition-colors">
+                        Arthur Vance</h3>
+                    <p class="text-sm text-on-surface-variant font-body mb-6">Senior Archivist of Neolux</p>
+                    <div class="space-y-2 text-xs font-label text-outline/80 uppercase tracking-tight">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sm" data-icon="mail">mail</span>
+                            vance.a@thearchivist.com
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sm" data-icon="location_on">location_on</span>
+                            Sector 7, Library Wing
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-12 flex gap-3">
+                    <button
+                        class="flex-1 py-3 bg-gradient-to-b from-primary to-primary-container text-white rounded-md font-label text-xs uppercase tracking-widest shadow-sm hover:shadow-md transition-all duration-200 scale-98-active flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined text-sm" data-icon="chat">chat</span>
+                        Message
+                    </button>
+                    <button class="p-3 text-secondary hover:bg-secondary/10 rounded-md transition-colors duration-200">
+                        <span class="material-symbols-outlined" data-icon="delete">delete</span>
+                    </button>
+                </div>
+            </div>
+            <!-- Index Card 2 -->
+            <div
+                class="bg-surface-container-lowest rounded-lg p-8 shadow-[0_12px_40px_rgba(26,28,28,0.04)] hover:shadow-[0_12px_40px_rgba(26,28,28,0.08)] ghost-border transition-all duration-300 group flex flex-col h-full">
+                <div class="flex justify-between items-start mb-10">
+                    <div
+                        class="w-16 h-16 rounded-xl overflow-hidden bg-surface-container-high border border-outline-variant/15">
+                        <img class="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500"
+                            data-alt="Vibrant portrait of a smiling woman with curly hair wearing professional attire in soft natural morning light"
+                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBz7vpIAvY9elQ8oTwW62UvGaBIUo57sbcl2SflLDJN59Z4cjqjLgCJJ7_h2EFQ9qrDrhf4MA3IYGfPlQOS6lbXQs6N0K3zZkmYlc0Juc3ysqxKmq8fKhHxIkPHvIt_7-t1RjcZ7cqvOTRl9JUwPwI63eYvYIGZV0a7Uf0PV-8w2YJGG_mf7h5TekejoWoyABz_0x7aEmHSdfRSgCouu4GH5ZgpQewdIQFnAJeGiGoH7urK2FlqHeJ-Ty8pABShwpHauyqSA9M_7kI" />
+                    </div>
+                    <span
+                        class="text-[10px] font-label font-bold text-outline uppercase tracking-widest border border-outline-variant/20 px-2 py-1 rounded">CONTRIBUTOR</span>
+                </div>
+                <div class="flex-grow">
+                    <h3
+                        class="text-2xl font-headline font-bold text-on-surface mb-1 group-hover:text-primary transition-colors">
+                        Elena Rossi</h3>
+                    <p class="text-sm text-on-surface-variant font-body mb-6">Historical Data Collector</p>
+                    <div class="space-y-2 text-xs font-label text-outline/80 uppercase tracking-tight">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sm" data-icon="mail">mail</span>
+                            rossi.e@datahub.net
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sm" data-icon="shield">shield</span>
+                            Level 4 Clearance
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-12 flex gap-3">
+                    <button
+                        class="flex-1 py-3 bg-gradient-to-b from-primary to-primary-container text-white rounded-md font-label text-xs uppercase tracking-widest shadow-sm hover:shadow-md transition-all duration-200 scale-98-active flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined text-sm" data-icon="chat">chat</span>
+                        Message
+                    </button>
+                    <button class="p-3 text-secondary hover:bg-secondary/10 rounded-md transition-colors duration-200">
+                        <span class="material-symbols-outlined" data-icon="delete">delete</span>
+                    </button>
+                </div>
+            </div>
+            <!-- Empty State Illustration Card (Bento Twist) -->
+            <div
+                class="bg-surface-container-low/40 rounded-lg p-8 border-2 border-dashed border-outline-variant/30 flex flex-col items-center justify-center text-center min-h-[400px]">
+                <div
+                    class="w-20 h-20 bg-surface-container-high rounded-full flex items-center justify-center mb-6 shadow-inner">
+                    <span class="material-symbols-outlined text-primary/40 text-4xl"
+                        data-icon="person_search">person_search</span>
+                </div>
+                <h4 class="text-xl font-headline font-bold text-on-surface mb-2">Find Your Peers</h4>
+                <p class="text-on-surface-variant text-sm max-w-[200px] leading-relaxed mb-8">
+                    Your address book is empty. Search for someone to start a conversation.
+                </p>
+                <button
+                    class="text-primary font-label text-xs uppercase tracking-[0.2em] flex items-center gap-2 group">
+                    Begin Search
+                    <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform"
+                        data-icon="arrow_forward">arrow_forward</span>
+                </button>
+            </div>
+            <!-- Index Card 3 -->
+            <div
+                class="bg-surface-container-lowest rounded-lg p-8 shadow-[0_12px_40px_rgba(26,28,28,0.04)] hover:shadow-[0_12px_40px_rgba(26,28,28,0.08)] ghost-border transition-all duration-300 group flex flex-col h-full xl:col-start-1">
+                <div class="flex justify-between items-start mb-10">
+                    <div
+                        class="w-16 h-16 rounded-xl overflow-hidden bg-surface-container-high border border-outline-variant/15">
+                        <img class="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500"
+                            data-alt="Minimalist portrait of a man in a black turtleneck with soft directional lighting creating a clean editorial look"
+                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDEMsSQBSiYpeMNxxKzntBg7BKY0W0X_K3YGbtQbBfowIeciiaY1rkLH5wgZN6bavyeJaI87j-9CxBY6Ebmu8kexL1FJCZdui1DzRhdcSHRcn4X9YiL0kxLNEKunjYPbruQ4eONut_o_X_aFwxjifr2FMfCIpPkGxgW2IXC0cF32Ujy7ONkOxNvyTyRg9x-hquhzb_tKPcRtXI9C5wSf6WlKiDF-_gcIyGkJkziFPfak9fY0XqFpPp-J5ENX74QzkKHjFcXeL91Ii0" />
+                    </div>
+                    <span
+                        class="text-[10px] font-label font-bold text-outline uppercase tracking-widest border border-outline-variant/20 px-2 py-1 rounded">ASSOCIATE</span>
+                </div>
+                <div class="flex-grow">
+                    <h3
+                        class="text-2xl font-headline font-bold text-on-surface mb-1 group-hover:text-primary transition-colors">
+                        Marcus Thorne</h3>
+                    <p class="text-sm text-on-surface-variant font-body mb-6">Cryptographic Specialist</p>
+                    <div class="space-y-2 text-xs font-label text-outline/80 uppercase tracking-tight">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sm" data-icon="mail">mail</span>
+                            m.thorne@cipher.io
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sm" data-icon="history">history</span>
+                            Active 2h ago
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-12 flex gap-3">
+                    <button
+                        class="flex-1 py-3 bg-gradient-to-b from-primary to-primary-container text-white rounded-md font-label text-xs uppercase tracking-widest shadow-sm hover:shadow-md transition-all duration-200 scale-98-active flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined text-sm" data-icon="chat">chat</span>
+                        Message
+                    </button>
+                    <button class="p-3 text-secondary hover:bg-secondary/10 rounded-md transition-colors duration-200">
+                        <span class="material-symbols-outlined" data-icon="delete">delete</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Pagination/Footer Stats -->
+        <footer class="mt-20 flex items-center justify-between border-t border-stone-200/40 pt-8">
+            <div class="text-[10px] font-label font-bold text-outline uppercase tracking-[0.1em]">
+                Displaying 3 of 42 Registered Entities
+            </div>
+            <div class="flex gap-4">
+                <button
+                    class="p-2 border border-outline-variant/20 rounded-md text-outline hover:bg-surface-container-low transition-colors">
+                    <span class="material-symbols-outlined text-lg" data-icon="chevron_left">chevron_left</span>
+                </button>
+                <div class="flex items-center gap-3 text-xs font-label font-bold">
+                    <span class="text-primary">01</span>
+                    <span class="text-outline/40">02</span>
+                    <span class="text-outline/40">03</span>
+                </div>
+                <button
+                    class="p-2 border border-outline-variant/20 rounded-md text-outline hover:bg-surface-container-low transition-colors">
+                    <span class="material-symbols-outlined text-lg" data-icon="chevron_right">chevron_right</span>
+                </button>
+            </div>
+        </footer>
+    </main>
+    <!-- Contextual FAB (Suppressing as per guidelines for secondary screens, but adding a "Quick Action" anchor if needed. Guidelines say: "You MUST suppress the FAB on Settings, Profile, Details, and Transactional screens". Address Book is an 'Index' so FAB is acceptable but I will stick to the 'Suppression' rule for a cleaner archival look). -->
+</body>
+
+</html>
+
+<!-- Contacts & Search App -->
+<!DOCTYPE html>
+
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>The Archivist | Library Registry</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;700;800;900&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "secondary": "#b02e26",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#f4f4f3",
+                        "on-surface": "#1a1c1c",
+                        "outline-variant": "#c1c7d2",
+                        "on-primary-fixed": "#001c37",
+                        "inverse-surface": "#2f3130",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#add8c1",
+                        "inverse-on-surface": "#f1f1f0",
+                        "tertiary-fixed-dim": "#a5d0b9",
+                        "surface-container-highest": "#e2e2e2",
+                        "surface": "#f9f9f8",
+                        "on-secondary-fixed-variant": "#8e1311",
+                        "on-secondary-fixed": "#410001",
+                        "on-tertiary-fixed-variant": "#274e3d",
+                        "tertiary-container": "#38604d",
+                        "tertiary-fixed": "#c1ecd4",
+                        "background": "#f9f9f8",
+                        "surface-variant": "#e2e2e2",
+                        "surface-dim": "#dadad9",
+                        "outline": "#727781",
+                        "on-tertiary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#ffb4aa",
+                        "primary-fixed-dim": "#a1c9ff",
+                        "surface-tint": "#1261a3",
+                        "secondary-fixed": "#ffdad5",
+                        "on-tertiary-fixed": "#002114",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed-variant": "#00487f",
+                        "on-secondary": "#ffffff",
+                        "surface-container-high": "#e8e8e7",
+                        "surface-bright": "#f9f9f8",
+                        "on-surface-variant": "#414750",
+                        "inverse-primary": "#a1c9ff",
+                        "primary": "#004275",
+                        "error": "#ba1a1a",
+                        "primary-fixed": "#d2e4ff",
+                        "on-error": "#ffffff",
+                        "on-secondary-container": "#690004",
+                        "on-primary-container": "#afd1ff",
+                        "tertiary": "#204837",
+                        "secondary-container": "#ff6758",
+                        "on-background": "#1a1c1c",
+                        "surface-container": "#eeeeed",
+                        "primary-container": "#005a9c"
+                    },
+                    fontFamily: {
+                        "headline": ["Epilogue"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "1rem", "xl": "1.25rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #e2e2e2;
+            border-radius: 10px;
+        }
+
+        .glass-nav {
+            background: rgba(249, 249, 248, 0.8);
+            backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+
+<body
+    class="bg-background text-on-surface font-body antialiased selection:bg-primary-fixed-dim selection:text-on-primary-fixed">
+    <div class="flex h-screen overflow-hidden">
+        <!-- SideNavBar Component -->
+        <aside
+            class="hidden md:flex flex-col h-screen w-80 bg-[#f3f3f2] border-r-[0.5px] border-[#1a1c1c]/10 py-6 space-y-2 z-40">
+            <div class="px-6 mb-8">
+                <div class="flex items-center gap-3 mb-6">
+                    <img alt="Curator Admin" class="w-10 h-10 rounded-full bg-surface-container-highest"
+                        data-alt="professional portrait of a sophisticated library curator with spectacles and scholarly attire"
+                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuCt5U2GoJPfWlDeGgFqR_udH-sIDw8bgKGsq-NO1oPbs61hoK7hUMpNGABTfqssCLG7Zrj6-dg7fMiViquv1_e4C4W_5CsiEb_fZifhqPJ7OA7-hqtUj8rI7LpMgUYI7d83HRlJ6Pxa1BbhSM-BWoX6UlpM65H1x7IWDGAvJ-8uNuwEH2n67x2tVZ3apZW937S_OCSR6h45Ol2J3HKJXZkIKmwo7NAqJ7qx050Sjf5Tc2V0yOAR2FR3IjoX1AJ5lRuhWdc2m6P2ZSo" />
+                    <div>
+                        <h2 class="text-lg font-bold text-[#1a1c1c] font-headline tracking-tight">Library Registry</h2>
+                        <p class="text-xs text-[#1a1c1c]/60 font-medium uppercase tracking-wider">Managing 1,240
+                            Contacts</p>
+                    </div>
+                </div>
+                <button
+                    class="w-full py-3 px-4 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-primary-container transition-all active:scale-95 shadow-lg shadow-primary/10">
+                    <span class="material-symbols-outlined text-sm">add</span>
+                    New Entry
+                </button>
+            </div>
+            <nav class="flex-1 space-y-1 overflow-y-auto px-2 custom-scrollbar">
+                <!-- Address Book Active Tab -->
+                <a class="flex items-center gap-4 py-3 text-[#004275] font-extrabold border-l-4 border-[#004275] pl-4 bg-white/50 transition-all duration-200"
+                    href="#">
+                    <span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+                    <span>Address Book</span>
+                </a>
+                <a class="flex items-center gap-4 py-3 text-[#1a1c1c]/70 pl-5 hover:bg-white/30 hover:pl-6 transition-all duration-200"
+                    href="#">
+                    <span class="material-symbols-outlined" data-icon="person_search">person_search</span>
+                    <span>Global Search</span>
+                </a>
+                <a class="flex items-center gap-4 py-3 text-[#1a1c1c]/70 pl-5 hover:bg-white/30 hover:pl-6 transition-all duration-200"
+                    href="#">
+                    <span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+                    <span>Recent Chats</span>
+                </a>
+                <a class="flex items-center gap-4 py-3 text-[#1a1c1c]/70 pl-5 hover:bg-white/30 hover:pl-6 transition-all duration-200"
+                    href="#">
+                    <span class="material-symbols-outlined" data-icon="bookmarks">bookmarks</span>
+                    <span>Collections</span>
+                </a>
+            </nav>
+            <div class="px-2 mt-auto">
+                <a class="flex items-center gap-4 py-3 text-[#1a1c1c]/70 pl-5 hover:bg-white/30 hover:pl-6 transition-all duration-200"
+                    href="#">
+                    <span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+                    <span>Archival Help</span>
+                </a>
+            </div>
+        </aside>
+        <!-- Main Workspace -->
+        <main class="flex-1 flex flex-col min-w-0 bg-surface relative">
+            <!-- TopNavBar Component -->
+            <header
+                class="docked full-width top-0 sticky z-50 bg-[#f9f9f8] border-b-[0.5px] border-[#1a1c1c]/15 shadow-sm flex justify-between items-center px-8 py-4 w-full">
+                <div class="flex items-center gap-8">
+                    <h1 class="text-2xl font-black text-[#1a1c1c] font-['Epilogue'] tracking-tight">The Archivist</h1>
+                    <nav class="hidden lg:flex items-center gap-6">
+                        <a class="text-[#1a1c1c]/60 hover:text-[#004275] transition-colors font-medium"
+                            href="#">Directory</a>
+                        <a class="text-[#004275] border-b-2 border-[#004275] pb-1 font-bold" href="#">Archive</a>
+                        <a class="text-[#1a1c1c]/60 hover:text-[#004275] transition-colors font-medium"
+                            href="#">Settings</a>
+                    </nav>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div
+                        class="hidden sm:flex items-center bg-surface-container-low px-4 py-2 rounded-full border border-outline-variant/20 focus-within:border-primary/40 transition-all">
+                        <span class="material-symbols-outlined text-outline text-lg">search</span>
+                        <input class="bg-transparent border-none focus:ring-0 text-sm w-48 font-medium"
+                            placeholder="Search registry..." type="text" />
+                    </div>
+                    <button class="p-2 text-[#1a1c1c]/60 hover:bg-[#f3f3f2] rounded-full transition-all">
+                        <span class="material-symbols-outlined">notifications</span>
+                    </button>
+                    <button class="p-2 text-[#1a1c1c]/60 hover:bg-[#f3f3f2] rounded-full transition-all">
+                        <span class="material-symbols-outlined">history</span>
+                    </button>
+                    <div class="h-8 w-[0.5px] bg-[#1a1c1c]/10 mx-2"></div>
+                    <img alt="User Librarian Profile" class="w-9 h-9 rounded-full border border-outline-variant/30"
+                        data-alt="close-up portrait of a professional librarian with a kind expression and warm lighting"
+                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6TSKEtKXjzUhTPWk7l8h391ea1CPYA3Gpeo4bRvKzoGpkCJrt6KViGGIatDQHPIS8tKg_J2uJqBPdqVIak5TkmlriUuKgOXpL-rfICxU2u1FsIDSoPkJbTuJenZRwzA4O6Z0RKLYlPDJXU0p18x7TLGAEGANgDZrjVzMZTrrRoOx9o55lUz0roghf45pAPr9IeemqAXJ5oPd83cCUcPR9fhbl-BbDIosvLdlxj_76MdMFhwxXDa3NRJFqfseko71Dwtj7XUAIxvE" />
+                </div>
+            </header>
+            <!-- Content Area: Bento Grid Layout -->
+            <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <div class="grid grid-cols-12 gap-8 max-w-7xl mx-auto">
+                    <!-- Left Column: Registry List (Index Card Style) -->
+                    <div class="col-span-12 lg:col-span-5 space-y-6">
+                        <div class="flex justify-between items-end mb-2">
+                            <div>
+                                <span
+                                    class="text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">Registry</span>
+                                <h3 class="text-3xl font-black font-headline text-on-surface">Recent Contacts</h3>
+                            </div>
+                            <span class="text-xs font-medium text-outline">12 Total</span>
+                        </div>
+                        <!-- Index Cards Container -->
+                        <div class="space-y-4">
+                            <!-- Card 1 -->
+                            <div
+                                class="group bg-surface-container-lowest rounded-xl p-6 border border-transparent hover:border-outline-variant/30 hover:shadow-[0_12px_40px_rgba(26,28,28,0.06)] transition-all duration-300 relative overflow-hidden">
+                                <div
+                                    class="absolute top-0 left-0 w-1 h-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                                </div>
+                                <div class="flex items-start justify-between">
+                                    <div class="flex gap-4">
+                                        <img alt="Contact Avatar" class="w-12 h-12 rounded-lg bg-surface-container-low"
+                                            data-alt="clean professional profile picture of an elderly scholar with white hair and sharp features"
+                                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQ7arFTVB4Pu1ekwkg9US1iaJcXhBtQyP_2IzhxMzkBVSNvrtaEatL46SF4g7mwS8WwEisUG_oOB6EeueccZEfb-9MvntnprqfJNPWxDXPEcWdw-m1Cw_1kCgi6wYkpps6vvpN4v5za9T4BxdbYHpLGe4j7Sql4m7GMqyiI1_AVR9BuXaCsXD3Uhy_TZn6YxWUF6ZToOhoE833roYEJvybHKSbZSNxKUkUOIiFnGrZbSS8fEpO6PjTjLSyuYdVUtcjq5ghfH78eRw" />
+                                        <div>
+                                            <h4 class="font-bold text-lg text-on-surface leading-tight">Dr. Alistair
+                                                Thorne</h4>
+                                            <p class="text-sm text-outline font-medium">Head of Rare Manuscripts</p>
+                                        </div>
+                                    </div>
+                                    <span
+                                        class="px-2 py-1 rounded bg-tertiary-fixed text-on-tertiary-fixed text-[10px] font-bold tracking-wider uppercase">Active</span>
+                                </div>
+                                <div class="mt-6 flex gap-2">
+                                    <button
+                                        class="flex-1 py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary-container transition-colors">Message</button>
+                                    <button
+                                        class="px-4 py-2 border border-outline-variant/50 text-on-surface-variant rounded-lg text-xs font-bold hover:bg-surface-container-low transition-colors">Details</button>
+                                </div>
+                            </div>
+                            <!-- Card 2 -->
+                            <div
+                                class="group bg-surface-container-lowest rounded-xl p-6 border border-transparent hover:border-outline-variant/30 hover:shadow-[0_12px_40px_rgba(26,28,28,0.06)] transition-all duration-300 relative overflow-hidden">
+                                <div
+                                    class="absolute top-0 left-0 w-1 h-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                                </div>
+                                <div class="flex items-start justify-between">
+                                    <div class="flex gap-4">
+                                        <img alt="Contact Avatar" class="w-12 h-12 rounded-lg bg-surface-container-low"
+                                            data-alt="portrait of a young female researcher with glasses and thoughtful expression in an office environment"
+                                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDZbj8Mi1IZEwIM4qABXOBKbMQCy5Pws7x3dg2NmmmXB0PCKcpOGBRFqmDwU0l4PWFd3gePZqWPuf66gL1fF7mphHVmCkdw3Ydwfg2vvlmRcipO6EgRW3yhtjtjyOz3kLBzgrePLh2xcENINqvjAQQn3wCZqyCueklEMNX5hAL3_5AvZJREb6X69smm5zj_a-sPppOZ_mI6QPEJWmB9cVEkjcJ7cS7Dn-jPBkWa0d4FETBSVTzDVJFef-gQ7ZAIb-yuJCSbM2jQ2ng" />
+                                        <div>
+                                            <h4 class="font-bold text-lg text-on-surface leading-tight">Sarah Jenkins
+                                            </h4>
+                                            <p class="text-sm text-outline font-medium">Archive Restoration Specialist
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <span
+                                        class="px-2 py-1 rounded bg-surface-container-high text-on-surface-variant text-[10px] font-bold tracking-wider uppercase">Away</span>
+                                </div>
+                                <div class="mt-6 flex gap-2">
+                                    <button
+                                        class="flex-1 py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary-container transition-colors">Message</button>
+                                    <button
+                                        class="px-4 py-2 border border-outline-variant/50 text-on-surface-variant rounded-lg text-xs font-bold hover:bg-surface-container-low transition-colors">Details</button>
+                                </div>
+                            </div>
+                            <!-- Card 3 -->
+                            <div
+                                class="group bg-surface-container-lowest rounded-xl p-6 border border-transparent hover:border-outline-variant/30 hover:shadow-[0_12px_40px_rgba(26,28,28,0.06)] transition-all duration-300 relative overflow-hidden">
+                                <div
+                                    class="absolute top-0 left-0 w-1 h-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                                </div>
+                                <div class="flex items-start justify-between">
+                                    <div class="flex gap-4">
+                                        <img alt="Contact Avatar" class="w-12 h-12 rounded-lg bg-surface-container-low"
+                                            data-alt="smiling middle aged man with beard wearing business casual attire in a library setting"
+                                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1vIcGKLiXa8HF0GFwPtSOVygwRa2ezeL8vBJDcOpvPHCRDqZLzAx1CtYlW_ALgJm6zTUe-DhewtGCqCnU58BLOuHfauC0Rvi5HEXwtwtNuAAEUPXK_z-f4y7Opp3O4UcS_QJuCb6x0DWv17YAqYzpQ3AZj2wdN5ZY7YBFVLJiH0k4IdhQJ_Oqi96l6IhPPrCx-WjVm7rfRKnmSHf5g1MJ90WERFAozoCA2qxn_h1Tb9BetKrRVvoz19RpoVHJ_XCUIhoFmZF58ac" />
+                                        <div>
+                                            <h4 class="font-bold text-lg text-on-surface leading-tight">Marcus Vane</h4>
+                                            <p class="text-sm text-outline font-medium">Digital Rights Curator</p>
+                                        </div>
+                                    </div>
+                                    <span
+                                        class="px-2 py-1 rounded bg-surface-container-high text-on-surface-variant text-[10px] font-bold tracking-wider uppercase">Offline</span>
+                                </div>
+                                <div class="mt-6 flex gap-2">
+                                    <button
+                                        class="flex-1 py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary-container transition-colors">Message</button>
+                                    <button
+                                        class="px-4 py-2 border border-outline-variant/50 text-on-surface-variant rounded-lg text-xs font-bold hover:bg-surface-container-low transition-colors">Details</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Right Column: Focus Workspace (Chat Interface) -->
+                    <div
+                        class="col-span-12 lg:col-span-7 flex flex-col min-h-[600px] bg-surface-container-lowest rounded-xl border border-outline-variant/15 shadow-sm overflow-hidden">
+                        <!-- Chat Header -->
+                        <div class="px-6 py-4 border-b border-outline-variant/10 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="relative">
+                                    <img alt="Active Chat" class="w-10 h-10 rounded-full"
+                                        data-alt="professional scholarship portrait of an elderly man with wisdom in his eyes"
+                                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQM4HQk3WTPBWgAWbTa9hSq3ymbQbEG5tEZLKdxNPhw4QQJPc_QPssQCzrcApQYwCdBDXUJ_VsSCLzgVtZ4eRtf28r6Kg3dLrCJWcWcQu3R4vaOlj2DpGf61ZP97KNQJHGyNRFoogOGBrIzzVe0LF-LNJqa31tsl66pTX2eHGtoJolkeHzAzlXsDtve8btstWM9MtS7QshweOlc-zAUV12GlSo5xlIA_TodZPLKHnBbFDZ6lL58hJRK7zhXuVb2u8ijqjsL8LpGnU" />
+                                    <div
+                                        class="absolute bottom-0 right-0 w-3 h-3 bg-tertiary border-2 border-white rounded-full">
+                                    </div>
+                                </div>
+                                <div>
+                                    <h5 class="font-bold text-on-surface">Dr. Alistair Thorne</h5>
+                                    <p class="text-[10px] text-tertiary font-bold uppercase tracking-widest">Connected
+                                        Now</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button class="p-2 text-outline hover:text-primary transition-colors">
+                                    <span class="material-symbols-outlined">call</span>
+                                </button>
+                                <button class="p-2 text-outline hover:text-primary transition-colors">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Chat Messages -->
+                        <div class="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6">
+                            <!-- System Timestamp -->
+                            <div class="flex items-center justify-center gap-4">
+                                <div class="h-[1px] flex-1 bg-outline-variant/20"></div>
+                                <span class="text-[10px] font-bold uppercase tracking-widest text-outline">Today, Oct
+                                    14</span>
+                                <div class="h-[1px] flex-1 bg-outline-variant/20"></div>
+                            </div>
+                            <!-- Message Received -->
+                            <div class="flex gap-4 max-w-[85%]">
+                                <img alt="Avatar" class="w-8 h-8 rounded-full self-end"
+                                    data-alt="portrait of elderly male scholar"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTrReN-ofBzQqPp0CqNV9IdD34EDjD23yRiW5NFB-18IBh4wWdEib03SjUspmqZPMzdTwyPPTrNqokYV-7n86iZfZ_ivn4J5vRpnJ2C9nwbtCRIQiExY3mR0S8e-jDLtQhhYC3WqXDpVnrNrmohtqHCYg3_Yj5UmNjTszXv-REN7TDBaC1NKIWg1HuGxJIYZkw76vvr7OoWy2cSGrkL_oiw7lTZ-QdQjyKNnvgEgBC3XFMbe-V5JOX-FNs-oSYn4puLp0BjDzJJ7U" />
+                                <div class="bg-surface-container-low p-4 rounded-xl rounded-bl-none">
+                                    <p class="text-sm text-on-surface-variant leading-relaxed">
+                                        Greetings. I've just completed the indexing of the 14th-century liturgical
+                                        scrolls. Would you like to review the metadata before we commit it to the global
+                                        archive?
+                                    </p>
+                                    <span
+                                        class="text-[9px] font-bold text-outline mt-2 block uppercase tracking-tighter">09:42
+                                        AM</span>
+                                </div>
+                            </div>
+                            <!-- Message Sent -->
+                            <div class="flex flex-row-reverse gap-4 max-w-[85%] self-end">
+                                <div
+                                    class="bg-primary text-white p-4 rounded-xl rounded-br-none shadow-md shadow-primary/10">
+                                    <p class="text-sm leading-relaxed">
+                                        That sounds excellent, Alistair. I can review them after the midday briefing.
+                                        Please ensure the provenance notes are cross-referenced with the Vatican ledger.
+                                    </p>
+                                    <span
+                                        class="text-[9px] font-bold text-on-primary-container mt-2 block uppercase tracking-tighter text-right">09:45
+                                        AM</span>
+                                </div>
+                            </div>
+                            <!-- Message Received -->
+                            <div class="flex gap-4 max-w-[85%]">
+                                <img alt="Avatar" class="w-8 h-8 rounded-full self-end"
+                                    data-alt="portrait of elderly male scholar"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuAnh-V5yn4nJlvmemBt8FaJ2YkEHTdRaQNaDINRPaURtBsuBn4hmJUpqwwpXSNcnXgAnT15uSjtaI5rqM0koZDDCsG-SkHT8RYDNwwL9L-MQP2h96GP02VO6ReVjyQNc7NwX9HJM3wKRpN8OD10ns_lhhaIeZEg66Xe7OttFnj5mOiShpllQsESpIR_ORNfE1MvEyiFZeYDCgDXKoTPLfE5XLf0DZ1ipEJ6nx_jQzVG6PNr0jZihBcqHvW0vi8yBkRRbLrgVP7-CHg" />
+                                <div class="bg-surface-container-low p-4 rounded-xl rounded-bl-none">
+                                    <p class="text-sm text-on-surface-variant leading-relaxed">
+                                        I'll attend to it immediately. The ledger matches perfectly so far.
+                                    </p>
+                                    <span
+                                        class="text-[9px] font-bold text-outline mt-2 block uppercase tracking-tighter">09:48
+                                        AM</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Message Input -->
+                        <div class="p-6 border-t border-outline-variant/10">
+                            <div
+                                class="bg-surface-container-low rounded-xl p-2 flex items-center gap-2 border-l-4 border-transparent focus-within:border-primary transition-all">
+                                <button class="p-2 text-outline hover:text-on-surface transition-colors">
+                                    <span class="material-symbols-outlined">attach_file</span>
+                                </button>
+                                <input class="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2"
+                                    placeholder="Draft a message for the registry..." type="text" />
+                                <button
+                                    class="w-10 h-10 bg-primary text-white rounded-lg flex items-center justify-center hover:bg-primary-container transition-all shadow-md shadow-primary/10">
+                                    <span class="material-symbols-outlined text-sm"
+                                        style="font-variation-settings: 'FILL' 1;">send</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Footer Accents -->
+                <div
+                    class="max-w-7xl mx-auto mt-16 pt-8 border-t border-outline-variant/10 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <p class="text-[10px] font-bold text-outline uppercase tracking-[0.3em]">© 2024 The Archivist —
+                        Digital Curation Protocol</p>
+                    <div class="flex gap-6">
+                        <a class="text-[10px] font-bold text-outline hover:text-primary uppercase tracking-[0.2em] transition-colors"
+                            href="#">Compliance</a>
+                        <a class="text-[10px] font-bold text-outline hover:text-primary uppercase tracking-[0.2em] transition-colors"
+                            href="#">System Log</a>
+                        <a class="text-[10px] font-bold text-outline hover:text-primary uppercase tracking-[0.2em] transition-colors"
+                            href="#">Terminal</a>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>
+
+<!-- Chat Interface -->
+<!DOCTYPE html>
+
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>The Archivist | Chat Interface</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;700;800;900&amp;family=Manrope:wght@300;400;500;600;700&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-low": "#f4f4f3",
+                        "tertiary-container": "#38604d",
+                        "background": "#f9f9f8",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-high": "#e8e8e7",
+                        "on-surface-variant": "#414750",
+                        "primary": "#004275",
+                        "on-primary-container": "#afd1ff",
+                        "surface-container-highest": "#e2e2e2",
+                        "error": "#ba1a1a",
+                        "surface-variant": "#e2e2e2",
+                        "on-primary-fixed-variant": "#00487f",
+                        "on-error": "#ffffff",
+                        "primary-container": "#005a9c",
+                        "on-surface": "#1a1c1c",
+                        "on-secondary-container": "#690004",
+                        "surface-container": "#eeeeed",
+                        "on-primary": "#ffffff",
+                        "secondary-container": "#ff6758",
+                        "outline-variant": "#c1c7d2",
+                        "secondary-fixed-dim": "#ffb4aa",
+                        "on-tertiary-fixed": "#002114",
+                        "on-primary-fixed": "#001c37",
+                        "on-tertiary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "surface-tint": "#1261a3",
+                        "on-tertiary-container": "#add8c1",
+                        "outline": "#727781",
+                        "tertiary-fixed": "#c1ecd4",
+                        "on-secondary-fixed": "#410001",
+                        "on-secondary-fixed-variant": "#8e1311",
+                        "primary-fixed-dim": "#a1c9ff",
+                        "inverse-surface": "#2f3130",
+                        "inverse-on-surface": "#f1f1f0",
+                        "on-secondary": "#ffffff",
+                        "inverse-primary": "#a1c9ff",
+                        "primary-fixed": "#d2e4ff",
+                        "surface-dim": "#dadad9",
+                        "on-error-container": "#93000a",
+                        "secondary": "#b02e26",
+                        "secondary-fixed": "#ffdad5",
+                        "on-background": "#1a1c1c",
+                        "tertiary": "#204837",
+                        "surface-bright": "#f9f9f8",
+                        "surface": "#f9f9f8",
+                        "on-tertiary-fixed-variant": "#274e3d",
+                        "tertiary-fixed-dim": "#a5d0b9"
+                    },
+                    fontFamily: {
+                        "headline": ["Epilogue"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "1rem", "xl": "1.25rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        .scale-98-active:active {
+            transform: scale(0.98);
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+
+<body class="bg-surface font-body text-on-surface selection:bg-primary/10">
+    <div class="flex min-h-screen">
+        <!-- SideNavBar Component -->
+        <aside
+            class="bg-stone-100 dark:bg-stone-950 h-screen w-64 left-0 top-0 fixed flex flex-col h-full py-6 border-r border-stone-200/15 dark:border-stone-800/15 shadow-xl dark:shadow-none z-50">
+            <!-- Header Section -->
+            <div class="px-6 mb-8">
+                <div class="flex items-center gap-3 mb-4">
+                    <img alt="Library Seal" class="w-10 h-10 rounded-lg"
+                        data-alt="A vintage heraldic seal of a library featuring an open book and a quill in deep indigo and cream"
+                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPhUmn5kOlaDi_fPNcvKLvuYNXzKkHyvzO0Y_ibY-m0Wjk_piyaf0d-oDBxKQi4j7apnn5NmjBrOGqDVm1qLGjsKbaP-RyGuh5aCpOSCLvEBOu-NAnmSo7FSidx91dkFGSMswd7ymfdFZD-CDv0u0yJ4kXQfhS_fx6pnpr6dnmr-uZnZ-nUe8h_oODHr-SktUvkbklXT_hy8X4_dPdJqPSCI50zxBSx1ZpHf_trDIz8wgr3Qqrt02dGTfbrtFXijiEFQoGhJB_3hM" />
+                    <div>
+                        <h1 class="text-lg font-bold text-stone-900 dark:text-stone-100 font-headline tracking-tight">
+                            The Archivist</h1>
+                        <p class="text-[10px] text-stone-500 font-label tracking-widest uppercase">Digital Curator v1.0
+                        </p>
+                    </div>
+                </div>
+                <button
+                    class="w-full py-3 bg-gradient-to-b from-primary to-primary-container text-on-primary rounded-lg font-bold text-sm transition-all duration-200 hover:shadow-lg scale-98-active font-headline">
+                    New Entry
+                </button>
+            </div>
+            <!-- Navigation Tabs -->
+            <nav class="flex-1 space-y-1">
+                <div
+                    class="flex items-center gap-3 text-stone-50 dark:text-stone-400 pl-5 py-3 hover:bg-stone-200/30 dark:hover:bg-stone-800/30 font-label text-sm font-medium uppercase tracking-widest transition-transform duration-200 hover:translate-x-1 cursor-pointer">
+                    <span class="material-symbols-outlined" data-icon="contact_page">contact_page</span>
+                    Address Book
+                </div>
+                <div
+                    class="flex items-center gap-3 text-stone-50 dark:text-stone-400 pl-5 py-3 hover:bg-stone-200/30 dark:hover:bg-stone-800/30 font-label text-sm font-medium uppercase tracking-widest transition-transform duration-200 hover:translate-x-1 cursor-pointer">
+                    <span class="material-symbols-outlined" data-icon="search">search</span>
+                    Global Search
+                </div>
+                <div
+                    class="flex items-center gap-3 text-blue-800 dark:text-blue-400 font-bold border-l-4 border-blue-800 dark:border-blue-400 pl-4 py-3 bg-stone-200/50 dark:bg-stone-800/50 font-label text-sm uppercase tracking-widest transition-transform duration-200">
+                    <span class="material-symbols-outlined" data-icon="chat_bubble"
+                        style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+                    Recent Chats
+                </div>
+            </nav>
+            <!-- Footer Tabs -->
+            <div class="mt-auto space-y-1">
+                <div
+                    class="flex items-center gap-3 text-stone-50 dark:text-stone-400 pl-5 py-3 hover:bg-stone-200/30 dark:hover:bg-stone-800/30 font-label text-sm font-medium uppercase tracking-widest transition-transform duration-200 hover:translate-x-1 cursor-pointer">
+                    <span class="material-symbols-outlined" data-icon="help">help</span>
+                    Support
+                </div>
+                <div
+                    class="flex items-center gap-3 text-stone-50 dark:text-stone-400 pl-5 py-3 hover:bg-stone-200/30 dark:hover:bg-stone-800/30 font-label text-sm font-medium uppercase tracking-widest transition-transform duration-200 hover:translate-x-1 cursor-pointer">
+                    <span class="material-symbols-outlined" data-icon="history">history</span>
+                    Logs
+                </div>
+            </div>
+        </aside>
+        <!-- Main Chat Pane -->
+        <main class="flex-1 ml-64 flex flex-col bg-surface relative">
+            <!-- Chat Header -->
+            <header
+                class="h-20 flex items-center justify-between px-8 bg-surface-bright/80 backdrop-blur-md sticky top-0 z-40 transition-all duration-200">
+                <div class="flex items-center gap-4">
+                    <div class="relative">
+                        <img alt="User Profile" class="w-12 h-12 rounded-full object-cover grayscale-[0.3]"
+                            data-alt="Close-up portrait of a thoughtful man with a scholarly appearance, wearing glasses, in soft warm lighting"
+                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuAfqIxbgSMuL7ZQdUQRn9g31szBqCb58hnusffY4DbOZ-qC6a8fR5K6Eawt-WLMAAGm8a6gEWQr_hardC9tIvp3-CibeE7a5Bj9dyv8JWmhzsL2K39PmeVodswROGbPgMZXpT7_dnRctDqQVYmjlp7ginYHRLTbZTiIjLyj_ypmOsnVWS7JCdLnPQr-Hjzdp6VlRBmqz8WrLbrGQ1A7htZ5AL23r7UCkI4aSFNobUEsbL8gbS2lBKJtb46oLuxBT2X4OP0jmldADiE" />
+                        <span
+                            class="absolute bottom-0 right-0 w-3 h-3 bg-tertiary rounded-full border-2 border-surface"></span>
+                    </div>
+                    <div>
+                        <h2 class="font-headline font-bold text-xl text-on-surface tracking-tight">Julian Vane</h2>
+                        <span class="text-xs font-label uppercase tracking-widest text-outline">Lead Researcher • Oxford
+                            Archive</span>
+                    </div>
+                </div>
+                <!-- CRITICAL FEATURE: Add to Contacts -->
+                <div class="flex items-center gap-3">
+                    <button
+                        class="flex items-center gap-2 px-5 py-2.5 bg-secondary text-on-secondary rounded-lg font-headline font-bold text-sm hover:shadow-md transition-all duration-200 scale-98-active group">
+                        <span class="material-symbols-outlined text-sm" data-icon="bookmark"
+                            style="font-variation-settings: 'FILL' 1;">bookmark</span>
+                        Add to Contacts
+                    </button>
+                    <button
+                        class="p-2.5 text-outline hover:bg-surface-container-low rounded-lg transition-colors duration-200">
+                        <span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+                    </button>
+                </div>
+            </header>
+            <!-- Message History -->
+            <section class="flex-1 px-8 py-10 space-y-12 overflow-y-auto no-scrollbar">
+                <!-- Date Divider -->
+                <div class="flex items-center gap-4 justify-center">
+                    <div class="h-[1px] flex-1 bg-surface-container-highest"></div>
+                    <span class="text-[10px] font-label font-bold uppercase tracking-[0.2em] text-outline">October 24,
+                        1924</span>
+                    <div class="h-[1px] flex-1 bg-surface-container-highest"></div>
+                </div>
+                <!-- Received Message -->
+                <div class="flex gap-4 max-w-2xl">
+                    <img alt="Julian Vane" class="w-8 h-8 rounded-full object-cover mt-1 grayscale-[0.5]"
+                        data-alt="Portrait of Julian Vane, professional scholarly man"
+                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuAnVnbJYapJwCrPQEEvt7kE-SQb_nHwMNZHlyLmQz6jszBQHfNkun7zlGKwflRJrUd_LI8yuWVeF0Iv5hgZdHFogRKv9dRF2ZPcdKJqNkvi4Hc1r8ChHs7fiXYDM7PZdYUrS0E13r3nmLMCYxrZSGSgs-bhx5msZEs_sABBwP-A1GUROUerKycV3xTUgk2SFIeDJc3svKvRiNAa4bn8khfih3YcvYrwoHyiRuUVmyZiY3QskX57VdC0y3aIy7RbRLb-LFd8-YC5kn8" />
+                    <div class="space-y-2">
+                        <div
+                            class="bg-surface-container-low p-6 rounded-xl rounded-tl-none shadow-sm transition-all duration-200 hover:shadow-md group">
+                            <p class="text-on-surface leading-relaxed text-[15px]">
+                                I've unearthed the manuscript we discussed last Tuesday. The ink is somewhat faded, but
+                                the marginalia confirms the provenance. Shall I prepare a digital scan or would you
+                                prefer the physical inspection?
+                            </p>
+                        </div>
+                        <span class="text-[10px] font-label uppercase tracking-widest text-outline px-1">11:42 AM •
+                            Julian Vane</span>
+                    </div>
+                </div>
+                <!-- Sent Message -->
+                <div class="flex flex-row-reverse gap-4 max-w-2xl ml-auto">
+                    <div
+                        class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-headline font-bold text-xs">
+                        AC</div>
+                    <div class="space-y-2 flex flex-col items-end">
+                        <div
+                            class="bg-primary text-on-primary p-6 rounded-xl rounded-tr-none shadow-sm transition-all duration-200 hover:shadow-lg bg-gradient-to-br from-primary to-primary-container">
+                            <p class="leading-relaxed text-[15px]">
+                                This is exceptional news, Julian. Please proceed with the digital scan first. I need to
+                                verify the watermarks against the 18th-century ledger entries before I commit to travel.
+                            </p>
+                        </div>
+                        <span class="text-[10px] font-label uppercase tracking-widest text-outline px-1">11:45 AM •
+                            Delivered</span>
+                    </div>
+                </div>
+                <!-- Received Message (Index Card Style) -->
+                <div class="flex gap-4 max-w-2xl">
+                    <img alt="Julian Vane" class="w-8 h-8 rounded-full object-cover mt-1 grayscale-[0.5]"
+                        data-alt="Portrait of Julian Vane"
+                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHwFu5Qcm3Fe5mnYDooxgRr3IS6WBioSHbjJuzoSaWSi5eHHROdKoBbgKdtksVwnzakDFfauNpTuMQs8whVcoXehpj0xIdlkkWKHDjmkV3QVwkYh_WeQBBw35ka2sE0Fouuj5ww-Xc5SdpoTDP2Jl_hAuh9yHFIo2fpD9AbX8Eq9cWRwM6YCACZKPF-mJqbhMngarijsIUg4EpcbEY2-nr33abYGQC1P7eIcsbeVH0mz01wyTOijMfQjJYb_dPA_xvjY7-TSpSeuM" />
+                    <div class="space-y-2 flex-1">
+                        <div
+                            class="bg-surface-container-lowest border border-outline-variant/15 p-6 rounded-xl rounded-tl-none shadow-sm transition-all duration-200 hover:shadow-md">
+                            <div class="flex items-center gap-3 mb-4 text-primary">
+                                <span class="material-symbols-outlined" data-icon="attachment">attachment</span>
+                                <span class="font-headline font-bold text-sm">Preliminary_Scan_001.pdf</span>
+                            </div>
+                            <div
+                                class="w-full h-32 rounded-lg bg-surface-container-low flex items-center justify-center mb-4 overflow-hidden">
+                                <img alt="Manuscript Preview"
+                                    class="w-full h-full object-cover opacity-60 mix-blend-multiply"
+                                    data-alt="Extreme close-up of yellowed antique parchment with elegant handwritten cursive ink calligraphy"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuBoHdHYqLRoJ868psMie0Xfq8oiHSsaJoiSPQ4wo951QuXY5hKEzdfLB8MvDSV673BgyuLPjCZhufHnYP8mYQY0nmsox6EQ38E-eROy-Vr52jKpjLu58JHvThch2yBH2yHMJU1_Mo5lNpmpO7cE701ZZuNwBnUB6lNC6H75QeWMryUZkNK_hvXXhISubDj_h3dRZz5AL_Efd0QviZtBFdjvBT_DqnzgyHYzLhZFe0spD1a9_P9U4QyYJ_1JvNWKho40ejUITGV5ukQ" />
+                            </div>
+                            <p class="text-on-surface leading-relaxed text-[15px]">
+                                Here is the first page. Notice the subtle curvature in the lower left corner—it matches
+                                the description of the fire in the 1792 catalog.
+                            </p>
+                        </div>
+                        <span class="text-[10px] font-label uppercase tracking-widest text-outline px-1">11:58 AM •
+                            Julian Vane</span>
+                    </div>
+                </div>
+                <!-- Typing Indicator -->
+                <div class="flex gap-2 px-12">
+                    <div class="w-1.5 h-1.5 bg-outline rounded-full animate-pulse"></div>
+                    <div class="w-1.5 h-1.5 bg-outline rounded-full animate-pulse delay-75"></div>
+                    <div class="w-1.5 h-1.5 bg-outline rounded-full animate-pulse delay-150"></div>
+                </div>
+            </section>
+            <!-- Input Area -->
+            <footer class="p-8 bg-surface border-t border-outline-variant/5">
+                <div
+                    class="max-w-4xl mx-auto flex items-end gap-4 bg-surface-container-low rounded-xl p-3 focus-within:ring-2 ring-primary/10 transition-all duration-300">
+                    <button class="p-2.5 text-outline hover:text-primary transition-colors">
+                        <span class="material-symbols-outlined" data-icon="add_circle">add_circle</span>
+                    </button>
+                    <textarea
+                        class="flex-1 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-outline/60 py-2.5 font-body resize-none no-scrollbar"
+                        placeholder="Type a message to the curator..." rows="1"></textarea>
+                    <div class="flex items-center gap-2">
+                        <button class="p-2.5 text-outline hover:text-primary transition-colors">
+                            <span class="material-symbols-outlined" data-icon="auto_awesome">auto_awesome</span>
+                        </button>
+                        <button
+                            class="p-2.5 bg-primary text-on-primary rounded-lg transition-all duration-200 hover:shadow-lg scale-98-active">
+                            <span class="material-symbols-outlined" data-icon="send"
+                                style="font-variation-settings: 'FILL' 1;">send</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="text-center mt-4">
+                    <p class="text-[10px] font-label uppercase tracking-widest text-outline/40">Encryption active:
+                        Archival Standard AES-256</p>
+                </div>
+            </footer>
+            <!-- Floating Context Menu (Asymmetric Decor) -->
+            <div class="fixed right-8 top-1/2 -translate-y-1/2 flex flex-col gap-6 items-center">
+                <div
+                    class="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center text-outline hover:text-primary transition-all duration-300 cursor-pointer hover:shadow-md">
+                    <span class="material-symbols-outlined" data-icon="book_5">book_5</span>
+                </div>
+                <div
+                    class="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center text-outline hover:text-primary transition-all duration-300 cursor-pointer hover:shadow-md">
+                    <span class="material-symbols-outlined" data-icon="local_library">local_library</span>
+                </div>
+                <div
+                    class="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center text-outline hover:text-primary transition-all duration-300 cursor-pointer hover:shadow-md">
+                    <span class="material-symbols-outlined" data-icon="collections_bookmark">collections_bookmark</span>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>
+
+<!-- Global Search -->
+<!DOCTYPE html>
+
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Global Search | The Archivist</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;700;800;900&amp;family=Manrope:wght@300;400;500;600;700&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-low": "#f4f4f3",
+                        "tertiary-container": "#38604d",
+                        "background": "#f9f9f8",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-high": "#e8e8e7",
+                        "on-surface-variant": "#414750",
+                        "primary": "#004275",
+                        "on-primary-container": "#afd1ff",
+                        "surface-container-highest": "#e2e2e2",
+                        "error": "#ba1a1a",
+                        "surface-variant": "#e2e2e2",
+                        "on-primary-fixed-variant": "#00487f",
+                        "on-error": "#ffffff",
+                        "primary-container": "#005a9c",
+                        "on-surface": "#1a1c1c",
+                        "on-secondary-container": "#690004",
+                        "surface-container": "#eeeeed",
+                        "on-primary": "#ffffff",
+                        "secondary-container": "#ff6758",
+                        "outline-variant": "#c1c7d2",
+                        "secondary-fixed-dim": "#ffb4aa",
+                        "on-tertiary-fixed": "#002114",
+                        "on-primary-fixed": "#001c37",
+                        "on-tertiary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "surface-tint": "#1261a3",
+                        "on-tertiary-container": "#add8c1",
+                        "outline": "#727781",
+                        "tertiary-fixed": "#c1ecd4",
+                        "on-secondary-fixed": "#410001",
+                        "on-secondary-fixed-variant": "#8e1311",
+                        "primary-fixed-dim": "#a1c9ff",
+                        "inverse-surface": "#2f3130",
+                        "inverse-on-surface": "#f1f1f0",
+                        "on-secondary": "#ffffff",
+                        "inverse-primary": "#a1c9ff",
+                        "primary-fixed": "#d2e4ff",
+                        "surface-dim": "#dadad9",
+                        "on-error-container": "#93000a",
+                        "secondary": "#b02e26",
+                        "secondary-fixed": "#ffdad5",
+                        "on-background": "#1a1c1c",
+                        "tertiary": "#204837",
+                        "surface-bright": "#f9f9f8",
+                        "surface": "#f9f9f8",
+                        "on-tertiary-fixed-variant": "#274e3d",
+                        "tertiary-fixed-dim": "#a5d0b9"
+                    },
+                    fontFamily: {
+                        "headline": ["Epilogue"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "1rem", "xl": "1.25rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        .font-epilogue {
+            font-family: 'Epilogue', sans-serif;
+        }
+
+        .scale-98-active:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+
+<body
+    class="bg-background text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container">
+    <div class="flex min-h-screen">
+        <!-- SideNavBar - Shared Component -->
+        <aside
+            class="hidden md:flex flex-col h-screen w-64 left-0 top-0 fixed bg-stone-100 dark:bg-stone-950 border-r border-stone-200/15 dark:border-stone-800/15 shadow-xl dark:shadow-none z-40 py-6">
+            <div class="px-6 mb-10">
+                <div class="flex items-center gap-3 mb-2">
+                    <img alt="Library Seal" class="w-8 h-8 rounded-full"
+                        data-alt="A vintage circular wax seal with a library crest, deep blue and gold details, high resolution texture"
+                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuCFONrw291bDLqQZmeghjNH8QocOP2fM0ES6DmXvuIrU93US0OARD_QXBC7iwD2CgEjQzhLZvdeKmWcLRGra1ZRXde0a20MtiADUFGJTowQCztegnT3pwZrCRCNHk7ISkONTY5AYTtGhx0o-Jt-n9iRxfnpMdnAQUnzpdwqlFmibxFy650BtyDk7JpE5Qq3X0FVsDl8NeaUtU4-kNkqaiEFpoz9ghYErYPFILp3XVVSEn4828pFXNXcD6-lmEivS-Dg8EVg1GGCQqg" />
+                    <h1
+                        class="text-lg font-bold text-stone-900 dark:text-stone-100 font-epilogue uppercase tracking-tight">
+                        The Archivist</h1>
+                </div>
+                <p class="text-[10px] font-medium text-stone-500 font-epilogue uppercase tracking-widest">Digital
+                    Curator v1.0</p>
+            </div>
+            <nav class="flex-grow space-y-1">
+                <a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-3 hover:bg-stone-200/30 dark:hover:bg-stone-800/30 hover:translate-x-1 transition-transform duration-200 ease-in-out"
+                    href="#">
+                    <span class="material-symbols-outlined" data-icon="contact_page">contact_page</span>
+                    <span class="font-epilogue text-sm font-medium uppercase tracking-widest">Address Book</span>
+                </a>
+                <a class="flex items-center gap-3 text-blue-800 dark:text-blue-400 font-bold border-l-4 border-blue-800 dark:border-blue-400 pl-4 py-3 bg-stone-200/50 dark:bg-stone-800/50 transition-all duration-200 ease-in-out"
+                    href="#">
+                    <span class="material-symbols-outlined" data-icon="search"
+                        style="font-variation-settings: 'FILL' 1;">search</span>
+                    <span class="font-epilogue text-sm font-medium uppercase tracking-widest">Global Search</span>
+                </a>
+                <a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-3 hover:bg-stone-200/30 dark:hover:bg-stone-800/30 hover:translate-x-1 transition-transform duration-200 ease-in-out"
+                    href="#">
+                    <span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+                    <span class="font-epilogue text-sm font-medium uppercase tracking-widest">Recent Chats</span>
+                </a>
+            </nav>
+            <div class="px-5 mt-auto">
+                <button
+                    class="w-full bg-gradient-to-b from-primary to-primary-container text-white py-3 rounded-xl font-epilogue font-bold tracking-tight shadow-lg hover:shadow-primary/20 transition-all active:scale-95">
+                    New Entry
+                </button>
+                <div class="mt-8 pt-6 border-t border-stone-200/10 space-y-1">
+                    <a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-2 hover:bg-stone-200/30 dark:hover:bg-stone-800/30 text-xs font-medium uppercase tracking-widest"
+                        href="#">
+                        <span class="material-symbols-outlined text-sm" data-icon="help">help</span>
+                        Support
+                    </a>
+                    <a class="flex items-center gap-3 text-stone-500 dark:text-stone-400 pl-5 py-2 hover:bg-stone-200/30 dark:hover:bg-stone-800/30 text-xs font-medium uppercase tracking-widest"
+                        href="#">
+                        <span class="material-symbols-outlined text-sm" data-icon="history">history</span>
+                        Logs
+                    </a>
+                </div>
+            </div>
+        </aside>
+        <!-- Main Content Canvas -->
+        <main class="flex-1 md:ml-64 min-h-screen relative bg-background flex flex-col">
+            <!-- TopNavBar - Shared Component -->
+            <header
+                class="sticky top-0 z-50 bg-stone-50/80 dark:bg-stone-900/80 backdrop-blur-md flex justify-between items-center w-full px-8 py-4 no-border bg-stone-100 dark:bg-stone-800">
+                <div class="flex items-center gap-8">
+                    <span
+                        class="text-2xl font-black text-blue-900 dark:text-blue-200 uppercase tracking-tighter font-epilogue">The
+                        Archivist</span>
+                    <nav class="hidden lg:flex items-center gap-6">
+                        <a class="text-stone-500 dark:text-stone-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors duration-200 font-epilogue font-bold tracking-tight"
+                            href="#">Directory</a>
+                        <a class="text-stone-500 dark:text-stone-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors duration-200 font-epilogue font-bold tracking-tight"
+                            href="#">Archive</a>
+                    </nav>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="hidden sm:flex items-center gap-2">
+                        <button
+                            class="p-2 text-stone-500 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 rounded-md transition-all">
+                            <span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+                        </button>
+                        <button
+                            class="p-2 text-stone-500 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 rounded-md transition-all">
+                            <span class="material-symbols-outlined" data-icon="settings">settings</span>
+                        </button>
+                    </div>
+                    <div
+                        class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border-2 border-primary-container">
+                        <img alt="Curator Profile"
+                            data-alt="Close-up portrait of a refined academic curator in a modern minimalist library, warm natural lighting, professional and focused"
+                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUBn1GIZgmgRvWQOmTGibZF93EKXBPmka7O2QvSctMN0D0Zl-3bYi09OoYqoUzuGhRL72V8QuwFdsj8n40LgPWAAyDEUh8vJF3WVaYMKX95dXmifn3xrDOoLsqJiOgqMi1lVu_5lDHyNBkc1Apn1hHBf-p71kXYyfsxu5ZPvi_y9zZGZaaCCfc-KE31RUYHwzA37RdyJVzRaz51LgOROLBWII-31oh8GVa8_MDYWp_i94NxcY6DnY0JNGsy6VOTXIcUrOvk1QRCVs" />
+                    </div>
+                </div>
+            </header>
+            <!-- Search Content Area -->
+            <section class="max-w-5xl mx-auto w-full px-8 py-16">
+                <!-- Header & Intro -->
+                <div class="mb-12">
+                    <span
+                        class="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mb-2 block font-epilogue">Registry
+                        Access</span>
+                    <h2
+                        class="text-5xl font-extrabold text-on-surface font-headline leading-tight tracking-tight mb-4 max-w-2xl">
+                        Discover entries across the <span class="text-primary italic">global collection.</span>
+                    </h2>
+                </div>
+                <!-- Prominent Search Bar -->
+                <div class="relative group mb-16">
+                    <div class="absolute inset-y-0 left-6 flex items-center pointer-events-none">
+                        <span
+                            class="material-symbols-outlined text-primary/40 group-focus-within:text-primary transition-colors"
+                            data-icon="search">search</span>
+                    </div>
+                    <!-- Focused Accent Bar Metaphor -->
+                    <div
+                        class="absolute left-0 top-1/2 -translate-y-1/2 w-[4px] h-8 bg-primary rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity">
+                    </div>
+                    <input
+                        class="w-full h-20 pl-16 pr-24 bg-surface-container-low border-none rounded-xl text-xl font-medium focus:ring-0 placeholder:text-stone-400 focus:bg-surface-container transition-all"
+                        placeholder="Search by name, manuscript, or metadata..." type="text" value="Julian" />
+                    <div class="absolute inset-y-0 right-6 flex items-center gap-4">
+                        <!-- Debouncing Interaction Visual -->
+                        <div
+                            class="flex items-center gap-2 px-3 py-1 bg-surface-container-high rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity animate-pulse">
+                            <div class="w-1.5 h-1.5 bg-primary rounded-full"></div>
+                            <span class="text-[10px] font-bold text-primary uppercase tracking-wider">Syncing</span>
+                        </div>
+                        <button
+                            class="bg-primary text-white p-3 rounded-lg shadow-lg hover:shadow-primary/20 active:scale-95 transition-all">
+                            <span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- Results Grid (Asymmetric Bento/Index Card Hybrid) -->
+                <div class="space-y-10">
+                    <div class="flex items-baseline justify-between">
+                        <h3 class="text-sm font-bold text-stone-500 uppercase tracking-widest font-epilogue">Search
+                            Results (4)</h3>
+                        <div class="h-px bg-stone-200 flex-1 mx-6 opacity-40"></div>
+                        <button class="text-xs font-bold text-primary hover:underline">Sort by Relevance</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Result 1: Index Card -->
+                        <div
+                            class="group relative bg-surface-container-lowest p-8 rounded-lg shadow-[0_12px_40px_rgba(26,28,28,0.06)] hover:shadow-[0_20px_50px_rgba(0,66,117,0.1)] transition-all duration-300 cursor-pointer outline-primary/5 outline">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="w-14 h-14 rounded-full bg-surface-container-low overflow-hidden">
+                                    <img alt="Julian Sterling"
+                                        data-alt="Portrait of an elderly scholar with glasses, grey hair, soft natural lighting in an archive room background"
+                                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuCM3ugvdpVK3Sv7WBM0-yie4yrLjdEOakZBVWgJD8d_1u_jmDO_cezsDisX2MZmc_PyM1QN5hfQxhpC32dD__SEVm4Ys2aTBicf0DmTPFFn9P8t_SytZKGQumiTw3t-07gr8fGKKqDP-vJ06_zH7nWns4kPV0E20OkGsnBq0ye-ICLQNQZ6idt-6eeZ9l1Mw06_AmVaRgKZZ4DtuLvxVi_-NrM5v8VYDFiVRcMWOc26qlJZWs2oet5UIBE2DmJUZ8-HwU4wunwcclc" />
+                                </div>
+                                <span
+                                    class="text-[10px] font-bold bg-surface-container-low text-primary px-2 py-1 rounded">ID:
+                                    ARCH-992</span>
+                            </div>
+                            <h4
+                                class="text-2xl font-bold font-headline mb-1 group-hover:text-primary transition-colors">
+                                Julian Sterling</h4>
+                            <p class="text-sm text-stone-500 mb-6 italic">"Lead Paleographer • Vatican Secret Archives"
+                            </p>
+                            <div class="flex items-center gap-3 mt-auto">
+                                <button
+                                    class="flex-1 bg-surface-container-low hover:bg-primary hover:text-white text-primary text-xs font-bold uppercase tracking-widest py-3 rounded-md transition-all flex items-center justify-center gap-2">
+                                    <span class="material-symbols-outlined text-sm" data-icon="chat">chat</span>
+                                    Initiate Chat
+                                </button>
+                                <button
+                                    class="p-3 bg-surface-container-low text-stone-500 hover:bg-surface-container-high rounded-md transition-all">
+                                    <span class="material-symbols-outlined text-sm"
+                                        data-icon="more_horiz">more_horiz</span>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Result 2: Index Card -->
+                        <div
+                            class="group relative bg-surface-container-lowest p-8 rounded-lg shadow-[0_12px_40px_rgba(26,28,28,0.06)] hover:shadow-[0_20px_50px_rgba(0,66,117,0.1)] transition-all duration-300 cursor-pointer outline-primary/5 outline">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="w-14 h-14 rounded-full bg-surface-container-low overflow-hidden">
+                                    <img alt="Julianne Moore"
+                                        data-alt="Professional woman in business attire, modern library setting, warm indoor lighting, intelligent expression"
+                                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuDlrbwHar2YAE22jNJh1C4xxjwxoHrfWfSmotoVgCLH8VXZiu9NuWRKzscUT2k94SvDAIe2mS_iXTNgn3q-inkVfaiFAj8oqKg4KqQbsZeltepoH8IgpKPPi5jp3KYRKjtYv7NjE8ZND3ku41ara0UaRMpPXY1iJ00s2bKhHPYymZ3d3aTu0mKmFtwxcq00UgbRIyWuIkAR4UC5b4KfggKwhAfbzYuK6vlvhylRPB8PuiT5ijk2xjrPk1h6C41XSgT3-r4ec7Rv_x8" />
+                                </div>
+                                <span
+                                    class="text-[10px] font-bold bg-surface-container-low text-primary px-2 py-1 rounded">ID:
+                                    ARCH-102</span>
+                            </div>
+                            <h4
+                                class="text-2xl font-bold font-headline mb-1 group-hover:text-primary transition-colors">
+                                Julianne Moore</h4>
+                            <p class="text-sm text-stone-500 mb-6 italic">"Digital Rights Specialist • EU Records"</p>
+                            <div class="flex items-center gap-3 mt-auto">
+                                <button
+                                    class="flex-1 bg-surface-container-low hover:bg-primary hover:text-white text-primary text-xs font-bold uppercase tracking-widest py-3 rounded-md transition-all flex items-center justify-center gap-2">
+                                    <span class="material-symbols-outlined text-sm" data-icon="chat">chat</span>
+                                    Initiate Chat
+                                </button>
+                                <button
+                                    class="p-3 bg-surface-container-low text-stone-500 hover:bg-surface-container-high rounded-md transition-all">
+                                    <span class="material-symbols-outlined text-sm"
+                                        data-icon="more_horiz">more_horiz</span>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Result 3: Index Card (Wide/Bento style) -->
+                        <div
+                            class="md:col-span-2 group relative bg-surface-container-low/50 p-8 rounded-lg shadow-[0_12px_40px_rgba(26,28,28,0.06)] hover:shadow-[0_20px_50px_rgba(0,66,117,0.1)] transition-all duration-300 cursor-pointer outline-primary/5 outline flex flex-col md:flex-row gap-8 items-center">
+                            <div class="w-24 h-24 rounded-full bg-surface-container-high overflow-hidden shrink-0">
+                                <img alt="Julian Voss"
+                                    data-alt="Portrait of a young male researcher with a beard, studio lighting with a soft shadow, focused and professional look"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCYxnQyETatf6ClDaG96bjOcdxsYlRmeenAmluuBJybtVO1dfvXZfQaHKGyvccgbzdgOHMSZWBke-1u1HcIgUPH9dBmQsqIJ584AjHA7Hmk_TIQKAXS90rZRde3etglP62wU1Jo_JsEDnBHg-RzmRH8tg6_iPGZ5_C1rqTa5df_rd5bTA7WcPahdBXc384AQWmN319gT6CZeYKKdqSr28dZKH5UxHHQm-lTyp2OmqCt7ryQ8JgI2SBB60iRWWHOQ2iIQGaBG3cM7aY" />
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <h4
+                                        class="text-2xl font-bold font-headline group-hover:text-primary transition-colors">
+                                        Julian Voss-Andreae</h4>
+                                    <span class="material-symbols-outlined text-tertiary text-sm" data-icon="verified"
+                                        style="font-variation-settings: 'FILL' 1;">verified</span>
+                                </div>
+                                <p class="text-sm text-stone-600 mb-4 max-w-lg">Renowned physicist and sculptor
+                                    specializing in quantum-inspired archival structures. Lead on the "Infinite Scroll"
+                                    preservation project.</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <span
+                                        class="text-[9px] font-bold border border-stone-200 px-2 py-0.5 rounded-full text-stone-500 uppercase tracking-tighter">Physics</span>
+                                    <span
+                                        class="text-[9px] font-bold border border-stone-200 px-2 py-0.5 rounded-full text-stone-500 uppercase tracking-tighter">Art
+                                        Preservation</span>
+                                    <span
+                                        class="text-[9px] font-bold border border-stone-200 px-2 py-0.5 rounded-full text-stone-500 uppercase tracking-tighter">Quantum</span>
+                                </div>
+                            </div>
+                            <div class="w-full md:w-auto">
+                                <button
+                                    class="w-full md:w-48 bg-primary text-white text-xs font-bold uppercase tracking-widest py-4 rounded-md shadow-lg shadow-primary/20 hover:translate-y-[-2px] transition-all flex items-center justify-center gap-2">
+                                    <span class="material-symbols-outlined text-sm" data-icon="forum">forum</span>
+                                    Open Terminal
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Result 4: Index Card -->
+                        <div
+                            class="group relative bg-surface-container-lowest p-8 rounded-lg shadow-[0_12px_40px_rgba(26,28,28,0.06)] hover:shadow-[0_20px_50px_rgba(0,66,117,0.1)] transition-all duration-300 cursor-pointer outline-primary/5 outline">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="w-14 h-14 rounded-full bg-surface-container-low overflow-hidden">
+                                    <img alt="Julianna Chen"
+                                        data-alt="Close up of a young professional woman of Asian descent, intelligent eyes, soft bokeh office background"
+                                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJTJwp6mbjIt7D7qaYsc43cr9xT5K5V1c-o_qtIHtRwXd-ay7PujH3-z7HBc-UA-7XUO9u_1Rjt3yHEwR7m1-D688bxH4TygLReoW-G7utDMA0tq_d53lMDZoU9u47vg56y2ilk9oVS4dg_F2c-_YgppdEj19V8izS5xHZU5uET5y54tBfB1B_vJWcqzU1JQgAASutN35w9dxZ6LJ7dmcTTEoKdvKlOzf3uLpkgVdEu6_Mmr87EkChTOPMntg7x_zIIhumYFyQt_8" />
+                                </div>
+                                <span
+                                    class="text-[10px] font-bold bg-surface-container-low text-primary px-2 py-1 rounded">ID:
+                                    ARCH-441</span>
+                            </div>
+                            <h4
+                                class="text-2xl font-bold font-headline mb-1 group-hover:text-primary transition-colors">
+                                Julianna Chen</h4>
+                            <p class="text-sm text-stone-500 mb-6 italic">"Assistant Curator • Shanghai Municipal"</p>
+                            <div class="flex items-center gap-3 mt-auto">
+                                <button
+                                    class="flex-1 bg-surface-container-low hover:bg-primary hover:text-white text-primary text-xs font-bold uppercase tracking-widest py-3 rounded-md transition-all flex items-center justify-center gap-2">
+                                    <span class="material-symbols-outlined text-sm" data-icon="chat">chat</span>
+                                    Initiate Chat
+                                </button>
+                                <button
+                                    class="p-3 bg-surface-container-low text-stone-500 hover:bg-surface-container-high rounded-md transition-all">
+                                    <span class="material-symbols-outlined text-sm"
+                                        data-icon="more_horiz">more_horiz</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Pagination/Load More Aesthetic -->
+                <div class="mt-16 flex flex-col items-center">
+                    <button
+                        class="group flex flex-col items-center gap-2 text-stone-400 hover:text-primary transition-colors">
+                        <span class="text-[10px] font-bold uppercase tracking-[0.3em]">Load Further Records</span>
+                        <span class="material-symbols-outlined animate-bounce"
+                            data-icon="keyboard_double_arrow_down">keyboard_double_arrow_down</span>
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+</body>
+
+</html>

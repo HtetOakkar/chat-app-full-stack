@@ -1,0 +1,534 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { apiFetch } from "@/lib/api";
+import { useWebSocket } from "@/context/WebSocketContext";
+import { useAuth } from "@/context/AuthContext";
+
+type Contact = {
+  id: number;
+  contactUserId: number;
+  contactUsername: string;
+  status: string;
+  createdAt: string;
+  lastMessageContent?: string | null;
+  lastMessageTimestamp?: string | null;
+  lastMessageSenderId?: number | null;
+  unreadCount?: number | null;
+};
+
+type UserDto = {
+  id: number;
+  username: string;
+  fullName?: string;
+  createdAt: string;
+};
+
+export type ActiveChat = {
+  id: number;
+  username: string;
+  isPublic: boolean;
+  status?: string;
+};
+
+interface SidebarProps {
+  activeChat: ActiveChat | null;
+  onSelectChat: (chat: ActiveChat) => void;
+  onSelectProfileUser: (user: { id: number; username: string; status?: string }) => void;
+  refreshTrigger: number;
+}
+
+export default function Sidebar({ activeChat, onSelectChat, onSelectProfileUser, refreshTrigger }: SidebarProps) {
+  const { onlineUsers } = useWebSocket();
+  const { userId: currentUserId } = useAuth();
+
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [requests, setRequests] = useState<Contact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(true);
+  const [sidebarView, setSidebarView] = useState<"chats" | "requests">("chats");
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<UserDto[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [addingContact, setAddingContact] = useState<number | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Fetch contacts and requests
+  const fetchData = async () => {
+    try {
+      setLoadingContacts(true);
+      const [contactsData, requestsData] = await Promise.all([
+        apiFetch("/api/v1/contacts"),
+        apiFetch("/api/v1/contacts/requests"),
+      ]);
+      setContacts(contactsData || []);
+      setRequests(requestsData || []);
+    } catch {
+      // Silent fail — contacts will show as empty
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [refreshTrigger]);
+
+  useEffect(() => {
+    const handleContactsUpdate = () => {
+      fetchData();
+    };
+
+    window.addEventListener("contacts:updated", handleContactsUpdate);
+    return () => {
+      window.removeEventListener("contacts:updated", handleContactsUpdate);
+    };
+  }, []);
+
+  // Clear unread count locally when activeChat changes to a direct message chat
+  useEffect(() => {
+    if (activeChat && !activeChat.isPublic) {
+      setContacts((prev) =>
+        prev.map((c) =>
+          c.contactUserId === activeChat.id ? { ...c, unreadCount: 0 } : c
+        )
+      );
+    }
+  }, [activeChat?.id, activeChat?.isPublic]);
+
+  // Listen for WebSocket real-time messages to update unread counts and last message previews
+  useEffect(() => {
+    const handleMessageReceived = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const msg = customEvent.detail;
+      if (!msg) return;
+
+      setContacts((prevContacts) => {
+        return prevContacts.map((contact) => {
+          const isSender = msg.senderId === contact.contactUserId;
+          const isRecipient = msg.recipientId === contact.contactUserId;
+          if (isSender || isRecipient) {
+            const updatedContact = {
+              ...contact,
+              lastMessageContent: msg.content,
+              lastMessageTimestamp: msg.timestamp,
+              lastMessageSenderId: msg.senderId,
+            };
+            const isActive = activeChat && !activeChat.isPublic && activeChat.id === contact.contactUserId;
+            if (isSender && !isActive) {
+              updatedContact.unreadCount = (contact.unreadCount || 0) + 1;
+            }
+            return updatedContact;
+          }
+          return contact;
+        });
+      });
+    };
+
+    window.addEventListener("message:received", handleMessageReceived);
+    return () => {
+      window.removeEventListener("message:received", handleMessageReceived);
+    };
+  }, [activeChat]);
+
+  // Debounced search
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        setSearchLoading(true);
+        const data = await apiFetch(
+          `/api/v1/users/search?keyword=${encodeURIComponent(searchQuery)}`
+        );
+        setSearchResults(data || []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 400);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery]);
+
+  const handleAddContact = async (username: string, userId: number) => {
+    try {
+      setAddingContact(userId);
+      await apiFetch("/api/v1/contacts", {
+        method: "POST",
+        body: JSON.stringify({ username }),
+      });
+      fetchData();
+      setSearchQuery("");
+      setSearchResults([]);
+    } catch {
+      // Silent fail
+    } finally {
+      setAddingContact(null);
+    }
+  };
+
+  const handleAcceptRequest = async (userId: number) => {
+    try {
+      await apiFetch(`/api/v1/contacts/${userId}/accept`, {
+        method: "PUT",
+      });
+      fetchData();
+    } catch {
+      // Silent fail
+    }
+  };
+
+  const showSearchOverlay = searchFocused && searchQuery.trim().length >= 2;
+
+  return (
+    <aside className={`${
+      activeChat === null ? "flex w-full" : "hidden"
+    } md:flex flex-col h-full w-80 lg:w-96 bg-surface-container-low/60 border-r border-outline-variant/10 shrink-0`}>
+      {/* Header */}
+      <div className="px-5 pt-6 pb-4 shrink-0">
+        {sidebarView === "chats" ? (
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-sm shadow-primary/20">
+              <span className="material-symbols-outlined text-white text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                forum
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-black text-on-surface font-headline tracking-tight leading-tight truncate">
+                Meow Chit Chat
+              </h2>
+              <p className="text-[9px] text-outline font-bold uppercase tracking-[0.15em] truncate">
+                {contacts.length + requests.length} Connections
+              </p>
+            </div>
+            {/* Message Requests Pill */}
+            <button
+              type="button"
+              onClick={() => setSidebarView("requests")}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-wider hover:bg-primary hover:text-white transition-all duration-200 border border-primary/15 shadow-sm shrink-0"
+              title="View pending connection requests"
+            >
+              <span className="material-symbols-outlined text-sm">person_alert</span>
+              <span className="hidden sm:inline">Requests</span>
+              {requests.length > 0 && (
+                <span className="w-4 h-4 rounded-full bg-secondary text-white text-[8px] font-bold flex items-center justify-center shrink-0 animate-pulse">
+                  {requests.length}
+                </span>
+              )}
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 mb-5 animate-[fadeIn_0.2s_ease-out]">
+            <button
+              type="button"
+              onClick={() => setSidebarView("chats")}
+              className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center border border-outline-variant/30 hover:bg-surface-container-high transition-colors text-outline hover:text-on-surface shrink-0"
+              title="Back to chat list"
+            >
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
+            </button>
+            <div>
+              <h2 className="text-base font-black text-on-surface font-headline tracking-tight leading-tight">
+                Requests List
+              </h2>
+              <p className="text-[9px] text-outline font-bold uppercase tracking-[0.15em]">
+                {requests.length} Pending
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Search Input (Only shown in chats view) */}
+        {sidebarView === "chats" && (
+          <div className="relative">
+            <div className="flex items-center bg-surface-container-lowest rounded-xl border border-transparent focus-within:border-primary/30 transition-all shadow-sm">
+              <span className="material-symbols-outlined text-outline text-lg ml-3">
+                search
+              </span>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+                className="flex-1 bg-transparent border-none outline-none focus:ring-0 text-xs px-3 py-3 text-on-surface placeholder:text-outline"
+                placeholder="Search global registry..."
+                type="text"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchQuery(""); setSearchResults([]); }}
+                  className="p-1.5 mr-1.5 text-outline hover:text-on-surface rounded-full hover:bg-surface-container-high transition-colors"
+                >
+                  <span className="material-symbols-outlined text-sm">close</span>
+                </button>
+              )}
+            </div>
+
+            {/* Search Results Overlay */}
+            {showSearchOverlay && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-surface-container-lowest rounded-xl border border-outline-variant/20 shadow-[0_16px_48px_rgba(0,0,0,0.12)] z-50 max-h-64 overflow-y-auto custom-scrollbar">
+                {searchLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <span className="material-symbols-outlined animate-spin text-primary text-lg">rotate_right</span>
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-outline">
+                    No users found for &quot;{searchQuery}&quot;
+                  </div>
+                ) : (
+                  searchResults.map((user) => {
+                    const isContact = contacts.find((c) => c.contactUserId === user.id);
+                    const isPending = requests.find((r) => r.contactUserId === user.id);
+                    const status = isContact ? "CONTACT" : isPending ? "PENDING_REQUEST" : undefined;
+                    return (
+                    <div
+                      key={user.id}
+                      onClick={() => onSelectProfileUser({ id: user.id, username: user.username, status })}
+                      className="flex items-center justify-between px-4 py-3 hover:bg-surface-container-low/50 transition-colors border-b border-outline-variant/5 last:border-0 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-primary/5 flex items-center justify-center text-xs font-extrabold text-primary border border-primary/10">
+                          {user.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-on-surface">
+                            {user.fullName ? `${user.fullName} (${user.username})` : user.username}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )})
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar px-3 pb-4 space-y-1">
+        {sidebarView === "chats" ? (
+          <>
+            {/* Section Label */}
+            <div className="px-2 pt-2 pb-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-outline">
+                Channels
+              </span>
+            </div>
+
+            {/* Global Public Chat */}
+            <button
+              type="button"
+              onClick={() => onSelectChat({ id: 0, username: "Global Registry Chat", isPublic: true })}
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left ${
+                activeChat?.isPublic
+                  ? "bg-primary/8 border border-primary/15"
+                  : "hover:bg-surface-container-lowest/60 border border-transparent"
+              }`}
+            >
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                activeChat?.isPublic
+                  ? "bg-primary text-white shadow-sm shadow-primary/20"
+                  : "bg-primary/10 text-primary"
+              }`}>
+                <span className="material-symbols-outlined text-lg">language</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className="font-bold text-xs text-on-surface leading-tight truncate">
+                  Global Registry Chat
+                </h4>
+                <p className="text-[9px] text-outline font-medium mt-0.5 truncate">
+                  Public channel for all curators
+                </p>
+              </div>
+              <span className="px-1.5 py-0.5 rounded text-[7px] font-bold tracking-wider uppercase bg-primary/10 text-primary shrink-0">
+                Public
+              </span>
+            </button>
+
+            {/* Contacts Section */}
+            <div className="px-2 pt-4 pb-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-outline">
+                Contacts
+              </span>
+            </div>
+
+            {loadingContacts ? (
+              <div className="flex justify-center py-8">
+                <span className="material-symbols-outlined animate-spin text-xl text-primary">
+                  rotate_right
+                </span>
+              </div>
+            ) : contacts.length === 0 ? (
+              <div className="text-center py-8 px-4">
+                <span className="material-symbols-outlined text-outline/30 text-2xl mb-2 block">
+                  person_search
+                </span>
+                <p className="text-[10px] text-outline leading-relaxed">
+                  No contacts yet. Use the search bar above to discover curators.
+                </p>
+              </div>
+            ) : (
+              (() => {
+                const sortedContacts = [...contacts].sort((a, b) => {
+                  const timeA = a.lastMessageTimestamp ? new Date(a.lastMessageTimestamp).getTime() : new Date(a.createdAt).getTime();
+                  const timeB = b.lastMessageTimestamp ? new Date(b.lastMessageTimestamp).getTime() : new Date(b.createdAt).getTime();
+                  return timeB - timeA;
+                });
+                return sortedContacts.map((contact) => {
+                  const isSelected = activeChat && !activeChat.isPublic && activeChat.id === contact.contactUserId;
+                  const userStatus = onlineUsers[contact.contactUserId]?.status || "OFFLINE";
+
+                  return (
+                    <button
+                      type="button"
+                      key={contact.id}
+                      onClick={() =>
+                        onSelectChat({
+                          id: contact.contactUserId,
+                          username: contact.contactUsername,
+                          isPublic: false,
+                          status: contact.status,
+                        })
+                      }
+                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left ${
+                        isSelected
+                          ? "bg-primary/8 border border-primary/15"
+                          : "hover:bg-surface-container-lowest/60 border border-transparent"
+                      }`}
+                    >
+                      <div className="relative">
+                        <div className="w-9 h-9 rounded-lg bg-primary/5 flex items-center justify-center text-xs font-extrabold text-primary border border-primary/10">
+                          {contact.contactUsername.charAt(0).toUpperCase()}
+                        </div>
+                        {/* Online indicator */}
+                        <div
+                          className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 border-2 border-surface-container-low rounded-full ${
+                            userStatus === "ONLINE" ? "bg-tertiary" : "bg-outline/30"
+                          }`}
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <h4 className="font-bold text-xs text-on-surface leading-tight truncate">
+                            {contact.contactUsername}
+                          </h4>
+                          {contact.lastMessageTimestamp && (
+                            <span className="text-[8px] text-outline shrink-0">
+                              {new Date(contact.lastMessageTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between gap-1 mt-1">
+                          <p className="text-[10px] text-outline truncate flex-1 min-w-0 font-medium">
+                            {contact.lastMessageContent
+                              ? (contact.lastMessageSenderId === currentUserId
+                                  ? `You: ${contact.lastMessageContent}`
+                                  : contact.lastMessageContent)
+                              : `${userStatus.toLowerCase()}`}
+                          </p>
+                          {contact.unreadCount && contact.unreadCount > 0 ? (
+                            <span className="w-4.5 h-4.5 rounded-full bg-primary text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-sm shadow-primary/20">
+                              {contact.unreadCount}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                });
+              })()
+            )}
+          </>
+        ) : (
+          <div className="space-y-1 animate-[fadeIn_0.2s_ease-out]">
+            {/* Section Label */}
+            <div className="px-2 pt-2 pb-1.5 flex items-center gap-2">
+              <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-outline">
+                Pending Requests
+              </span>
+            </div>
+
+            {loadingContacts ? (
+              <div className="flex justify-center py-8">
+                <span className="material-symbols-outlined animate-spin text-xl text-primary">
+                  rotate_right
+                </span>
+              </div>
+            ) : requests.length === 0 ? (
+              <div className="text-center py-12 px-4 flex flex-col items-center justify-center">
+                <span className="material-symbols-outlined text-outline/30 text-3xl mb-2">
+                  person_add_disabled
+                </span>
+                <p className="text-[10px] text-outline leading-relaxed">
+                  No pending message requests.
+                </p>
+              </div>
+            ) : (
+              requests.map((request) => {
+                const isSelected = activeChat && !activeChat.isPublic && activeChat.id === request.contactUserId;
+                return (
+                  <button
+                    type="button"
+                    key={`req-${request.id}`}
+                    onClick={() =>
+                      onSelectChat({
+                        id: request.contactUserId,
+                        username: request.contactUsername,
+                        isPublic: false,
+                        status: "PENDING_REQUEST",
+                      })
+                    }
+                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left border ${
+                      isSelected
+                        ? "bg-secondary/8 border-secondary/15"
+                        : "hover:bg-surface-container-lowest/60 border border-transparent"
+                    }`}
+                  >
+                    <div className="relative">
+                      <div className="w-9 h-9 rounded-lg bg-secondary/10 flex items-center justify-center text-xs font-extrabold text-secondary border border-secondary/15">
+                        {request.contactUsername.charAt(0).toUpperCase()}
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-bold text-xs text-on-surface leading-tight truncate">
+                        {request.contactUsername}
+                      </h4>
+                      <p className="text-[9px] text-outline mt-0.5">Wants to chat with you</p>
+                    </div>
+                    <span className="px-1.5 py-0.5 rounded text-[7px] font-bold tracking-wider uppercase bg-secondary/10 text-secondary shrink-0 animate-pulse">
+                      Pending
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 py-3 border-t border-outline-variant/10 shrink-0">
+        <div className="text-[8px] text-center text-outline/40 uppercase tracking-[0.15em] font-label">
+          Meow Chit Chat v2026.1
+        </div>
+      </div>
+    </aside>
+  );
+}

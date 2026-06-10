@@ -1,0 +1,209 @@
+package com.example.chatapp.user.service;
+
+import com.example.chatapp.exception.BadRequestException;
+import com.example.chatapp.exception.ConflictException;
+import com.example.chatapp.exception.NotFoundException;
+import com.example.chatapp.user.model.dto.ContactDto;
+import com.example.chatapp.user.model.entity.Contact;
+import com.example.chatapp.user.model.entity.User;
+import com.example.chatapp.user.model.entity.ContactStatus;
+import com.example.chatapp.user.model.request.AddContactRequest;
+import com.example.chatapp.user.repository.ContactRepository;
+import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.message.repository.MessageRepository;
+import com.example.chatapp.message.repository.RedisMessageRepository;
+import com.example.chatapp.message.model.entity.Message;
+import org.springframework.data.domain.PageRequest;
+import java.time.Instant;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+public class ContactServiceImpl implements ContactService {
+
+    private final ContactRepository contactRepository;
+    private final UserRepository userRepository;
+    private final MessageRepository messageRepository;
+    private final RedisMessageRepository redisMessageRepository;
+
+    @Override
+    @Transactional
+    public ContactDto addContact(Long ownerId, AddContactRequest request) {
+        User owner = userRepository.findById(ownerId)
+                .orElseThrow(() -> new NotFoundException("Owner not found"));
+
+        User contactUser = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new NotFoundException("User to add not found"));
+
+        if (owner.getId().equals(contactUser.getId())) {
+            throw new BadRequestException("You cannot add yourself as a contact");
+        }
+
+        Optional<Contact> existingContactOpt = contactRepository.findByOwnerIdAndContactUserId(owner.getId(), contactUser.getId());
+        Contact contact;
+        if (existingContactOpt.isPresent()) {
+            contact = existingContactOpt.get();
+            if (contact.getStatus() == ContactStatus.CONTACT || contact.getStatus() == ContactStatus.ACCEPTED) {
+                throw new ConflictException("User is already in your contacts");
+            }
+            contact.setStatus(ContactStatus.CONTACT);
+        } else {
+            contact = Contact.builder()
+                    .owner(owner)
+                    .contactUser(contactUser)
+                    .status(ContactStatus.CONTACT)
+                    .build();
+        }
+
+        Contact saved = contactRepository.save(contact);
+        return mapToDto(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ContactDto> getContacts(Long ownerId) {
+        return contactRepository.findByOwnerIdAndStatusIn(ownerId, List.of(ContactStatus.CONTACT, ContactStatus.ACCEPTED)).stream()
+                .map(contact -> mapToEnrichedDto(contact, ownerId))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public void removeContact(Long ownerId, Long contactId) {
+        Contact contact = contactRepository.findByOwnerIdAndContactUserId(ownerId, contactId)
+                .orElseThrow(() -> new NotFoundException("Contact not found"));
+        contactRepository.delete(contact);
+    }
+
+    @Override
+    @Transactional
+    public ContactDto acceptRequest(Long ownerId, Long contactId) {
+        Contact contact = contactRepository.findByOwnerIdAndContactUserId(ownerId, contactId)
+                .orElseThrow(() -> new NotFoundException("Contact request not found"));
+        if (contact.getStatus() != ContactStatus.PENDING_REQUEST) {
+            throw new BadRequestException("No pending contact request found to accept");
+        }
+        contact.setStatus(ContactStatus.ACCEPTED);
+        Contact saved = contactRepository.save(contact);
+        return mapToDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public ContactDto blockUser(Long ownerId, Long contactId) {
+        User owner = userRepository.findById(ownerId)
+                .orElseThrow(() -> new NotFoundException("Owner not found"));
+        User contactUser = userRepository.findById(contactId)
+                .orElseThrow(() -> new NotFoundException("User to block not found"));
+
+        Contact contact = contactRepository.findByOwnerIdAndContactUserId(ownerId, contactId)
+                .orElse(Contact.builder()
+                        .owner(owner)
+                        .contactUser(contactUser)
+                        .build());
+
+        contact.setStatus(ContactStatus.BLOCKED);
+        Contact saved = contactRepository.save(contact);
+        return mapToDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public ContactDto neglectRequest(Long ownerId, Long contactId) {
+        Contact contact = contactRepository.findByOwnerIdAndContactUserId(ownerId, contactId)
+                .orElseThrow(() -> new NotFoundException("Contact request not found"));
+        if (contact.getStatus() != ContactStatus.PENDING_REQUEST) {
+            throw new BadRequestException("No pending contact request found to neglect");
+        }
+        contact.setStatus(ContactStatus.NEGLECTED);
+        Contact saved = contactRepository.save(contact);
+        return mapToDto(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ContactDto> getPendingRequests(Long ownerId) {
+        return contactRepository.findByOwnerIdAndStatus(ownerId, ContactStatus.PENDING_REQUEST).stream()
+                .map(contact -> mapToEnrichedDto(contact, ownerId))
+                .collect(Collectors.toList());
+    }
+
+    private ContactDto mapToEnrichedDto(Contact contact, Long ownerId) {
+        Long contactUserId = contact.getContactUser().getId();
+
+        // 1. Calculate unread count (DB + Redis)
+        long dbUnreadCount = messageRepository.countUnreadMessages(contactUserId, ownerId);
+        long redisUnreadCount = redisMessageRepository.peekMessages().stream()
+                .filter(msg -> msg.getSenderId().equals(contactUserId) &&
+                        msg.getRecipientId() != null &&
+                        msg.getRecipientId().equals(ownerId) &&
+                        (msg.getIsRead() == null || !msg.getIsRead()))
+                .count();
+        long unreadCount = dbUnreadCount + redisUnreadCount;
+
+        // 2. Determine latest message content & timestamp
+        // From DB
+        List<Message> dbLatestList = messageRepository.findLatestMessageBetweenUsers(ownerId, contactUserId, PageRequest.of(0, 1));
+        Message dbLatest = dbLatestList.isEmpty() ? null : dbLatestList.get(0);
+
+        // From Redis
+        com.example.chatapp.message.model.dto.MessageDto redisLatest = redisMessageRepository.peekMessages().stream()
+                .filter(msg -> msg.getRecipientId() != null &&
+                        ((msg.getSenderId().equals(ownerId) && msg.getRecipientId().equals(contactUserId)) ||
+                         (msg.getSenderId().equals(contactUserId) && msg.getRecipientId().equals(ownerId))))
+                .findFirst()
+                .orElse(null);
+
+        String lastMessageContent = null;
+        Instant lastMessageTimestamp = null;
+        Long lastMessageSenderId = null;
+
+        if (dbLatest != null && redisLatest != null) {
+            if (redisLatest.getTimestamp().isAfter(dbLatest.getSentAt())) {
+                lastMessageContent = redisLatest.getContent();
+                lastMessageTimestamp = redisLatest.getTimestamp();
+                lastMessageSenderId = redisLatest.getSenderId();
+            } else {
+                lastMessageContent = dbLatest.getContent();
+                lastMessageTimestamp = dbLatest.getSentAt();
+                lastMessageSenderId = dbLatest.getSender().getId();
+            }
+        } else if (dbLatest != null) {
+            lastMessageContent = dbLatest.getContent();
+            lastMessageTimestamp = dbLatest.getSentAt();
+            lastMessageSenderId = dbLatest.getSender().getId();
+        } else if (redisLatest != null) {
+            lastMessageContent = redisLatest.getContent();
+            lastMessageTimestamp = redisLatest.getTimestamp();
+            lastMessageSenderId = redisLatest.getSenderId();
+        }
+
+        return ContactDto.builder()
+                .id(contact.getId())
+                .contactUserId(contactUserId)
+                .contactUsername(contact.getContactUser().getUsername())
+                .status(contact.getStatus())
+                .createdAt(contact.getCreatedAt())
+                .lastMessageContent(lastMessageContent)
+                .lastMessageTimestamp(lastMessageTimestamp)
+                .lastMessageSenderId(lastMessageSenderId)
+                .unreadCount(unreadCount)
+                .build();
+    }
+
+    private ContactDto mapToDto(Contact contact) {
+        return ContactDto.builder()
+                .id(contact.getId())
+                .contactUserId(contact.getContactUser().getId())
+                .contactUsername(contact.getContactUser().getUsername())
+                .status(contact.getStatus())
+                .createdAt(contact.getCreatedAt())
+                .build();
+    }
+}

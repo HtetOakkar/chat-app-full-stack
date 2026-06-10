@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Verify your email</title>
+</head>
+<body>
+    <h2>Email Verification</h2>
+    <p>Please use the following code to verify your email address:</p>
+    <h3 th:text="${code}">123456</h3>
+    <p>This code will expire in 15 minutes.</p>
+</body>
+</html>
