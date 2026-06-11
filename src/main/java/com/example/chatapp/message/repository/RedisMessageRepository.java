@@ -63,4 +63,29 @@ public class RedisMessageRepository {
             }
         }
     }
+
+    public boolean deleteMessage(Long id, java.time.Instant timestamp, Long currentUserId) {
+        List<MessageDto> messages = peekMessages();
+        boolean modified = false;
+        for (MessageDto msg : messages) {
+            boolean match = msg.getId().equals(id) || 
+                    (timestamp != null && msg.getSenderId().equals(currentUserId) && msg.getTimestamp().equals(timestamp));
+            if (match) {
+                if (!msg.getSenderId().equals(currentUserId)) {
+                    throw new com.example.chatapp.exception.UnauthorizedException("Not authorized to delete this message");
+                }
+                msg.setIsDeleted(true);
+                msg.setContent("Deleted message");
+                modified = true;
+                break;
+            }
+        }
+        if (modified) {
+            clear();
+            for (int i = messages.size() - 1; i >= 0; i--) {
+                saveMessage(messages.get(i));
+            }
+        }
+        return modified;
+    }
 }

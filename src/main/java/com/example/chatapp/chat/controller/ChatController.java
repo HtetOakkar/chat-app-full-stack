@@ -11,6 +11,7 @@ import com.example.chatapp.user.model.entity.ContactStatus;
 import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.user.repository.ContactRepository;
 import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.user.service.ContactService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class ChatController {
     private final MessageService messageService;
     private final ContactRepository contactRepository;
     private final UserRepository userRepository;
+    private final ContactService contactService;
 
     @MessageMapping("/chat.public")
     public void sendPublicMessage(@Valid @Payload MessageDto messageDto, Principal principal) {
@@ -93,6 +95,9 @@ public class ChatController {
             }
             recipientStatus = ContactStatus.PENDING_REQUEST;
         }
+
+        // Update sender's relation to recipient if it is PENDING_REQUEST or NEGLECTED
+        contactService.acceptRequestIfPending(senderId, recipientId);
 
         // Save the message to Redis/DB
         messageService.saveMessage(messageDto);

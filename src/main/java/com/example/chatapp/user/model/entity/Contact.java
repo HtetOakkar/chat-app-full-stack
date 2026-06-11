@@ -38,6 +38,9 @@ public class Contact {
     @Column(name = "status", nullable = false)
     private ContactStatus status;
 
+    @Column(name = "cleared_at")
+    private Instant clearedAt;
+
     @CreationTimestamp
     @Column(name="created_at", updatable = false)
     private Instant createdAt;

@@ -13,4 +13,6 @@ public interface MessageService {
     MessagePage getPublicMessages(String cursor, int limit);
     MessagePage getPrivateMessages(Long currentUserId, Long contactUserId, String cursor, int limit);
     void markMessagesAsRead(Long senderId, Long recipientId);
+    MessageDto deleteMessage(Long messageId, Instant timestamp, Long currentUserId);
+    void clearPrivateChat(Long currentUserId, Long contactUserId);
 }

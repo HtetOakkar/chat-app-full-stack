@@ -70,6 +70,7 @@ public class ContactServiceImpl implements ContactService {
     public List<ContactDto> getContacts(Long ownerId) {
         return contactRepository.findByOwnerIdAndStatusIn(ownerId, List.of(ContactStatus.CONTACT, ContactStatus.ACCEPTED)).stream()
                 .map(contact -> mapToEnrichedDto(contact, ownerId))
+                .filter(dto -> dto.getClearedAt() == null || dto.getLastMessageTimestamp() != null)
                 .collect(Collectors.toList());
     }
 
@@ -136,27 +137,30 @@ public class ContactServiceImpl implements ContactService {
 
     private ContactDto mapToEnrichedDto(Contact contact, Long ownerId) {
         Long contactUserId = contact.getContactUser().getId();
+        Instant clearedAt = contact.getClearedAt();
 
         // 1. Calculate unread count (DB + Redis)
-        long dbUnreadCount = messageRepository.countUnreadMessages(contactUserId, ownerId);
+        long dbUnreadCount = messageRepository.countUnreadMessages(contactUserId, ownerId, clearedAt);
         long redisUnreadCount = redisMessageRepository.peekMessages().stream()
                 .filter(msg -> msg.getSenderId().equals(contactUserId) &&
                         msg.getRecipientId() != null &&
                         msg.getRecipientId().equals(ownerId) &&
-                        (msg.getIsRead() == null || !msg.getIsRead()))
+                        (msg.getIsRead() == null || !msg.getIsRead()) &&
+                        (clearedAt == null || msg.getTimestamp().isAfter(clearedAt)))
                 .count();
         long unreadCount = dbUnreadCount + redisUnreadCount;
 
         // 2. Determine latest message content & timestamp
         // From DB
-        List<Message> dbLatestList = messageRepository.findLatestMessageBetweenUsers(ownerId, contactUserId, PageRequest.of(0, 1));
+        List<Message> dbLatestList = messageRepository.findLatestMessageBetweenUsers(ownerId, contactUserId, clearedAt, PageRequest.of(0, 1));
         Message dbLatest = dbLatestList.isEmpty() ? null : dbLatestList.get(0);
 
         // From Redis
         com.example.chatapp.message.model.dto.MessageDto redisLatest = redisMessageRepository.peekMessages().stream()
                 .filter(msg -> msg.getRecipientId() != null &&
                         ((msg.getSenderId().equals(ownerId) && msg.getRecipientId().equals(contactUserId)) ||
-                         (msg.getSenderId().equals(contactUserId) && msg.getRecipientId().equals(ownerId))))
+                         (msg.getSenderId().equals(contactUserId) && msg.getRecipientId().equals(ownerId))) &&
+                        (clearedAt == null || msg.getTimestamp().isAfter(clearedAt)))
                 .findFirst()
                 .orElse(null);
 
@@ -190,6 +194,7 @@ public class ContactServiceImpl implements ContactService {
                 .contactUsername(contact.getContactUser().getUsername())
                 .status(contact.getStatus())
                 .createdAt(contact.getCreatedAt())
+                .clearedAt(clearedAt)
                 .lastMessageContent(lastMessageContent)
                 .lastMessageTimestamp(lastMessageTimestamp)
                 .lastMessageSenderId(lastMessageSenderId)
@@ -204,6 +209,18 @@ public class ContactServiceImpl implements ContactService {
                 .contactUsername(contact.getContactUser().getUsername())
                 .status(contact.getStatus())
                 .createdAt(contact.getCreatedAt())
+                .clearedAt(contact.getClearedAt())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void acceptRequestIfPending(Long ownerId, Long contactId) {
+        contactRepository.findByOwnerIdAndContactUserId(ownerId, contactId).ifPresent(contact -> {
+            if (contact.getStatus() == ContactStatus.PENDING_REQUEST || contact.getStatus() == ContactStatus.NEGLECTED) {
+                contact.setStatus(ContactStatus.ACCEPTED);
+                contactRepository.save(contact);
+            }
+        });
     }
 }

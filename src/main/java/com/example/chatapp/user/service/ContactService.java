@@ -13,4 +13,5 @@ public interface ContactService {
     ContactDto blockUser(Long ownerId, Long contactId);
     ContactDto neglectRequest(Long ownerId, Long contactId);
     List<ContactDto> getPendingRequests(Long ownerId);
+    void acceptRequestIfPending(Long ownerId, Long contactId);
 }

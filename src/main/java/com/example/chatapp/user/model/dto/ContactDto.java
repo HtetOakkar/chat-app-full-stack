@@ -22,4 +22,5 @@ public class ContactDto {
     private Instant lastMessageTimestamp;
     private Long lastMessageSenderId;
     private Long unreadCount;
+    private Instant clearedAt;
 }

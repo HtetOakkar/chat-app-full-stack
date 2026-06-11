@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
+    private final org.springframework.messaging.simp.user.SimpUserRegistry simpUserRegistry;
 
     @org.springframework.web.bind.annotation.GetMapping("/search")
     public org.springframework.http.ResponseEntity<java.util.List<com.example.chatapp.user.model.dto.UserDto>> searchUsers(
@@ -50,6 +51,34 @@ public class UserController {
     public org.springframework.http.ResponseEntity<com.example.chatapp.user.model.response.UserProfileResponse> getUserProfileById(
             @org.springframework.web.bind.annotation.PathVariable("userId") Long userId) {
         return org.springframework.http.ResponseEntity.ok(userService.getUserProfile(userId));
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping("/online")
+    public org.springframework.http.ResponseEntity<java.util.List<com.example.chatapp.message.model.dto.OnlineStatusDto>> getOnlineUsers() {
+        java.util.List<com.example.chatapp.message.model.dto.OnlineStatusDto> onlineUsers = simpUserRegistry.getUsers().stream()
+                .map(simpUser -> {
+                    com.example.chatapp.message.model.dto.OnlineStatusDto dto = new com.example.chatapp.message.model.dto.OnlineStatusDto();
+                    dto.setStatus("ONLINE");
+                    dto.setUserId(simpUser.getName());
+                    dto.setUsername(simpUser.getName());
+
+                    java.security.Principal principal = simpUser.getPrincipal();
+                    if (principal != null) {
+                        if (principal instanceof com.example.chatapp.jwt.UserPrincipal userPrincipal) {
+                            dto.setUserId(String.valueOf(userPrincipal.getId()));
+                            dto.setUsername(userPrincipal.getUsername());
+                        } else if (principal instanceof org.springframework.security.core.Authentication authentication) {
+                            Object innerPrincipal = authentication.getPrincipal();
+                            if (innerPrincipal instanceof com.example.chatapp.jwt.UserPrincipal userPrincipal) {
+                                dto.setUserId(String.valueOf(userPrincipal.getId()));
+                                dto.setUsername(userPrincipal.getUsername());
+                            }
+                        }
+                    }
+                    return dto;
+                })
+                .toList();
+        return org.springframework.http.ResponseEntity.ok(onlineUsers);
     }
 }
 

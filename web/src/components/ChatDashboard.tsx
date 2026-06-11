@@ -39,6 +39,29 @@ export default function ChatDashboard() {
     fetchProfile();
   }, []);
 
+  useEffect(() => {
+    const handleChatDeleted = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { contactUserId } = customEvent.detail;
+      setActiveChat((prev) => {
+        if (prev && !prev.isPublic && prev.id === contactUserId) {
+          return {
+            id: 0,
+            username: "Global Registry Chat",
+            isPublic: true,
+          };
+        }
+        return prev;
+      });
+      setRefreshTrigger((prev) => prev + 1);
+    };
+
+    window.addEventListener("chat:deleted", handleChatDeleted);
+    return () => {
+      window.removeEventListener("chat:deleted", handleChatDeleted);
+    };
+  }, []);
+
 
   const handleSelectChat = useCallback((chat: ActiveChat | null) => {
     setActiveChat(chat);
@@ -54,7 +77,7 @@ export default function ChatDashboard() {
     // After accept/ignore/block, refresh sidebar data and clear pending status
     setRefreshTrigger((prev) => prev + 1);
     setActiveChat((prev) => {
-      if (prev && prev.status === "PENDING_REQUEST") {
+      if (prev && (prev.status === "PENDING_REQUEST" || prev.status === "NEGLECTED")) {
         return { ...prev, status: undefined };
       }
       return prev;

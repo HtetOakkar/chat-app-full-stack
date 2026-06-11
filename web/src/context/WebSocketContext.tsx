@@ -14,6 +14,7 @@ type MessageDto = {
   recipientId: number | null;
   timestamp: string;
   messageType: string;
+  isDeleted?: boolean;
 };
 
 type OnlineUserStatus = {
@@ -112,12 +113,19 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       client.subscribe("/topic/public", (message) => {
         const msg: MessageDto = JSON.parse(message.body);
         setPublicMessages((prev) => {
-          if (prev.some((p) => 
+          const exists = prev.some((p) => 
             p.id === msg.id || 
             (p.senderId === msg.senderId && 
-             p.content === msg.content && 
              new Date(p.timestamp).getTime() === new Date(msg.timestamp).getTime())
-          )) return prev;
+          );
+          if (exists) {
+            return prev.map((p) => {
+              if (p.id === msg.id || (p.senderId === msg.senderId && new Date(p.timestamp).getTime() === new Date(msg.timestamp).getTime())) {
+                return msg;
+              }
+              return p;
+            });
+          }
           return [...prev, msg];
         });
       });
@@ -130,12 +138,23 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
 
         setPrivateMessages((prev) => {
           const current = prev[partnerId] || [];
-          if (current.some((c) => 
+          const exists = current.some((c) => 
             c.id === msg.id || 
             (c.senderId === msg.senderId && 
-             c.content === msg.content && 
              new Date(c.timestamp).getTime() === new Date(msg.timestamp).getTime())
-          )) return prev;
+          );
+          if (exists) {
+            const updatedList = current.map((c) => {
+              if (c.id === msg.id || (c.senderId === msg.senderId && new Date(c.timestamp).getTime() === new Date(msg.timestamp).getTime())) {
+                return msg;
+              }
+              return c;
+            });
+            return {
+              ...prev,
+              [partnerId]: updatedList,
+            };
+          }
           return {
             ...prev,
             [partnerId]: [...current, msg],
@@ -155,12 +174,23 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
 
         setPrivateMessages((prev) => {
           const current = prev[partnerId] || [];
-          if (current.some((c) => 
+          const exists = current.some((c) => 
             c.id === msg.id || 
             (c.senderId === msg.senderId && 
-             c.content === msg.content && 
              new Date(c.timestamp).getTime() === new Date(msg.timestamp).getTime())
-          )) return prev;
+          );
+          if (exists) {
+            const updatedList = current.map((c) => {
+              if (c.id === msg.id || (c.senderId === msg.senderId && new Date(c.timestamp).getTime() === new Date(msg.timestamp).getTime())) {
+                return msg;
+              }
+              return c;
+            });
+            return {
+              ...prev,
+              [partnerId]: updatedList,
+            };
+          }
           return {
             ...prev,
             [partnerId]: [...current, msg],
@@ -192,6 +222,27 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
         destination: "/app/noti.status",
         body: JSON.stringify({ status: "ONLINE" }),
       });
+
+      // Fetch initially online users from REST API
+      apiFetch("/api/v1/users/online")
+        .then((onlineList: any) => {
+          if (Array.isArray(onlineList)) {
+            setOnlineUsers((prev) => {
+              const newOnline = { ...prev };
+              onlineList.forEach((user: any) => {
+                newOnline[Number(user.userId)] = {
+                  status: user.status,
+                  username: user.username,
+                  timestamp: new Date().toISOString(),
+                };
+              });
+              return newOnline;
+            });
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to fetch online users:", err);
+        });
     };
 
     client.onDisconnect = () => {
@@ -210,6 +261,32 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       }
     };
   }, [token, isAuthenticated, userId]);
+
+  useEffect(() => {
+    const handleChatDeleted = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { contactUserId } = customEvent.detail;
+      setPrivateMessages((prev) => ({
+        ...prev,
+        [contactUserId]: [],
+      }));
+      setPrivateCursors((prev) => {
+        const next = { ...prev };
+        delete next[contactUserId];
+        return next;
+      });
+      setHasMorePrivateHistory((prev) => {
+        const next = { ...prev };
+        delete next[contactUserId];
+        return next;
+      });
+    };
+
+    window.addEventListener("chat:deleted", handleChatDeleted);
+    return () => {
+      window.removeEventListener("chat:deleted", handleChatDeleted);
+    };
+  }, []);
 
   const sendPublicMessage = (content: string) => {
     if (stompClientRef.current && connected) {

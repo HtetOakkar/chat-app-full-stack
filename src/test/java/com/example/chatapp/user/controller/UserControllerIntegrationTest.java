@@ -50,6 +50,9 @@ class UserControllerIntegrationTest {
     @MockBean
     private EmailService emailService;
 
+    @MockBean
+    private org.springframework.messaging.simp.user.SimpUserRegistry simpUserRegistry;
+
 
     @BeforeEach
     void setup() throws Exception {
@@ -350,6 +353,65 @@ class UserControllerIntegrationTest {
                 .andExpect(jsonPath("$.fullName").value("Bob Profile"))
                 .andExpect(jsonPath("$.email").value("bob@example.com"))
                 .andExpect(jsonPath("$.birthDate").value("1995-05-15"));
+    }
+
+    @Test
+    void getOnlineUsersShouldReturnEmptyListWhenNoActiveSessions() throws Exception {
+        Mockito.when(simpUserRegistry.getUsers()).thenReturn(java.util.Collections.emptySet());
+
+        mockMvc.perform(get("/api/v1/users/online")
+                        .header("Authorization", userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void getOnlineUsersShouldReturnActiveUsers() throws Exception {
+        org.springframework.messaging.simp.user.SimpUser mockUser = Mockito.mock(org.springframework.messaging.simp.user.SimpUser.class);
+        Mockito.when(mockUser.getName()).thenReturn("100");
+
+        com.example.chatapp.jwt.UserPrincipal onlinePrincipal = new com.example.chatapp.jwt.UserPrincipal(
+                100L, "onlineuser", "password", java.util.Collections.emptyList()
+        );
+        Mockito.when(mockUser.getPrincipal()).thenReturn(onlinePrincipal);
+
+        Mockito.when(simpUserRegistry.getUsers()).thenReturn(java.util.Collections.singleton(mockUser));
+
+        mockMvc.perform(get("/api/v1/users/online")
+                        .header("Authorization", userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].userId").value("100"))
+                .andExpect(jsonPath("$[0].username").value("onlineuser"))
+                .andExpect(jsonPath("$[0].status").value("ONLINE"));
+    }
+
+    @Test
+    void getOnlineUsersShouldReturnActiveUsersWhenPrincipalIsWrappedInAuthentication() throws Exception {
+        org.springframework.messaging.simp.user.SimpUser mockUser = Mockito.mock(org.springframework.messaging.simp.user.SimpUser.class);
+        Mockito.when(mockUser.getName()).thenReturn("200");
+
+        com.example.chatapp.jwt.UserPrincipal onlinePrincipal = new com.example.chatapp.jwt.UserPrincipal(
+                200L, "wrappeduser", "password", java.util.Collections.emptyList()
+        );
+        org.springframework.security.authentication.UsernamePasswordAuthenticationToken authentication =
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        onlinePrincipal, null, onlinePrincipal.getAuthorities()
+                );
+        Mockito.when(mockUser.getPrincipal()).thenReturn(authentication);
+
+        Mockito.when(simpUserRegistry.getUsers()).thenReturn(java.util.Collections.singleton(mockUser));
+
+        mockMvc.perform(get("/api/v1/users/online")
+                        .header("Authorization", userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].userId").value("200"))
+                .andExpect(jsonPath("$[0].username").value("wrappeduser"))
+                .andExpect(jsonPath("$[0].status").value("ONLINE"));
     }
 }
 

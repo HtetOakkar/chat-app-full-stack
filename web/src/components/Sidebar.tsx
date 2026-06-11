@@ -55,6 +55,25 @@ export default function Sidebar({ activeChat, onSelectChat, onSelectProfileUser,
   const [addingContact, setAddingContact] = useState<number | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const [activeMenuContactId, setActiveMenuContactId] = useState<number | null>(null);
+
+  const handleDeleteChat = async (contactUserId: number) => {
+    if (!confirm("Are you sure you want to delete this chat? This will clear the conversation history for you. The other user will not be notified.")) {
+      return;
+    }
+    try {
+      await apiFetch(`/api/v1/messages/private/${contactUserId}`, {
+        method: "DELETE",
+      });
+      window.dispatchEvent(new CustomEvent("chat:deleted", { detail: { contactUserId } }));
+      fetchData();
+    } catch (err) {
+      console.error("Failed to delete chat:", err);
+    } finally {
+      setActiveMenuContactId(null);
+    }
+  };
+
   // Fetch contacts and requests
   const fetchData = async () => {
     try {
@@ -87,6 +106,19 @@ export default function Sidebar({ activeChat, onSelectChat, onSelectProfileUser,
     };
   }, []);
 
+  // Close contact settings menu on outside clicks
+  useEffect(() => {
+    const handleWindowClick = () => {
+      setActiveMenuContactId(null);
+    };
+    if (activeMenuContactId !== null) {
+      window.addEventListener("click", handleWindowClick);
+    }
+    return () => {
+      window.removeEventListener("click", handleWindowClick);
+    };
+  }, [activeMenuContactId]);
+
   // Clear unread count locally when activeChat changes to a direct message chat
   useEffect(() => {
     if (activeChat && !activeChat.isPublic) {
@@ -98,6 +130,23 @@ export default function Sidebar({ activeChat, onSelectChat, onSelectProfileUser,
     }
   }, [activeChat?.id, activeChat?.isPublic]);
 
+  // Auto-switch sidebar view back to chats if activeChat is accepted (not pending/neglected)
+  const prevActiveChatRef = useRef<ActiveChat | null>(null);
+  useEffect(() => {
+    if (
+      sidebarView === "requests" &&
+      activeChat &&
+      prevActiveChatRef.current &&
+      activeChat.id === prevActiveChatRef.current.id &&
+      (prevActiveChatRef.current.status === "PENDING_REQUEST" || prevActiveChatRef.current.status === "NEGLECTED") &&
+      activeChat.status !== "PENDING_REQUEST" &&
+      activeChat.status !== "NEGLECTED"
+    ) {
+      setSidebarView("chats");
+    }
+    prevActiveChatRef.current = activeChat;
+  }, [activeChat, sidebarView]);
+
   // Listen for WebSocket real-time messages to update unread counts and last message previews
   useEffect(() => {
     const handleMessageReceived = (event: Event) => {
@@ -105,7 +154,18 @@ export default function Sidebar({ activeChat, onSelectChat, onSelectProfileUser,
       const msg = customEvent.detail;
       if (!msg) return;
 
+      const partnerId = msg.senderId === currentUserId ? msg.recipientId : msg.senderId;
+
       setContacts((prevContacts) => {
+        const exists = prevContacts.some((c) => c.contactUserId === partnerId);
+        if (!exists && partnerId) {
+          // Trigger reload from server so the contact is restored in the sidebar
+          setTimeout(() => {
+            fetchData();
+          }, 50);
+          return prevContacts;
+        }
+
         return prevContacts.map((contact) => {
           const isSender = msg.senderId === contact.contactUserId;
           const isRecipient = msg.recipientId === contact.contactUserId;
@@ -396,8 +456,9 @@ export default function Sidebar({ activeChat, onSelectChat, onSelectProfileUser,
                   const userStatus = onlineUsers[contact.contactUserId]?.status || "OFFLINE";
 
                   return (
-                    <button
-                      type="button"
+                    <div
+                      role="button"
+                      tabIndex={0}
                       key={contact.id}
                       onClick={() =>
                         onSelectChat({
@@ -407,7 +468,17 @@ export default function Sidebar({ activeChat, onSelectChat, onSelectProfileUser,
                           status: contact.status,
                         })
                       }
-                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left ${
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          onSelectChat({
+                            id: contact.contactUserId,
+                            username: contact.contactUsername,
+                            isPublic: false,
+                            status: contact.status,
+                          });
+                        }
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left cursor-pointer group relative ${
                         isSelected
                           ? "bg-primary/8 border border-primary/15"
                           : "hover:bg-surface-container-lowest/60 border border-transparent"
@@ -443,14 +514,42 @@ export default function Sidebar({ activeChat, onSelectChat, onSelectProfileUser,
                                   : contact.lastMessageContent)
                               : `${userStatus.toLowerCase()}`}
                           </p>
-                          {contact.unreadCount && contact.unreadCount > 0 ? (
-                            <span className="w-4.5 h-4.5 rounded-full bg-primary text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-sm shadow-primary/20">
-                              {contact.unreadCount}
-                            </span>
-                          ) : null}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {contact.unreadCount && contact.unreadCount > 0 ? (
+                              <span className="w-4.5 h-4.5 rounded-full bg-primary text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-sm shadow-primary/20">
+                                {contact.unreadCount}
+                              </span>
+                            ) : null}
+                            {/* Chat options button visible on hover/focus */}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuContactId(activeMenuContactId === contact.contactUserId ? null : contact.contactUserId);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-0.5 text-outline hover:text-on-surface rounded-full hover:bg-surface-container-high flex items-center justify-center"
+                                title="Chat options"
+                              >
+                                <span className="material-symbols-outlined text-sm">more_vert</span>
+                              </button>
+                              {activeMenuContactId === contact.contactUserId && (
+                                <div className="absolute right-0 top-full mt-1 z-35 bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.08)] py-1.5 min-w-[130px] animate-[fadeIn_0.15s_ease-out]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteChat(contact.contactUserId)}
+                                    className="w-full text-left px-3.5 py-2 text-xs text-error hover:bg-surface-container-low transition-colors flex items-center gap-1.5 font-bold uppercase tracking-wider"
+                                  >
+                                    <span className="material-symbols-outlined text-sm text-error">delete</span>
+                                    Delete Chat
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </button>
+                    </div>
                   );
                 });
               })()

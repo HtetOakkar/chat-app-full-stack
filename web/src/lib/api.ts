@@ -34,10 +34,6 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     throw new Error(errorMsg);
   }
 
-  // Some endpoints return 204 No Content with no body
-  if (response.status === 204) {
-    return null;
-  }
-
-  return response.json();
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
 }

@@ -47,11 +47,18 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI());
     }
 
+    @ExceptionHandler(java.time.format.DateTimeParseException.class)
+    public ResponseEntity<ApiError> handleDateTimeParseException(java.time.format.DateTimeParseException ex,
+                                                                 HttpServletRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "Invalid date/time format: " + ex.getParsedString(), request.getRequestURI());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnexpectedException(Exception ex,
                                                               HttpServletRequest request) {
+        ex.printStackTrace(); // Temporarily print stack trace to console for diagnosis
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR,
-                "An unexpected error occurred",
+                "An unexpected error occurred: " + ex.getMessage(),
                 request.getRequestURI());
     }
 

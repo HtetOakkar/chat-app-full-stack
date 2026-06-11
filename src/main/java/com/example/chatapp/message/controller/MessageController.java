@@ -8,6 +8,8 @@ import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.message.service.MessageService;
 import com.example.chatapp.user.repository.ContactRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +24,7 @@ public class MessageController {
     private final MessageService messageService;
     private final ContactRepository contactRepository;
     private final MessageRepository messageRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @GetMapping("/public")
     public MessagePage getPublicMessages(
@@ -68,5 +71,44 @@ public class MessageController {
             throw new UnauthorizedException("User not authenticated");
         }
         messageService.markMessagesAsRead(contactUserId, currentUser.getId());
+    }
+
+    @DeleteMapping("/{messageId}")
+    public MessageDto deleteMessage(
+            @PathVariable Long messageId,
+            @RequestParam(required = false) String timestamp,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        if (currentUser == null) {
+            throw new UnauthorizedException("User not authenticated");
+        }
+        Instant ts = null;
+        if (timestamp != null && !timestamp.isBlank() && !"null".equals(timestamp) && !"undefined".equals(timestamp)) {
+            try {
+                ts = Instant.parse(timestamp);
+            } catch (java.time.format.DateTimeParseException e) {
+                ts = java.time.OffsetDateTime.parse(timestamp).toInstant();
+            }
+        }
+        MessageDto deletedMessage = messageService.deleteMessage(messageId, ts, currentUser.getId());
+
+        if (deletedMessage.getRecipientId() == null) {
+            messagingTemplate.convertAndSend("/topic/public", deletedMessage);
+        } else {
+            messagingTemplate.convertAndSendToUser(deletedMessage.getSenderId().toString(), "/queue/messages", deletedMessage);
+            messagingTemplate.convertAndSendToUser(deletedMessage.getRecipientId().toString(), "/queue/messages", deletedMessage);
+        }
+
+        return deletedMessage;
+    }
+
+    @DeleteMapping("/private/{contactUserId}")
+    public ResponseEntity<Void> clearPrivateChat(
+            @PathVariable Long contactUserId,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        if (currentUser == null) {
+            throw new UnauthorizedException("User not authenticated");
+        }
+        messageService.clearPrivateChat(currentUser.getId(), contactUserId);
+        return ResponseEntity.noContent().build();
     }
 }

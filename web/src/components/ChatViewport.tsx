@@ -52,6 +52,61 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
   const [inputText, setInputText] = useState("");
   const [bannerLoading, setBannerLoading] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [activeMenuMessageId, setActiveMenuMessageId] = useState<number | null>(null);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+
+  const handleDeleteChat = async (contactUserId: number) => {
+    if (!confirm("Are you sure you want to delete this chat? This will clear the conversation history for you. The other user will not be notified.")) {
+      return;
+    }
+    try {
+      await apiFetch(`/api/v1/messages/private/${contactUserId}`, {
+        method: "DELETE",
+      });
+      window.dispatchEvent(new CustomEvent("chat:deleted", { detail: { contactUserId } }));
+    } catch (err) {
+      console.error("Failed to delete chat:", err);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: number, timestamp: string) => {
+    try {
+      const url = `/api/v1/messages/${messageId}?timestamp=${encodeURIComponent(timestamp)}`;
+      await apiFetch(url, {
+        method: "DELETE",
+      });
+    } catch (err) {
+      console.error("Failed to delete message:", err);
+    } finally {
+      setActiveMenuMessageId(null);
+    }
+  };
+
+  // Close header settings menu on outside clicks
+  useEffect(() => {
+    const handleWindowClick = () => {
+      setShowHeaderMenu(false);
+    };
+    if (showHeaderMenu) {
+      window.addEventListener("click", handleWindowClick);
+    }
+    return () => {
+      window.removeEventListener("click", handleWindowClick);
+    };
+  }, [showHeaderMenu]);
+
+  // Close message dropdown menu on outside clicks
+  useEffect(() => {
+    const handleWindowClick = () => {
+      setActiveMenuMessageId(null);
+    };
+    if (activeMenuMessageId !== null) {
+      window.addEventListener("click", handleWindowClick);
+    }
+    return () => {
+      window.removeEventListener("click", handleWindowClick);
+    };
+  }, [activeMenuMessageId]);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
@@ -135,9 +190,11 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
     }
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || !activeChat) return;
+
+    const isPendingOrNeglected = activeChat.status === "PENDING_REQUEST" || activeChat.status === "NEGLECTED";
 
     if (activeChat.isPublic) {
       sendPublicMessage(inputText.trim());
@@ -145,6 +202,17 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
       sendPrivateMessage(activeChat.id, inputText.trim());
     }
     setInputText("");
+
+    if (isPendingOrNeglected) {
+      try {
+        await apiFetch(`/api/v1/contacts/${activeChat.id}/accept`, {
+          method: "PUT",
+        });
+      } catch {
+        // Silent fail
+      }
+      onBannerAction();
+    }
   };
 
   const handleBannerAction = async (action: "accept" | "neglect" | "block") => {
@@ -174,6 +242,7 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
   };
 
   const isPending = activeChat?.status === "PENDING_REQUEST";
+  const isPendingOrNeglected = activeChat?.status === "PENDING_REQUEST" || activeChat?.status === "NEGLECTED";
 
   // Empty state
   if (!activeChat) {
@@ -261,6 +330,37 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
             />
             {connected ? "Connected" : "Offline"}
           </span>
+
+          {!activeChat.isPublic && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowHeaderMenu(!showHeaderMenu);
+                }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors"
+                title="Conversation Settings"
+              >
+                <span className="material-symbols-outlined text-lg">more_vert</span>
+              </button>
+              {showHeaderMenu && (
+                <div className="absolute right-0 mt-1.5 z-30 bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.08)] py-1.5 min-w-[140px] animate-[fadeIn_0.15s_ease-out]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowHeaderMenu(false);
+                      handleDeleteChat(activeChat.id);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs text-error hover:bg-surface-container-low transition-colors flex items-center gap-2 font-bold uppercase tracking-wider"
+                  >
+                    <span className="material-symbols-outlined text-base text-error">delete</span>
+                    Delete Chat
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -357,24 +457,56 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
                         {msg.senderUsername}
                       </span>
                     )}
-                    <div
-                      className={`p-3.5 rounded-2xl text-xs leading-relaxed ${
-                        isOwnMessage
-                          ? "bg-primary text-white rounded-br-sm shadow-sm shadow-primary/10"
-                          : "bg-surface-container-lowest text-on-surface rounded-bl-sm border border-outline-variant/10"
-                      }`}
-                    >
-                      <p>{msg.content}</p>
-                      <span
-                        className={`text-[8px] font-bold mt-1.5 block tracking-tighter uppercase ${
-                          isOwnMessage ? "text-white/60 text-right" : "text-outline"
+                    <div className="relative group flex items-center gap-2">
+                      {isOwnMessage && !msg.isDeleted && (
+                        <div className="relative shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuMessageId(activeMenuMessageId === msg.id ? null : msg.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded-full hover:bg-surface-container-high flex items-center justify-center shrink-0"
+                          >
+                            <span className="material-symbols-outlined text-sm">more_vert</span>
+                          </button>
+
+                          {activeMenuMessageId === msg.id && (
+                            <div className="absolute right-0 top-[100%] mt-1 z-30 bg-surface-container-lowest border border-outline-variant/20 rounded-lg shadow-lg py-1 min-w-[100px] animate-[fadeIn_0.15s_ease-out]">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMessage(msg.id, msg.timestamp)}
+                                className="w-full text-left px-3 py-1.5 text-xs text-error hover:bg-surface-container-low transition-colors flex items-center gap-1.5 font-bold uppercase tracking-wider"
+                              >
+                                <span className="material-symbols-outlined text-sm text-error">delete</span>
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div
+                        className={`p-3.5 rounded-2xl text-xs leading-relaxed ${
+                          msg.isDeleted
+                            ? `bg-surface-container-low/50 text-outline italic border border-outline-variant/10 ${isOwnMessage ? "rounded-br-sm" : "rounded-bl-sm"}`
+                            : isOwnMessage
+                              ? "bg-primary text-white rounded-br-sm shadow-sm shadow-primary/10"
+                              : "bg-surface-container-lowest text-on-surface rounded-bl-sm border border-outline-variant/10"
                         }`}
                       >
-                        {new Date(msg.timestamp).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
+                        <p>{msg.content}</p>
+                        <span
+                          className={`text-[8px] font-bold mt-1.5 block tracking-tighter uppercase ${
+                            isOwnMessage && !msg.isDeleted ? "text-white/60 text-right" : "text-outline"
+                          }`}
+                        >
+                          {new Date(msg.timestamp).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </Fragment>
@@ -402,6 +534,14 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
           onSubmit={handleSendMessage}
           className="p-4 border-t border-outline-variant/10 bg-surface-container-lowest shrink-0"
         >
+          {isPendingOrNeglected && (
+            <div className="mb-3 px-3 py-2 bg-secondary/5 border border-secondary/10 rounded-lg flex items-center gap-2 text-[10px] text-on-surface font-semibold select-none animate-[fadeIn_0.2s_ease-out]">
+              <span className="material-symbols-outlined text-secondary text-xs">warning</span>
+              <span>
+                Replying will automatically accept this request and save <span className="text-secondary font-bold">{activeChat.username}</span> to your contacts.
+              </span>
+            </div>
+          )}
           <div className="bg-surface-container-low rounded-xl p-1.5 flex items-center gap-2 border border-transparent focus-within:border-primary/30 transition-all">
             <input
               value={inputText}

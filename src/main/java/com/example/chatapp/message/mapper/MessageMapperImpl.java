@@ -22,6 +22,7 @@ public class MessageMapperImpl implements MessageMapper {
                 .timestamp(message.getSentAt())
                 .isDelivered(message.getIsDelivered())
                 .isRead(message.getIsRead())
+                .isDeleted(message.getIsDeleted())
                 .build();
     }
 
@@ -30,6 +31,7 @@ public class MessageMapperImpl implements MessageMapper {
         return Message.builder()
                 .messageType(messageDto.getMessageType())
                 .content(messageDto.getContent())
+                .isDeleted(messageDto.getIsDeleted() != null ? messageDto.getIsDeleted() : false)
                 .build();
     }
 }

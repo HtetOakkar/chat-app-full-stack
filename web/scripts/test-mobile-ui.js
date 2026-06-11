@@ -133,6 +133,13 @@ try {
     assert(dashboardContent.includes('MyProfileCard'), 'ChatDashboard.tsx must import and use MyProfileCard');
     assert(!fs.existsSync(path.join(__dirname, '../src/components/MyProfileModal.tsx')), 'MyProfileModal.tsx must be removed');
 
+    // Message request reply behavior checks
+    assert(viewportContent.includes('PENDING_REQUEST') && viewportContent.includes('NEGLECTED') && viewportContent.includes('automatically accept'), 'ChatViewport.tsx must display a warning when replying to a pending/neglected request');
+    assert(viewportContent.includes('onBannerAction()'), 'ChatViewport.tsx must call onBannerAction() upon replying to a request');
+    assert(viewportContent.includes('/accept') && viewportContent.includes('handleSendMessage'), 'ChatViewport.tsx must call accept API on handleSendMessage for pending/neglected requests');
+    assert(sidebarContent.includes('activeChat.status !== "PENDING_REQUEST"') && sidebarContent.includes('setSidebarView("chats")'), 'Sidebar.tsx must auto-switch view back to chats when activeChat is accepted');
+    assert(sidebarContent.includes('prevActiveChatRef') && sidebarContent.includes('prevActiveChatRef.current'), 'Sidebar.tsx must use prevActiveChatRef to track activeChat transitions');
+
     console.log('Mobile UI & Rebranding verification tests passed successfully!');
     process.exit(0);
 } catch (err) {
