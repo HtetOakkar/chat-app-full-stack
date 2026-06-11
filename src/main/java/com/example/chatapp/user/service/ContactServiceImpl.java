@@ -115,6 +115,14 @@ public class ContactServiceImpl implements ContactService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<ContactDto> getBlockedContacts(Long ownerId) {
+        return contactRepository.findByOwnerIdAndStatus(ownerId, ContactStatus.BLOCKED).stream()
+                .map(contact -> mapToEnrichedDto(contact, ownerId))
+                .collect(Collectors.toList());
+    }
+
+    @Override
     @Transactional
     public ContactDto neglectRequest(Long ownerId, Long contactId) {
         Contact contact = contactRepository.findByOwnerIdAndContactUserId(ownerId, contactId)

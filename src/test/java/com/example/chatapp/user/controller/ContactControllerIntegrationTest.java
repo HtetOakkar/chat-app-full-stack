@@ -199,6 +199,22 @@ class ContactControllerIntegrationTest {
     }
 
     @Test
+    void getBlockedContactsShouldReturnOnlyBlockedUsers() throws Exception {
+        // Bob blocks Alice
+        mockMvc.perform(put("/api/v1/contacts/" + aliceUser.getId() + "/block")
+                        .header("Authorization", bobToken))
+                .andExpect(status().isOk());
+
+        // Get blocked contacts
+        mockMvc.perform(get("/api/v1/contacts/blocked")
+                        .header("Authorization", bobToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].contactUsername").value("alice"))
+                .andExpect(jsonPath("$[0].status").value("BLOCKED"));
+    }
+
+    @Test
     void getContactsShouldReturnLastMessageAndUnreadCount() throws Exception {
         // 1. Establish Bob and Alice as mutually accepted contacts
         Contact contactAlice = Contact.builder()

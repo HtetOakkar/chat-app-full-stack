@@ -76,6 +76,14 @@ public class ContactController {
         return ResponseEntity.ok(contactService.neglectRequest(currentUser.getId(), contactId));
     }
 
+    @GetMapping("/blocked")
+    public ResponseEntity<List<ContactDto>> getBlockedContacts(@AuthenticationPrincipal UserPrincipal currentUser) {
+        if (currentUser == null) {
+            throw new BadRequestException("User not authenticated");
+        }
+        return ResponseEntity.ok(contactService.getBlockedContacts(currentUser.getId()));
+    }
+
     @GetMapping("/requests")
     public ResponseEntity<List<ContactDto>> getPendingRequests(@AuthenticationPrincipal UserPrincipal currentUser) {
         if (currentUser == null) {
