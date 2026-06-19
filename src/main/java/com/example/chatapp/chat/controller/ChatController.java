@@ -4,6 +4,7 @@ import com.example.chatapp.exception.BadRequestException;
 import com.example.chatapp.jwt.UserPrincipal;
 import com.example.chatapp.message.model.dto.MessageDto;
 import com.example.chatapp.message.model.dto.OnlineStatusDto;
+import com.example.chatapp.message.model.dto.TypingIndicatorDto;
 import com.example.chatapp.message.model.entity.MessageType;
 import com.example.chatapp.message.service.MessageService;
 import com.example.chatapp.user.model.entity.Contact;
@@ -36,6 +37,7 @@ public class ChatController {
     private final ContactRepository contactRepository;
     private final UserRepository userRepository;
     private final ContactService contactService;
+    private final com.example.chatapp.user.service.PresencePrivacyService presencePrivacyService;
 
     @MessageMapping("/chat.public")
     public void sendPublicMessage(@Valid @Payload MessageDto messageDto, Principal principal) {
@@ -117,11 +119,30 @@ public class ChatController {
     public void sendOnlineStatus(@Valid @Payload OnlineStatusDto onlineStatusDto, Principal principal) {
         UserPrincipal authenticatedUser = getAuthenticatedUser(principal);
         Map<String, Object> map = new HashMap<>();
-        map.put("userid", authenticatedUser.getId());
+        map.put("userId", authenticatedUser.getId());
         map.put("status", onlineStatusDto.getStatus());
         map.put("timestamp", Instant.now());
         map.put("username", authenticatedUser.getUsername());
-        messagingTemplate.convertAndSend("/topic/online", map);
+
+        java.util.Set<Long> receivers = presencePrivacyService.getEligiblePresenceReceivers(authenticatedUser.getId());
+        for (Long receiverId : receivers) {
+            messagingTemplate.convertAndSendToUser(receiverId.toString(), "/queue/online", map);
+        }
+        messagingTemplate.convertAndSendToUser(authenticatedUser.getId().toString(), "/queue/online", map);
+    }
+
+    @MessageMapping("/typing")
+    public void sendTypingIndicator(@Valid @Payload TypingIndicatorDto typingDto, Principal principal) {
+        UserPrincipal authenticatedUser = getAuthenticatedUser(principal);
+        typingDto.setSenderId(authenticatedUser.getId());
+
+        Long recipientId = typingDto.getRecipientId();
+        if (recipientId == null) {
+            throw new BadRequestException("recipientId is required for typing events");
+        }
+
+        // Send typing indicator directly since it's an explicit action
+        messagingTemplate.convertAndSendToUser(recipientId.toString(), "/queue/typing", typingDto);
     }
 
     private void createSymmetricRelations(Long recipientId, Long senderId) {

@@ -159,4 +159,18 @@ describe("Sidebar", () => {
     expect(screen.getByText("user2")).toBeInTheDocument();
     expect(screen.queryByText("user1")).not.toBeInTheDocument();
   });
+  it("hides sidebar on mobile when viewMode is profile and activeChat is null", () => {
+    const { container } = render(
+      <Sidebar
+        activeChat={null}
+        onSelectChat={jest.fn()}
+        onSelectProfileUser={jest.fn()}
+        refreshTrigger={0}
+        viewMode="profile"
+      />
+    );
+    const aside = container.querySelector("aside");
+    expect(aside).toHaveClass("hidden");
+    expect(aside).not.toHaveClass("flex w-full");
+  });
 });

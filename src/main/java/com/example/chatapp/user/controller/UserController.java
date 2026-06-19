@@ -10,7 +10,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
-    private final org.springframework.messaging.simp.user.SimpUserRegistry simpUserRegistry;
+    private final com.example.chatapp.user.service.PresencePrivacyService presencePrivacyService;
+    private final org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
 
     @org.springframework.web.bind.annotation.GetMapping("/search")
     public org.springframework.http.ResponseEntity<java.util.List<com.example.chatapp.user.model.dto.UserDto>> searchUsers(
@@ -54,32 +55,37 @@ public class UserController {
     }
 
     @org.springframework.web.bind.annotation.GetMapping("/online")
-    public org.springframework.http.ResponseEntity<java.util.List<com.example.chatapp.message.model.dto.OnlineStatusDto>> getOnlineUsers() {
-        java.util.List<com.example.chatapp.message.model.dto.OnlineStatusDto> onlineUsers = simpUserRegistry.getUsers().stream()
-                .map(simpUser -> {
+    public org.springframework.http.ResponseEntity<java.util.List<com.example.chatapp.message.model.dto.OnlineStatusDto>> getOnlineUsers(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.example.chatapp.jwt.UserPrincipal currentUser) {
+            
+        java.util.List<com.example.chatapp.user.model.entity.User> visibleUsers = presencePrivacyService.getEligiblePresenceUsers(currentUser.getId());
+
+        java.util.List<com.example.chatapp.message.model.dto.OnlineStatusDto> onlineUsers = visibleUsers.stream()
+                .filter(user -> {
+                    Object status = redisTemplate.opsForValue().get("user:presence:" + user.getId());
+                    return "Online".equals(status) || "ONLINE".equals(status);
+                })
+                .map(user -> {
                     com.example.chatapp.message.model.dto.OnlineStatusDto dto = new com.example.chatapp.message.model.dto.OnlineStatusDto();
                     dto.setStatus("ONLINE");
-                    dto.setUserId(simpUser.getName());
-                    dto.setUsername(simpUser.getName());
-
-                    java.security.Principal principal = simpUser.getPrincipal();
-                    if (principal != null) {
-                        if (principal instanceof com.example.chatapp.jwt.UserPrincipal userPrincipal) {
-                            dto.setUserId(String.valueOf(userPrincipal.getId()));
-                            dto.setUsername(userPrincipal.getUsername());
-                        } else if (principal instanceof org.springframework.security.core.Authentication authentication) {
-                            Object innerPrincipal = authentication.getPrincipal();
-                            if (innerPrincipal instanceof com.example.chatapp.jwt.UserPrincipal userPrincipal) {
-                                dto.setUserId(String.valueOf(userPrincipal.getId()));
-                                dto.setUsername(userPrincipal.getUsername());
-                            }
-                        }
-                    }
+                    dto.setUserId(String.valueOf(user.getId()));
+                    dto.setUsername(user.getUsername());
                     return dto;
                 })
                 .toList();
         return org.springframework.http.ResponseEntity.ok(onlineUsers);
     }
+
+    @org.springframework.web.bind.annotation.GetMapping("/settings")
+    public org.springframework.http.ResponseEntity<com.example.chatapp.user.model.dto.UserSettingsDto> getUserSettings(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.example.chatapp.jwt.UserPrincipal currentUser) {
+        return org.springframework.http.ResponseEntity.ok(userService.getUserSettings(currentUser.getId()));
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/settings")
+    public org.springframework.http.ResponseEntity<com.example.chatapp.user.model.dto.UserSettingsDto> updateUserSettings(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.example.chatapp.jwt.UserPrincipal currentUser,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody com.example.chatapp.user.model.request.UpdateUserSettingsRequest request) {
+        return org.springframework.http.ResponseEntity.ok(userService.updateUserSettings(currentUser.getId(), request));
+    }
 }
-
-

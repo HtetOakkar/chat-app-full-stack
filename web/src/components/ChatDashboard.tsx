@@ -7,9 +7,7 @@ import Sidebar, { type ActiveChat } from "./Sidebar";
 import ChatViewport from "./ChatViewport";
 import MyProfileCard from "./MyProfileCard";
 
-
 import UserProfileCard from "./UserProfileCard";
-
 
 export default function ChatDashboard() {
   const { logout, username, userId } = useAuth();
@@ -19,11 +17,19 @@ export default function ChatDashboard() {
     isPublic: true,
   });
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [profile, setProfile] = useState<{ fullName?: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ fullName?: string | null } | null>(
+    null
+  );
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [viewMode, setViewMode] = useState<'chat' | 'profile' | 'user-profile'>('chat');
+  const [viewMode, setViewMode] = useState<"chat" | "profile" | "user-profile">(
+    "chat"
+  );
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [selectedProfileUser, setSelectedProfileUser] = useState<{ id: number; username: string; status?: string } | null>(null);
+  const [selectedProfileUser, setSelectedProfileUser] = useState<{
+    id: number;
+    username: string;
+    status?: string;
+  } | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -62,22 +68,27 @@ export default function ChatDashboard() {
     };
   }, []);
 
-
   const handleSelectChat = useCallback((chat: ActiveChat | null) => {
     setActiveChat(chat);
-    setViewMode('chat');
+    setViewMode("chat");
   }, []);
 
-  const handleViewUserProfile = useCallback((user: { id: number; username: string; status?: string }) => {
-    setSelectedProfileUser(user);
-    setViewMode('user-profile');
-  }, []);
+  const handleViewUserProfile = useCallback(
+    (user: { id: number; username: string; status?: string }) => {
+      setSelectedProfileUser(user);
+      setViewMode("user-profile");
+    },
+    []
+  );
 
   const handleBannerAction = useCallback(() => {
     // After accept/ignore/block, refresh sidebar data and clear pending status
     setRefreshTrigger((prev) => prev + 1);
     setActiveChat((prev) => {
-      if (prev && (prev.status === "PENDING_REQUEST" || prev.status === "NEGLECTED")) {
+      if (
+        prev &&
+        (prev.status === "PENDING_REQUEST" || prev.status === "NEGLECTED")
+      ) {
         return { ...prev, status: undefined };
       }
       return prev;
@@ -105,9 +116,13 @@ export default function ChatDashboard() {
                   {username.charAt(0).toUpperCase()}
                 </div>
                 <span className="text-[10px] font-bold text-on-surface hidden lg:block">
-                  {profile?.fullName ? `${profile.fullName} (${username})` : username}
+                  {profile?.fullName
+                    ? `${profile.fullName} (${username})`
+                    : username}
                 </span>
-                <span className="material-symbols-outlined text-[14px] text-outline ml-1">expand_more</span>
+                <span className="material-symbols-outlined text-[14px] text-outline ml-1">
+                  expand_more
+                </span>
               </button>
 
               {isUserMenuOpen && (
@@ -115,12 +130,14 @@ export default function ChatDashboard() {
                   <button
                     type="button"
                     onClick={() => {
-                      setViewMode('profile');
+                      setViewMode("profile");
                       setIsUserMenuOpen(false);
                     }}
                     className="flex items-center gap-2 px-4 py-3 text-sm font-medium text-on-surface hover:bg-surface-container-low transition-colors text-left"
                   >
-                    <span className="material-symbols-outlined text-base">person</span>
+                    <span className="material-symbols-outlined text-base">
+                      person
+                    </span>
                     View Profile
                   </button>
                   <div className="h-px w-full bg-outline-variant/10" />
@@ -132,7 +149,9 @@ export default function ChatDashboard() {
                     }}
                     className="flex items-center gap-2 px-4 py-3 text-sm font-medium text-error hover:bg-error-container/20 transition-colors text-left"
                   >
-                    <span className="material-symbols-outlined text-base">logout</span>
+                    <span className="material-symbols-outlined text-base">
+                      logout
+                    </span>
                     Logout
                   </button>
                 </div>
@@ -149,23 +168,28 @@ export default function ChatDashboard() {
           onSelectChat={handleSelectChat}
           onSelectProfileUser={handleViewUserProfile}
           refreshTrigger={refreshTrigger}
+          viewMode={viewMode}
         />
 
         {/* Main Content */}
-        <div className={`flex-1 flex flex-col min-w-0 ${
-          activeChat === null && viewMode === 'chat' ? "hidden md:flex" : "flex"
-        }`}>
+        <div
+          className={`flex-1 flex flex-col min-w-0 ${
+            activeChat === null && viewMode === "chat"
+              ? "hidden md:flex"
+              : "flex"
+          }`}
+        >
           {/* Main Viewport Content */}
           <div className="flex-1 flex min-h-0">
-            {viewMode === 'profile' ? (
-              <MyProfileCard onBack={() => setViewMode('chat')} />
-            ) : viewMode === 'user-profile' && selectedProfileUser ? (
+            {viewMode === "profile" ? (
+              <MyProfileCard onBack={() => setViewMode("chat")} />
+            ) : viewMode === "user-profile" && selectedProfileUser ? (
               <UserProfileCard
                 userId={selectedProfileUser.id}
                 fallbackUsername={selectedProfileUser.username}
                 currentUserId={userId}
                 userStatus={selectedProfileUser.status}
-                onBack={() => setViewMode('chat')}
+                onBack={() => setViewMode("chat")}
                 onSelectChat={handleSelectChat}
               />
             ) : (
@@ -186,12 +210,18 @@ export default function ChatDashboard() {
           <div className="bg-surface-container-lowest outline outline-1 outline-outline-variant/30 rounded-2xl shadow-[0_24px_64px_rgba(0,66,117,0.12)] max-w-sm w-full overflow-hidden flex flex-col">
             <div className="px-6 py-5 border-b border-outline-variant/10 bg-surface-container-low flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-error/10 flex items-center justify-center text-error border border-error/10">
-                <span className="material-symbols-outlined text-lg">logout</span>
+                <span className="material-symbols-outlined text-lg">
+                  logout
+                </span>
               </div>
-              <h3 className="font-bold text-sm text-on-surface">Sign Out Confirmation</h3>
+              <h3 className="font-bold text-sm text-on-surface">
+                Sign Out Confirmation
+              </h3>
             </div>
             <div className="p-6">
-              <p className="text-sm text-outline mb-6">Are you sure you want to sign out of your account?</p>
+              <p className="text-sm text-outline mb-6">
+                Are you sure you want to sign out of your account?
+              </p>
               <div className="flex justify-end gap-3">
                 <button
                   type="button"
@@ -213,6 +243,5 @@ export default function ChatDashboard() {
         </div>
       )}
     </div>
-
   );
 }

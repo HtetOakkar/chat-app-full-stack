@@ -42,6 +42,10 @@ public class UserServiceImpl implements UserService {
                 .birthDate(request.getBirthDate());
 
         if (request.getEmail() != null) {
+            userRepository.findByEmail(request.getEmail()).ifPresent(u -> {
+                throw new com.example.chatapp.exception.BadRequestException("Email is already registered!");
+            });
+
             String code = generateVerificationCode();
             userBuilder.email(request.getEmail())
                     .emailVerified(false)
@@ -55,6 +59,13 @@ public class UserServiceImpl implements UserService {
 
 
         User user = userBuilder.build();
+        
+        com.example.chatapp.user.model.entity.UserSettings settings = com.example.chatapp.user.model.entity.UserSettings.builder()
+                .user(user)
+                .sharePresence(true)
+                .build();
+        user.setSettings(settings);
+
         return userRepository.saveAndFlush(user);
     }
 
@@ -189,6 +200,40 @@ public class UserServiceImpl implements UserService {
         
         System.out.println("=== EMAIL VERIFICATION CODE RESEND " + user.getUsername() + ": " + code + " ===");
         emailService.sendVerificationEmail(user.getEmail(), code);
+    }
+
+    @Override
+    public com.example.chatapp.user.model.dto.UserSettingsDto getUserSettings(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        
+        return com.example.chatapp.user.model.dto.UserSettingsDto.builder()
+                .sharePresence(user.getSettings() != null ? user.getSettings().isSharePresence() : true)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public com.example.chatapp.user.model.dto.UserSettingsDto updateUserSettings(Long userId, com.example.chatapp.user.model.request.UpdateUserSettingsRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        
+        com.example.chatapp.user.model.entity.UserSettings settings = user.getSettings();
+        if (settings == null) {
+            settings = com.example.chatapp.user.model.entity.UserSettings.builder()
+                    .user(user)
+                    .sharePresence(request.getSharePresence())
+                    .build();
+            user.setSettings(settings);
+        } else {
+            settings.setSharePresence(request.getSharePresence());
+        }
+        
+        userRepository.save(user);
+        
+        return com.example.chatapp.user.model.dto.UserSettingsDto.builder()
+                .sharePresence(settings.isSharePresence())
+                .build();
     }
 }
 

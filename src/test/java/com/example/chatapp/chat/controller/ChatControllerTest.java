@@ -19,6 +19,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.mockito.Mockito.*;
 
@@ -39,6 +40,9 @@ class ChatControllerTest {
 
     @Mock
     private ContactService contactService;
+
+    @Mock
+    private com.example.chatapp.user.service.PresencePrivacyService presencePrivacyService;
 
     @InjectMocks
     private ChatController chatController;
@@ -78,4 +82,26 @@ class ChatControllerTest {
         // Assert
         verify(contactService, times(1)).acceptRequestIfPending(1L, 2L);
     }
+
+    @Test
+    void typingEventShouldBeBroadcastToRecipientQueue() {
+        // Arrange
+        com.example.chatapp.message.model.dto.TypingIndicatorDto typingDto = new com.example.chatapp.message.model.dto.TypingIndicatorDto(2L, true);
+
+
+        // Act
+        chatController.sendTypingIndicator(typingDto, senderPrincipal);
+
+        // Assert
+        verify(messagingTemplate).convertAndSendToUser(
+                eq("2"),
+                eq("/queue/typing"),
+                argThat(msg -> {
+                    com.example.chatapp.message.model.dto.TypingIndicatorDto dto = (com.example.chatapp.message.model.dto.TypingIndicatorDto) msg;
+                    return dto.getSenderId().equals(1L) && dto.getIsTyping();
+                })
+        );
+    }
+
+
 }

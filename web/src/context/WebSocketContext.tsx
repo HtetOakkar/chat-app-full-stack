@@ -1,6 +1,12 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useRef } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+} from "react";
 import { useAuth } from "./AuthContext";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
@@ -18,19 +24,30 @@ type MessageDto = {
 };
 
 type OnlineUserStatus = {
-  userid: number;
+  userId: number;
   status: string;
   timestamp: string;
   username: string;
+};
+
+type TypingIndicatorDto = {
+  senderId: number;
+  recipientId: number;
+  isTyping: boolean;
 };
 
 interface WebSocketContextType {
   connected: boolean;
   publicMessages: MessageDto[];
   privateMessages: Record<number, MessageDto[]>;
-  onlineUsers: Record<number, { status: string; username: string; timestamp: string }>;
+  onlineUsers: Record<
+    number,
+    { status: string; username: string; timestamp: string }
+  >;
+  typingUsers: Record<number, boolean>;
   sendPublicMessage: (content: string) => void;
   sendPrivateMessage: (recipientId: number, content: string) => void;
+  sendTypingIndicator: (recipientId: number, isTyping: boolean) => void;
   sendStatusUpdate: (status: string) => void;
   loadPublicHistory: () => Promise<void>;
   loadPrivateHistory: (contactUserId: number) => Promise<void>;
@@ -40,17 +57,31 @@ interface WebSocketContextType {
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
 
-export const WebSocketProvider = ({ children }: { children: React.ReactNode }) => {
+export const WebSocketProvider = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
   const { token, isAuthenticated, userId } = useAuth();
   const [connected, setConnected] = useState(false);
   const [publicMessages, setPublicMessages] = useState<MessageDto[]>([]);
-  const [privateMessages, setPrivateMessages] = useState<Record<number, MessageDto[]>>({});
-  const [onlineUsers, setOnlineUsers] = useState<Record<number, { status: string; username: string; timestamp: string }>>({});
-  
+  const [privateMessages, setPrivateMessages] = useState<
+    Record<number, MessageDto[]>
+  >({});
+  const [onlineUsers, setOnlineUsers] = useState<
+    Record<number, { status: string; username: string; timestamp: string }>
+  >({});
+  const [typingUsers, setTypingUsers] = useState<Record<number, boolean>>({});
+  const typingTimeoutsRef = useRef<Record<number, NodeJS.Timeout>>({});
+
   const [hasMorePublicHistory, setHasMorePublicHistory] = useState(true);
-  const [hasMorePrivateHistory, setHasMorePrivateHistory] = useState<Record<number, boolean>>({});
+  const [hasMorePrivateHistory, setHasMorePrivateHistory] = useState<
+    Record<number, boolean>
+  >({});
   const [publicCursor, setPublicCursor] = useState<string | null>(null);
-  const [privateCursors, setPrivateCursors] = useState<Record<number, string | null>>({});
+  const [privateCursors, setPrivateCursors] = useState<
+    Record<number, string | null>
+  >({});
 
   const stompClientRef = useRef<Client | null>(null);
 
@@ -65,6 +96,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
         setPublicMessages([]);
         setPrivateMessages({});
         setOnlineUsers({});
+        setTypingUsers({});
         setHasMorePublicHistory(true);
         setHasMorePrivateHistory({});
         setPublicCursor(null);
@@ -77,6 +109,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       setPublicMessages([]);
       setPrivateMessages({});
       setOnlineUsers({});
+      setTypingUsers({});
       setHasMorePublicHistory(true);
       setHasMorePrivateHistory({});
       setPublicCursor(null);
@@ -84,7 +117,8 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
     }, 0);
 
     // Connect to Backend WebSocket
-    const socketUrl = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8181/ws";
+    const socketUrl =
+      process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8181/ws";
     const client = new Client({
       webSocketFactory: () => new SockJS(socketUrl),
       connectHeaders: {
@@ -113,14 +147,21 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       client.subscribe("/topic/public", (message) => {
         const msg: MessageDto = JSON.parse(message.body);
         setPublicMessages((prev) => {
-          const exists = prev.some((p) => 
-            p.id === msg.id || 
-            (p.senderId === msg.senderId && 
-             new Date(p.timestamp).getTime() === new Date(msg.timestamp).getTime())
+          const exists = prev.some(
+            (p) =>
+              p.id === msg.id ||
+              (p.senderId === msg.senderId &&
+                new Date(p.timestamp).getTime() ===
+                  new Date(msg.timestamp).getTime())
           );
           if (exists) {
             return prev.map((p) => {
-              if (p.id === msg.id || (p.senderId === msg.senderId && new Date(p.timestamp).getTime() === new Date(msg.timestamp).getTime())) {
+              if (
+                p.id === msg.id ||
+                (p.senderId === msg.senderId &&
+                  new Date(p.timestamp).getTime() ===
+                    new Date(msg.timestamp).getTime())
+              ) {
                 return msg;
               }
               return p;
@@ -133,19 +174,27 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       // 2. Subscribe to Private Queue (regular and requests)
       client.subscribe("/user/queue/messages", (message) => {
         const msg: MessageDto = JSON.parse(message.body);
-        const partnerId = msg.senderId === userId ? msg.recipientId : msg.senderId;
+        const partnerId =
+          msg.senderId === userId ? msg.recipientId : msg.senderId;
         if (!partnerId) return;
 
         setPrivateMessages((prev) => {
           const current = prev[partnerId] || [];
-          const exists = current.some((c) => 
-            c.id === msg.id || 
-            (c.senderId === msg.senderId && 
-             new Date(c.timestamp).getTime() === new Date(msg.timestamp).getTime())
+          const exists = current.some(
+            (c) =>
+              c.id === msg.id ||
+              (c.senderId === msg.senderId &&
+                new Date(c.timestamp).getTime() ===
+                  new Date(msg.timestamp).getTime())
           );
           if (exists) {
             const updatedList = current.map((c) => {
-              if (c.id === msg.id || (c.senderId === msg.senderId && new Date(c.timestamp).getTime() === new Date(msg.timestamp).getTime())) {
+              if (
+                c.id === msg.id ||
+                (c.senderId === msg.senderId &&
+                  new Date(c.timestamp).getTime() ===
+                    new Date(msg.timestamp).getTime())
+              ) {
                 return msg;
               }
               return c;
@@ -162,26 +211,36 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
         });
 
         if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("message:received", { detail: msg }));
+          window.dispatchEvent(
+            new CustomEvent("message:received", { detail: msg })
+          );
         }
       });
 
       client.subscribe("/user/queue/requests", (message) => {
         // First message from a new contact will trigger request banner
         const msg: MessageDto = JSON.parse(message.body);
-        const partnerId = msg.senderId === userId ? msg.recipientId : msg.senderId;
+        const partnerId =
+          msg.senderId === userId ? msg.recipientId : msg.senderId;
         if (!partnerId) return;
 
         setPrivateMessages((prev) => {
           const current = prev[partnerId] || [];
-          const exists = current.some((c) => 
-            c.id === msg.id || 
-            (c.senderId === msg.senderId && 
-             new Date(c.timestamp).getTime() === new Date(msg.timestamp).getTime())
+          const exists = current.some(
+            (c) =>
+              c.id === msg.id ||
+              (c.senderId === msg.senderId &&
+                new Date(c.timestamp).getTime() ===
+                  new Date(msg.timestamp).getTime())
           );
           if (exists) {
             const updatedList = current.map((c) => {
-              if (c.id === msg.id || (c.senderId === msg.senderId && new Date(c.timestamp).getTime() === new Date(msg.timestamp).getTime())) {
+              if (
+                c.id === msg.id ||
+                (c.senderId === msg.senderId &&
+                  new Date(c.timestamp).getTime() ===
+                    new Date(msg.timestamp).getTime())
+              ) {
                 return msg;
               }
               return c;
@@ -200,21 +259,49 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
         // Notify Sidebar/Dashboard to reload contacts/requests
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("contacts:updated"));
-          window.dispatchEvent(new CustomEvent("message:received", { detail: msg }));
+          window.dispatchEvent(
+            new CustomEvent("message:received", { detail: msg })
+          );
         }
       });
 
       // 3. Subscribe to Online Notification Topic
-      client.subscribe("/topic/online", (message) => {
+      client.subscribe("/user/queue/online", (message) => {
         const statusUpdate: OnlineUserStatus = JSON.parse(message.body);
         setOnlineUsers((prev) => ({
           ...prev,
-          [statusUpdate.userid]: {
+          [statusUpdate.userId]: {
             status: statusUpdate.status,
             username: statusUpdate.username,
             timestamp: statusUpdate.timestamp,
           },
         }));
+      });
+
+      // 4. Subscribe to Typing Indicators
+      client.subscribe("/user/queue/typing", (message) => {
+        const indicator: TypingIndicatorDto = JSON.parse(message.body);
+        const { senderId, isTyping } = indicator;
+
+        setTypingUsers((prev) => ({
+          ...prev,
+          [senderId]: isTyping,
+        }));
+
+        // Clear existing timeout if any
+        if (typingTimeoutsRef.current[senderId]) {
+          clearTimeout(typingTimeoutsRef.current[senderId]);
+        }
+
+        // Auto-clear typing status after 3 seconds if isTyping is true
+        if (isTyping) {
+          typingTimeoutsRef.current[senderId] = setTimeout(() => {
+            setTypingUsers((prev) => ({
+              ...prev,
+              [senderId]: false,
+            }));
+          }, 3000);
+        }
       });
 
       // Automatically publish ONLINE status
@@ -316,6 +403,15 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
     }
   };
 
+  const sendTypingIndicator = (recipientId: number, isTyping: boolean) => {
+    if (stompClientRef.current && connected) {
+      stompClientRef.current.publish({
+        destination: "/app/typing",
+        body: JSON.stringify({ recipientId, isTyping }),
+      });
+    }
+  };
+
   const sendStatusUpdate = (status: string) => {
     if (stompClientRef.current && connected) {
       stompClientRef.current.publish({
@@ -331,10 +427,10 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
     try {
       const url = `/api/v1/messages/public?limit=30${publicCursor ? `&cursor=${encodeURIComponent(publicCursor)}` : ""}`;
       const data = await apiFetch(url);
-      
+
       const messages = data.messages || [];
       const nextCursor = data.nextCursor;
-      
+
       if (!nextCursor || messages.length === 0) {
         setHasMorePublicHistory(false);
       } else {
@@ -344,15 +440,21 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       setPublicMessages((prev) => {
         // Merge histories and sort chronologically (ascending)
         const combined = [...messages, ...prev];
-        const unique = combined.filter((m: MessageDto, idx: number, self: MessageDto[]) => 
-          self.findIndex((x) => 
-            x.id === m.id || 
-            (x.senderId === m.senderId && 
-             x.content === m.content && 
-             new Date(x.timestamp).getTime() === new Date(m.timestamp).getTime())
-          ) === idx
+        const unique = combined.filter(
+          (m: MessageDto, idx: number, self: MessageDto[]) =>
+            self.findIndex(
+              (x) =>
+                x.id === m.id ||
+                (x.senderId === m.senderId &&
+                  x.content === m.content &&
+                  new Date(x.timestamp).getTime() ===
+                    new Date(m.timestamp).getTime())
+            ) === idx
         );
-        return unique.sort((a: MessageDto, b: MessageDto) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        return unique.sort(
+          (a: MessageDto, b: MessageDto) =>
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
       });
     } catch (err) {
       console.error("Error loading public history:", err);
@@ -376,7 +478,10 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       const nextCursor = data.nextCursor || null;
 
       if (!nextCursor || messages.length === 0) {
-        setHasMorePrivateHistory((prev) => ({ ...prev, [contactUserId]: false }));
+        setHasMorePrivateHistory((prev) => ({
+          ...prev,
+          [contactUserId]: false,
+        }));
       } else {
         setPrivateCursors((prev) => ({ ...prev, [contactUserId]: nextCursor }));
       }
@@ -384,15 +489,21 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       setPrivateMessages((prev) => {
         const current = prev[contactUserId] || [];
         const combined = [...messages, ...current];
-        const unique = combined.filter((m: MessageDto, idx: number, self: MessageDto[]) => 
-          self.findIndex((x) => 
-            x.id === m.id || 
-            (x.senderId === m.senderId && 
-             x.content === m.content && 
-             new Date(x.timestamp).getTime() === new Date(m.timestamp).getTime())
-          ) === idx
+        const unique = combined.filter(
+          (m: MessageDto, idx: number, self: MessageDto[]) =>
+            self.findIndex(
+              (x) =>
+                x.id === m.id ||
+                (x.senderId === m.senderId &&
+                  x.content === m.content &&
+                  new Date(x.timestamp).getTime() ===
+                    new Date(m.timestamp).getTime())
+            ) === idx
         );
-        const sorted = unique.sort((a: MessageDto, b: MessageDto) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        const sorted = unique.sort(
+          (a: MessageDto, b: MessageDto) =>
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
         return {
           ...prev,
           [contactUserId]: sorted,
@@ -410,8 +521,10 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
         publicMessages,
         privateMessages,
         onlineUsers,
+        typingUsers,
         sendPublicMessage,
         sendPrivateMessage,
+        sendTypingIndicator,
         sendStatusUpdate,
         loadPublicHistory,
         loadPrivateHistory,

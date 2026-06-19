@@ -14,6 +14,8 @@ public interface UserService {
     UserProfileResponse updateUserProfile(Long userId, com.example.chatapp.user.model.request.UpdateProfileRequest request);
     void verifyEmail(Long userId, String code);
     void resendVerificationCode(Long userId);
+    com.example.chatapp.user.model.dto.UserSettingsDto getUserSettings(Long userId);
+    com.example.chatapp.user.model.dto.UserSettingsDto updateUserSettings(Long userId, com.example.chatapp.user.model.request.UpdateUserSettingsRequest request);
 }
 
 

@@ -261,5 +261,35 @@ class AuthenticationControllerIntegrationTest {
                         .content(resendBody))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    void signupWithDuplicateEmailShouldReturnBadRequest() throws Exception {
+        String signupBody1 = """
+                {
+                  "username": "user1",
+                  "password": "password123",
+                  "email": "duplicate@chatapp.com"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signupBody1))
+                .andExpect(status().isOk());
+
+        String signupBody2 = """
+                {
+                  "username": "user2",
+                  "password": "password123",
+                  "email": "duplicate@chatapp.com"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signupBody2))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Email is already registered!"));
+    }
 }
 

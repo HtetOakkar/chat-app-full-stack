@@ -40,6 +40,7 @@ interface SidebarProps {
     status?: string;
   }) => void;
   refreshTrigger: number;
+  viewMode?: "chat" | "profile" | "user-profile";
 }
 
 export default function Sidebar({
@@ -47,6 +48,7 @@ export default function Sidebar({
   onSelectChat,
   onSelectProfileUser,
   refreshTrigger,
+  viewMode = "chat",
 }: SidebarProps) {
   const { onlineUsers } = useWebSocket();
   const { userId: currentUserId } = useAuth();
@@ -293,7 +295,7 @@ export default function Sidebar({
   return (
     <aside
       className={`${
-        activeChat === null ? "flex w-full" : "hidden"
+        activeChat === null && viewMode === "chat" ? "flex w-full" : "hidden"
       } md:flex flex-col h-full w-80 lg:w-96 bg-surface-container-low/60 border-r border-outline-variant/10 shrink-0`}
     >
       {/* Header */}

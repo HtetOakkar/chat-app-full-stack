@@ -20,6 +20,37 @@ import java.util.Map;
 public class WebSocketEventListener {
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
+    private final com.example.chatapp.user.repository.UserRepository userRepository;
+    private final com.example.chatapp.user.service.PresencePrivacyService presencePrivacyService;
+
+    private static final String PRESENCE_KEY_PREFIX = "user:presence:";
+    private static final String OFFLINE_SYNC_QUEUE = "user:presence:offline_sync";
+
+    @EventListener
+    public void handleWebSocketConnectListener(org.springframework.web.socket.messaging.SessionConnectedEvent event) {
+        Principal principal = event.getUser();
+        if (principal instanceof UserPrincipal userPrincipal) {
+            log.info("User '{}' connected. Broadcasting ONLINE status.", userPrincipal.getUsername());
+
+            // Update Redis
+            redisTemplate.opsForValue().set(PRESENCE_KEY_PREFIX + userPrincipal.getId(), "Online");
+            redisTemplate.opsForSet().remove(OFFLINE_SYNC_QUEUE, String.valueOf(userPrincipal.getId()));
+
+            // Broadcast
+            Map<String, Object> map = new HashMap<>();
+            map.put("userId", userPrincipal.getId());
+            map.put("status", "ONLINE");
+            map.put("timestamp", Instant.now());
+            map.put("username", userPrincipal.getUsername());
+
+            java.util.Set<Long> receivers = presencePrivacyService.getEligiblePresenceReceivers(userPrincipal.getId());
+            for (Long receiverId : receivers) {
+                messagingTemplate.convertAndSendToUser(receiverId.toString(), "/queue/online", map);
+            }
+            messagingTemplate.convertAndSendToUser(userPrincipal.getId().toString(), "/queue/online", map);
+        }
+    }
 
     @EventListener
     public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
@@ -28,14 +59,25 @@ public class WebSocketEventListener {
 
         if (principal instanceof UserPrincipal userPrincipal) {
             log.info("User '{}' disconnected. Broadcasting OFFLINE status.", userPrincipal.getUsername());
+            
+            Instant now = Instant.now();
 
+            // Update Redis presence and add to sync queue
+            redisTemplate.opsForValue().set(PRESENCE_KEY_PREFIX + userPrincipal.getId(), now.toString());
+            redisTemplate.opsForSet().add(OFFLINE_SYNC_QUEUE, String.valueOf(userPrincipal.getId()));
+
+            // Broadcast
             Map<String, Object> map = new HashMap<>();
-            map.put("userid", userPrincipal.getId());
+            map.put("userId", userPrincipal.getId());
             map.put("status", "OFFLINE");
-            map.put("timestamp", Instant.now());
+            map.put("timestamp", now);
             map.put("username", userPrincipal.getUsername());
 
-            messagingTemplate.convertAndSend("/topic/online", map);
+            java.util.Set<Long> receivers = presencePrivacyService.getEligiblePresenceReceivers(userPrincipal.getId());
+            for (Long receiverId : receivers) {
+                messagingTemplate.convertAndSendToUser(receiverId.toString(), "/queue/online", map);
+            }
+            messagingTemplate.convertAndSendToUser(userPrincipal.getId().toString(), "/queue/online", map);
         } else {
             log.debug("Non-authenticated or non-UserPrincipal session disconnected.");
         }

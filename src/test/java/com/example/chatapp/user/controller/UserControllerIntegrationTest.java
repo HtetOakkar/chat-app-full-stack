@@ -51,7 +51,10 @@ class UserControllerIntegrationTest {
     private EmailService emailService;
 
     @MockBean
-    private org.springframework.messaging.simp.user.SimpUserRegistry simpUserRegistry;
+    private com.example.chatapp.user.service.PresencePrivacyService presencePrivacyService;
+
+    @MockBean
+    private org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
 
 
     @BeforeEach
@@ -357,7 +360,8 @@ class UserControllerIntegrationTest {
 
     @Test
     void getOnlineUsersShouldReturnEmptyListWhenNoActiveSessions() throws Exception {
-        Mockito.when(simpUserRegistry.getUsers()).thenReturn(java.util.Collections.emptySet());
+        Mockito.when(presencePrivacyService.getEligiblePresenceUsers(ArgumentMatchers.anyLong()))
+               .thenReturn(java.util.Collections.emptyList());
 
         mockMvc.perform(get("/api/v1/users/online")
                         .header("Authorization", userToken))
@@ -368,15 +372,16 @@ class UserControllerIntegrationTest {
 
     @Test
     void getOnlineUsersShouldReturnActiveUsers() throws Exception {
-        org.springframework.messaging.simp.user.SimpUser mockUser = Mockito.mock(org.springframework.messaging.simp.user.SimpUser.class);
-        Mockito.when(mockUser.getName()).thenReturn("100");
+        com.example.chatapp.user.model.entity.User onlineUser = new com.example.chatapp.user.model.entity.User();
+        onlineUser.setId(100L);
+        onlineUser.setUsername("onlineuser");
 
-        com.example.chatapp.jwt.UserPrincipal onlinePrincipal = new com.example.chatapp.jwt.UserPrincipal(
-                100L, "onlineuser", "password", java.util.Collections.emptyList()
-        );
-        Mockito.when(mockUser.getPrincipal()).thenReturn(onlinePrincipal);
+        Mockito.when(presencePrivacyService.getEligiblePresenceUsers(ArgumentMatchers.anyLong()))
+               .thenReturn(java.util.Collections.singletonList(onlineUser));
 
-        Mockito.when(simpUserRegistry.getUsers()).thenReturn(java.util.Collections.singleton(mockUser));
+        org.springframework.data.redis.core.ValueOperations<String, Object> valueOperations = Mockito.mock(org.springframework.data.redis.core.ValueOperations.class);
+        Mockito.when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        Mockito.when(valueOperations.get("user:presence:100")).thenReturn("Online");
 
         mockMvc.perform(get("/api/v1/users/online")
                         .header("Authorization", userToken))
@@ -385,32 +390,6 @@ class UserControllerIntegrationTest {
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].userId").value("100"))
                 .andExpect(jsonPath("$[0].username").value("onlineuser"))
-                .andExpect(jsonPath("$[0].status").value("ONLINE"));
-    }
-
-    @Test
-    void getOnlineUsersShouldReturnActiveUsersWhenPrincipalIsWrappedInAuthentication() throws Exception {
-        org.springframework.messaging.simp.user.SimpUser mockUser = Mockito.mock(org.springframework.messaging.simp.user.SimpUser.class);
-        Mockito.when(mockUser.getName()).thenReturn("200");
-
-        com.example.chatapp.jwt.UserPrincipal onlinePrincipal = new com.example.chatapp.jwt.UserPrincipal(
-                200L, "wrappeduser", "password", java.util.Collections.emptyList()
-        );
-        org.springframework.security.authentication.UsernamePasswordAuthenticationToken authentication =
-                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                        onlinePrincipal, null, onlinePrincipal.getAuthorities()
-                );
-        Mockito.when(mockUser.getPrincipal()).thenReturn(authentication);
-
-        Mockito.when(simpUserRegistry.getUsers()).thenReturn(java.util.Collections.singleton(mockUser));
-
-        mockMvc.perform(get("/api/v1/users/online")
-                        .header("Authorization", userToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].userId").value("200"))
-                .andExpect(jsonPath("$[0].username").value("wrappeduser"))
                 .andExpect(jsonPath("$[0].status").value("ONLINE"));
     }
 }

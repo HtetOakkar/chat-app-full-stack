@@ -31,17 +31,28 @@ interface ChatViewportProps {
   activeChat: ActiveChat | null;
   onBannerAction: () => void;
   onBackToList?: () => void;
-  onViewUserProfile?: (user: { id: number; username: string; status?: string }) => void;
+  onViewUserProfile?: (user: {
+    id: number;
+    username: string;
+    status?: string;
+  }) => void;
 }
 
-export default function ChatViewport({ activeChat, onBannerAction, onBackToList, onViewUserProfile }: ChatViewportProps) {
+export default function ChatViewport({
+  activeChat,
+  onBannerAction,
+  onBackToList,
+  onViewUserProfile,
+}: ChatViewportProps) {
   const {
     connected,
     publicMessages,
     privateMessages,
     onlineUsers,
+    typingUsers,
     sendPublicMessage,
     sendPrivateMessage,
+    sendTypingIndicator,
     loadPublicHistory,
     loadPrivateHistory,
     hasMorePublicHistory,
@@ -52,18 +63,26 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
   const [inputText, setInputText] = useState("");
   const [bannerLoading, setBannerLoading] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [activeMenuMessageId, setActiveMenuMessageId] = useState<number | null>(null);
+  const [activeMenuMessageId, setActiveMenuMessageId] = useState<number | null>(
+    null
+  );
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
 
   const handleDeleteChat = async (contactUserId: number) => {
-    if (!confirm("Are you sure you want to delete this chat? This will clear the conversation history for you. The other user will not be notified.")) {
+    if (
+      !confirm(
+        "Are you sure you want to delete this chat? This will clear the conversation history for you. The other user will not be notified."
+      )
+    ) {
       return;
     }
     try {
       await apiFetch(`/api/v1/messages/private/${contactUserId}`, {
         method: "DELETE",
       });
-      window.dispatchEvent(new CustomEvent("chat:deleted", { detail: { contactUserId } }));
+      window.dispatchEvent(
+        new CustomEvent("chat:deleted", { detail: { contactUserId } })
+      );
     } catch (err) {
       console.error("Failed to delete chat:", err);
     }
@@ -137,7 +156,9 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
       loadPublicHistory();
     } else {
       loadPrivateHistory(activeChat.id);
-      apiFetch(`/api/v1/messages/read/${activeChat.id}`, { method: "PUT" }).catch(() => {});
+      apiFetch(`/api/v1/messages/read/${activeChat.id}`, {
+        method: "PUT",
+      }).catch(() => {});
     }
   }, [activeChat?.id, activeChat?.isPublic]);
 
@@ -151,7 +172,9 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
       if (!msg) return;
 
       if (msg.senderId === activeChat.id) {
-        apiFetch(`/api/v1/messages/read/${activeChat.id}`, { method: "PUT" }).catch(() => {});
+        apiFetch(`/api/v1/messages/read/${activeChat.id}`, {
+          method: "PUT",
+        }).catch(() => {});
       }
     };
 
@@ -174,7 +197,11 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
     if (container.scrollTop === 0) {
       const scrollHeightBefore = container.scrollHeight;
 
-      if (activeChat.isPublic && publicMessages.length > 0 && hasMorePublicHistory) {
+      if (
+        activeChat.isPublic &&
+        publicMessages.length > 0 &&
+        hasMorePublicHistory
+      ) {
         await loadPublicHistory();
       } else if (
         !activeChat.isPublic &&
@@ -194,12 +221,15 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
     e.preventDefault();
     if (!inputText.trim() || !activeChat) return;
 
-    const isPendingOrNeglected = activeChat.status === "PENDING_REQUEST" || activeChat.status === "NEGLECTED";
+    const isPendingOrNeglected =
+      activeChat.status === "PENDING_REQUEST" ||
+      activeChat.status === "NEGLECTED";
 
     if (activeChat.isPublic) {
       sendPublicMessage(inputText.trim());
     } else {
       sendPrivateMessage(activeChat.id, inputText.trim());
+      sendTypingIndicator(activeChat.id, false);
     }
     setInputText("");
 
@@ -242,20 +272,25 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
   };
 
   const isPending = activeChat?.status === "PENDING_REQUEST";
-  const isPendingOrNeglected = activeChat?.status === "PENDING_REQUEST" || activeChat?.status === "NEGLECTED";
+  const isPendingOrNeglected =
+    activeChat?.status === "PENDING_REQUEST" ||
+    activeChat?.status === "NEGLECTED";
 
   // Empty state
   if (!activeChat) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-surface-container-lowest/30">
         <div className="w-20 h-20 rounded-2xl bg-primary/5 flex items-center justify-center mb-6 border border-primary/10">
-          <span className="material-symbols-outlined text-primary/30 text-4xl">chat_bubble</span>
+          <span className="material-symbols-outlined text-primary/30 text-4xl">
+            chat_bubble
+          </span>
         </div>
         <h2 className="text-xl font-headline font-black text-on-surface mb-2">
           Registry Focus Workspace
         </h2>
         <p className="text-xs text-outline max-w-[300px] leading-relaxed">
-          Select a public system channel or a private curator connection from the sidebar to load messaging history.
+          Select a public system channel or a private curator connection from
+          the sidebar to load messaging history.
         </p>
       </div>
     );
@@ -272,13 +307,26 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
               onClick={onBackToList}
               className="md:hidden p-1.5 -ml-1 text-outline hover:text-on-surface rounded-full hover:bg-surface-container-high transition-colors flex items-center justify-center"
             >
-              <span className="material-symbols-outlined text-lg">arrow_back</span>
+              <span className="material-symbols-outlined text-lg">
+                arrow_back
+              </span>
             </button>
           )}
           <div
-            onClick={!activeChat.isPublic && onViewUserProfile ? () => onViewUserProfile({ id: activeChat.id, username: activeChat.username, status: activeChat.status }) : undefined}
+            onClick={
+              !activeChat.isPublic && onViewUserProfile
+                ? () =>
+                    onViewUserProfile({
+                      id: activeChat.id,
+                      username: activeChat.username,
+                      status: activeChat.status,
+                    })
+                : undefined
+            }
             className={`flex items-center gap-2 md:gap-3 ${
-              !activeChat.isPublic ? "cursor-pointer hover:opacity-80 transition-opacity" : ""
+              !activeChat.isPublic
+                ? "cursor-pointer hover:opacity-80 transition-opacity"
+                : ""
             }`}
           >
             <div className="relative">
@@ -290,7 +338,9 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
                 }`}
               >
                 {activeChat.isPublic ? (
-                  <span className="material-symbols-outlined text-base">language</span>
+                  <span className="material-symbols-outlined text-base">
+                    language
+                  </span>
                 ) : (
                   activeChat.username.charAt(0).toUpperCase()
                 )}
@@ -298,13 +348,17 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
               {!activeChat.isPublic && (
                 <div
                   className={`absolute bottom-0 right-0 w-2.5 h-2.5 border-2 border-surface-container-lowest rounded-full ${
-                    getPartnerStatus() === "ONLINE" ? "bg-tertiary" : "bg-outline/30"
+                    getPartnerStatus() === "ONLINE"
+                      ? "bg-tertiary"
+                      : "bg-outline/30"
                   }`}
                 />
               )}
             </div>
             <div>
-              <h3 className="font-bold text-sm text-on-surface leading-tight">{activeChat.username}</h3>
+              <h3 className="font-bold text-sm text-on-surface leading-tight">
+                {activeChat.username}
+              </h3>
               <p className="text-[9px] text-outline font-bold uppercase tracking-widest">
                 {activeChat.isPublic ? (
                   <span className="text-primary">Curators Room</span>
@@ -342,7 +396,9 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors"
                 title="Conversation Settings"
               >
-                <span className="material-symbols-outlined text-lg">more_vert</span>
+                <span className="material-symbols-outlined text-lg">
+                  more_vert
+                </span>
               </button>
               {showHeaderMenu && (
                 <div className="absolute right-0 mt-1.5 z-30 bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.08)] py-1.5 min-w-[140px] animate-[fadeIn_0.15s_ease-out]">
@@ -354,7 +410,9 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
                     }}
                     className="w-full text-left px-4 py-2.5 text-xs text-error hover:bg-surface-container-low transition-colors flex items-center gap-2 font-bold uppercase tracking-wider"
                   >
-                    <span className="material-symbols-outlined text-base text-error">delete</span>
+                    <span className="material-symbols-outlined text-base text-error">
+                      delete
+                    </span>
                     Delete Chat
                   </button>
                 </div>
@@ -368,9 +426,12 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
       {isPending && (
         <div className="px-6 py-3 bg-secondary/5 border-b border-secondary/10 flex items-center justify-between shrink-0 animate-[fadeIn_0.3s_ease-out]">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-secondary text-lg">person_alert</span>
+            <span className="material-symbols-outlined text-secondary text-lg">
+              person_alert
+            </span>
             <span className="text-xs font-bold text-on-surface">
-              <span className="text-secondary">{activeChat.username}</span> wants to connect
+              <span className="text-secondary">{activeChat.username}</span>{" "}
+              wants to connect
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -410,7 +471,9 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
       >
         {currentMessages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-10">
-            <span className="material-symbols-outlined text-outline/20 text-3xl mb-2">forum</span>
+            <span className="material-symbols-outlined text-outline/20 text-3xl mb-2">
+              forum
+            </span>
             <p className="text-xs text-outline font-medium">
               No previous records found. Write a prompt to begin.
             </p>
@@ -429,11 +492,13 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
 
             {currentMessages.map((msg, i) => {
               const isOwnMessage = msg.senderId === userId;
-              
+
               // Date grouping/separator logic
               const msgDate = new Date(msg.timestamp).toDateString();
               const prevMsg = i > 0 ? currentMessages[i - 1] : null;
-              const prevMsgDate = prevMsg ? new Date(prevMsg.timestamp).toDateString() : null;
+              const prevMsgDate = prevMsg
+                ? new Date(prevMsg.timestamp).toDateString()
+                : null;
               const showDateSeparator = msgDate !== prevMsgDate;
 
               return (
@@ -449,7 +514,9 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
                   )}
                   <div
                     className={`flex flex-col max-w-[75%] ${
-                      isOwnMessage ? "self-end items-end" : "self-start items-start"
+                      isOwnMessage
+                        ? "self-end items-end"
+                        : "self-start items-start"
                     }`}
                   >
                     {!isOwnMessage && activeChat.isPublic && (
@@ -464,21 +531,29 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setActiveMenuMessageId(activeMenuMessageId === msg.id ? null : msg.id);
+                              setActiveMenuMessageId(
+                                activeMenuMessageId === msg.id ? null : msg.id
+                              );
                             }}
                             className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded-full hover:bg-surface-container-high flex items-center justify-center shrink-0"
                           >
-                            <span className="material-symbols-outlined text-sm">more_vert</span>
+                            <span className="material-symbols-outlined text-sm">
+                              more_vert
+                            </span>
                           </button>
 
                           {activeMenuMessageId === msg.id && (
                             <div className="absolute right-0 top-[100%] mt-1 z-30 bg-surface-container-lowest border border-outline-variant/20 rounded-lg shadow-lg py-1 min-w-[100px] animate-[fadeIn_0.15s_ease-out]">
                               <button
                                 type="button"
-                                onClick={() => handleDeleteMessage(msg.id, msg.timestamp)}
+                                onClick={() =>
+                                  handleDeleteMessage(msg.id, msg.timestamp)
+                                }
                                 className="w-full text-left px-3 py-1.5 text-xs text-error hover:bg-surface-container-low transition-colors flex items-center gap-1.5 font-bold uppercase tracking-wider"
                               >
-                                <span className="material-symbols-outlined text-sm text-error">delete</span>
+                                <span className="material-symbols-outlined text-sm text-error">
+                                  delete
+                                </span>
                                 Delete
                               </button>
                             </div>
@@ -498,7 +573,9 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
                         <p>{msg.content}</p>
                         <span
                           className={`text-[8px] font-bold mt-1.5 block tracking-tighter uppercase ${
-                            isOwnMessage && !msg.isDeleted ? "text-white/60 text-right" : "text-outline"
+                            isOwnMessage && !msg.isDeleted
+                              ? "text-white/60 text-right"
+                              : "text-outline"
                           }`}
                         >
                           {new Date(msg.timestamp).toLocaleTimeString([], {
@@ -513,6 +590,16 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
               );
             })}
           </>
+        )}
+        {activeChat && !activeChat.isPublic && typingUsers[activeChat.id] && (
+          <div className="flex items-center gap-2 self-start mb-2 text-outline animate-[pulse_1.5s_ease-in-out_infinite]">
+            <span className="material-symbols-outlined text-sm">
+              more_horiz
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-wider">
+              {activeChat.username} is typing...
+            </span>
+          </div>
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -536,16 +623,27 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
         >
           {isPendingOrNeglected && (
             <div className="mb-3 px-3 py-2 bg-secondary/5 border border-secondary/10 rounded-lg flex items-center gap-2 text-[10px] text-on-surface font-semibold select-none animate-[fadeIn_0.2s_ease-out]">
-              <span className="material-symbols-outlined text-secondary text-xs">warning</span>
+              <span className="material-symbols-outlined text-secondary text-xs">
+                warning
+              </span>
               <span>
-                Replying will automatically accept this request and save <span className="text-secondary font-bold">{activeChat.username}</span> to your contacts.
+                Replying will automatically accept this request and save{" "}
+                <span className="text-secondary font-bold">
+                  {activeChat.username}
+                </span>{" "}
+                to your contacts.
               </span>
             </div>
           )}
           <div className="bg-surface-container-low rounded-xl p-1.5 flex items-center gap-2 border border-transparent focus-within:border-primary/30 transition-all">
             <input
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                if (activeChat && !activeChat.isPublic) {
+                  sendTypingIndicator(activeChat.id, true);
+                }
+              }}
               className="flex-1 bg-transparent border-none outline-none focus:ring-0 text-xs px-3 py-2 text-on-surface placeholder:text-outline"
               placeholder={`Compose message for ${activeChat.username}...`}
               type="text"
@@ -567,7 +665,6 @@ export default function ChatViewport({ activeChat, onBannerAction, onBackToList,
           </div>
         </form>
       </div>
-
     </div>
   );
 }
