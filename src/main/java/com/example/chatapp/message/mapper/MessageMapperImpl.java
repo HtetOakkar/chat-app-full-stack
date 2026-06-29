@@ -19,6 +19,7 @@ public class MessageMapperImpl implements MessageMapper {
                 .recipientId(message.getRecipient() != null && !"system".equals(message.getRecipient().getUsername()) ? message.getRecipient().getId() : null)
                 .senderId(message.getSender().getId())
                 .senderUsername(message.getSender().getUsername())
+                .senderFullName(message.getSender().getFullName())
                 .timestamp(message.getSentAt())
                 .isDelivered(message.getIsDelivered())
                 .isRead(message.getIsRead())

@@ -1,15 +1,23 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import ChatViewport from "./ChatViewport";
 import { useAuth } from "@/context/AuthContext";
-import { useWebSocket } from "@/context/WebSocketContext";
+import { useConnection } from "@/context/ConnectionContext";
+import { useMessageStore } from "@/context/MessageStore";
+import { usePresence } from "@/context/PresenceContext";
 
 window.HTMLElement.prototype.scrollIntoView = jest.fn();
 
 jest.mock("@/context/AuthContext", () => ({
   useAuth: jest.fn(),
 }));
-jest.mock("@/context/WebSocketContext", () => ({
-  useWebSocket: jest.fn(),
+jest.mock("@/context/ConnectionContext", () => ({
+  useConnection: jest.fn(),
+}));
+jest.mock("@/context/MessageStore", () => ({
+  useMessageStore: jest.fn(),
+}));
+jest.mock("@/context/PresenceContext", () => ({
+  usePresence: jest.fn(),
 }));
 jest.mock("@/lib/api", () => ({
   apiFetch: jest.fn().mockResolvedValue([]),
@@ -24,19 +32,23 @@ describe("ChatViewport", () => {
 
   beforeEach(() => {
     (useAuth as jest.Mock).mockReturnValue({ userId: 1 });
-    (useWebSocket as jest.Mock).mockReturnValue({
+    (useConnection as jest.Mock).mockReturnValue({
       connected: true,
+    });
+    (useMessageStore as jest.Mock).mockReturnValue({
       publicMessages: [],
       privateMessages: {},
-      onlineUsers: {},
-      typingUsers: {},
       sendPublicMessage: mockSendPublicMessage,
       sendPrivateMessage: mockSendPrivateMessage,
-      sendTypingIndicator: mockSendTypingIndicator,
       loadPublicHistory: mockLoadPublicHistory,
       loadPrivateHistory: mockLoadPrivateHistory,
       hasMorePublicHistory: false,
       hasMorePrivateHistory: {},
+    });
+    (usePresence as jest.Mock).mockReturnValue({
+      onlineUsers: {},
+      typingUsers: {},
+      sendTypingIndicator: mockSendTypingIndicator,
     });
   });
 
@@ -45,19 +57,10 @@ describe("ChatViewport", () => {
   });
 
   it("displays typing indicator when the active chat user is typing", () => {
-    (useWebSocket as jest.Mock).mockReturnValue({
-      connected: true,
-      publicMessages: [],
-      privateMessages: {},
+    (usePresence as jest.Mock).mockReturnValue({
       onlineUsers: {},
       typingUsers: { 2: true },
-      sendPublicMessage: mockSendPublicMessage,
-      sendPrivateMessage: mockSendPrivateMessage,
       sendTypingIndicator: mockSendTypingIndicator,
-      loadPublicHistory: mockLoadPublicHistory,
-      loadPrivateHistory: mockLoadPrivateHistory,
-      hasMorePublicHistory: false,
-      hasMorePrivateHistory: {},
     });
 
     render(

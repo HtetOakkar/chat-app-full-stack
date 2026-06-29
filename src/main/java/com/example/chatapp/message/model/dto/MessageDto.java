@@ -20,6 +20,7 @@ public class MessageDto {
     private String content;
     private Long senderId;
     private String senderUsername;
+    private String senderFullName;
     private Long recipientId;
     private Instant timestamp;
     private Boolean isRead;

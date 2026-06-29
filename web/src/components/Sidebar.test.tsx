@@ -1,15 +1,15 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import Sidebar from "./Sidebar";
 import { useAuth } from "@/context/AuthContext";
-import { useWebSocket } from "@/context/WebSocketContext";
+import { usePresence } from "@/context/PresenceContext";
 import { apiFetch } from "@/lib/api";
 
 // Mock contexts and api
 jest.mock("@/context/AuthContext", () => ({
   useAuth: jest.fn(),
 }));
-jest.mock("@/context/WebSocketContext", () => ({
-  useWebSocket: jest.fn(),
+jest.mock("@/context/PresenceContext", () => ({
+  usePresence: jest.fn(),
 }));
 jest.mock("@/lib/api", () => ({
   apiFetch: jest.fn(),
@@ -18,7 +18,7 @@ jest.mock("@/lib/api", () => ({
 describe("Sidebar", () => {
   beforeEach(() => {
     (useAuth as jest.Mock).mockReturnValue({ userId: 1 });
-    (useWebSocket as jest.Mock).mockReturnValue({ onlineUsers: {} });
+    (usePresence as jest.Mock).mockReturnValue({ onlineUsers: {} });
     (apiFetch as jest.Mock).mockResolvedValue([]);
   });
 
@@ -159,6 +159,7 @@ describe("Sidebar", () => {
     expect(screen.getByText("user2")).toBeInTheDocument();
     expect(screen.queryByText("user1")).not.toBeInTheDocument();
   });
+
   it("hides sidebar on mobile when viewMode is profile and activeChat is null", () => {
     const { container } = render(
       <Sidebar

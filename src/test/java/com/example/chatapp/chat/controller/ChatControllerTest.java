@@ -8,14 +8,15 @@ import com.example.chatapp.user.model.entity.ContactStatus;
 import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.user.repository.ContactRepository;
 import com.example.chatapp.user.repository.UserRepository;
-import com.example.chatapp.user.service.ContactService;
+import com.example.chatapp.user.service.ContactModule;
+import com.example.chatapp.user.service.PresenceModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import com.example.chatapp.websocket.MessageBroker;
 
 import java.util.List;
 import java.util.Optional;
@@ -27,7 +28,7 @@ import static org.mockito.Mockito.*;
 class ChatControllerTest {
 
     @Mock
-    private SimpMessagingTemplate messagingTemplate;
+    private MessageBroker messageBroker;
 
     @Mock
     private MessageService messageService;
@@ -39,10 +40,10 @@ class ChatControllerTest {
     private UserRepository userRepository;
 
     @Mock
-    private ContactService contactService;
+    private ContactModule contactModule;
 
     @Mock
-    private com.example.chatapp.user.service.PresencePrivacyService presencePrivacyService;
+    private PresenceModule presenceModule;
 
     @InjectMocks
     private ChatController chatController;
@@ -80,7 +81,7 @@ class ChatControllerTest {
         chatController.sendPrivateMessage(messageDto, senderPrincipal);
 
         // Assert
-        verify(contactService, times(1)).acceptRequestIfPending(1L, 2L);
+        verify(contactModule, times(1)).acceptRequestIfPending(1L, 2L);
     }
 
     @Test
@@ -93,7 +94,7 @@ class ChatControllerTest {
         chatController.sendTypingIndicator(typingDto, senderPrincipal);
 
         // Assert
-        verify(messagingTemplate).convertAndSendToUser(
+        verify(messageBroker).publishToUser(
                 eq("2"),
                 eq("/queue/typing"),
                 argThat(msg -> {

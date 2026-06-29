@@ -15,6 +15,8 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import com.example.chatapp.email.service.EmailService;
 import org.mockito.Mockito;
 import org.mockito.ArgumentMatchers;
+import com.example.chatapp.user.service.PresenceModule;
+import com.example.chatapp.message.model.dto.OnlineStatusDto;
 
 
 import java.util.Map;
@@ -51,10 +53,13 @@ class UserControllerIntegrationTest {
     private EmailService emailService;
 
     @MockBean
-    private com.example.chatapp.user.service.PresencePrivacyService presencePrivacyService;
+    private PresenceModule presenceModule;
 
     @MockBean
     private org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
+
+    @MockBean
+    private com.example.chatapp.websocket.SessionRegistry sessionRegistry;
 
 
     @BeforeEach
@@ -360,7 +365,7 @@ class UserControllerIntegrationTest {
 
     @Test
     void getOnlineUsersShouldReturnEmptyListWhenNoActiveSessions() throws Exception {
-        Mockito.when(presencePrivacyService.getEligiblePresenceUsers(ArgumentMatchers.anyLong()))
+        Mockito.when(presenceModule.getOnlineUsers(ArgumentMatchers.anyLong()))
                .thenReturn(java.util.Collections.emptyList());
 
         mockMvc.perform(get("/api/v1/users/online")
@@ -372,16 +377,13 @@ class UserControllerIntegrationTest {
 
     @Test
     void getOnlineUsersShouldReturnActiveUsers() throws Exception {
-        com.example.chatapp.user.model.entity.User onlineUser = new com.example.chatapp.user.model.entity.User();
-        onlineUser.setId(100L);
-        onlineUser.setUsername("onlineuser");
+        OnlineStatusDto onlineStatus = new OnlineStatusDto();
+        onlineStatus.setUserId("100");
+        onlineStatus.setUsername("onlineuser");
+        onlineStatus.setStatus("ONLINE");
 
-        Mockito.when(presencePrivacyService.getEligiblePresenceUsers(ArgumentMatchers.anyLong()))
-               .thenReturn(java.util.Collections.singletonList(onlineUser));
-
-        org.springframework.data.redis.core.ValueOperations<String, Object> valueOperations = Mockito.mock(org.springframework.data.redis.core.ValueOperations.class);
-        Mockito.when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        Mockito.when(valueOperations.get("user:presence:100")).thenReturn("Online");
+        Mockito.when(presenceModule.getOnlineUsers(ArgumentMatchers.anyLong()))
+               .thenReturn(java.util.Collections.singletonList(onlineStatus));
 
         mockMvc.perform(get("/api/v1/users/online")
                         .header("Authorization", userToken))

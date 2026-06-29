@@ -291,5 +291,34 @@ class AuthenticationControllerIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Email is already registered!"));
     }
+
+    @Test
+    void loginWithUnverifiedEmailByUsernameShouldReturnBadRequest() throws Exception {
+        String signupBody = """
+                {
+                  "username": "unverifieduser",
+                  "password": "password123",
+                  "email": "unverified@chatapp.com"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signupBody))
+                .andExpect(status().isOk());
+
+        String loginBody = """
+                {
+                  "username": "unverifieduser",
+                  "password": "password123"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Email is not verified. Please verify your email first."));
+    }
 }
 

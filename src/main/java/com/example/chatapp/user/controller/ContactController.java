@@ -4,7 +4,7 @@ import com.example.chatapp.exception.BadRequestException;
 import com.example.chatapp.jwt.UserPrincipal;
 import com.example.chatapp.user.model.dto.ContactDto;
 import com.example.chatapp.user.model.request.AddContactRequest;
-import com.example.chatapp.user.service.ContactService;
+import com.example.chatapp.user.service.ContactModule;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,7 +19,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ContactController {
 
-    private final ContactService contactService;
+    private final ContactModule contactModule;
 
     @PostMapping
     public ResponseEntity<ContactDto> addContact(@Valid @RequestBody AddContactRequest request,
@@ -27,7 +27,7 @@ public class ContactController {
         if (currentUser == null) {
             throw new BadRequestException("User not authenticated");
         }
-        ContactDto contactDto = contactService.addContact(currentUser.getId(), request);
+        ContactDto contactDto = contactModule.addContact(currentUser.getId(), request);
         return new ResponseEntity<>(contactDto, HttpStatus.CREATED);
     }
 
@@ -36,7 +36,7 @@ public class ContactController {
         if (currentUser == null) {
             throw new BadRequestException("User not authenticated");
         }
-        return ResponseEntity.ok(contactService.getContacts(currentUser.getId()));
+        return ResponseEntity.ok(contactModule.getContacts(currentUser.getId()));
     }
 
     @DeleteMapping("/{contactId}")
@@ -45,7 +45,7 @@ public class ContactController {
         if (currentUser == null) {
             throw new BadRequestException("User not authenticated");
         }
-        contactService.removeContact(currentUser.getId(), contactId);
+        contactModule.removeContact(currentUser.getId(), contactId);
         return ResponseEntity.noContent().build();
     }
 
@@ -55,7 +55,7 @@ public class ContactController {
         if (currentUser == null) {
             throw new BadRequestException("User not authenticated");
         }
-        return ResponseEntity.ok(contactService.acceptRequest(currentUser.getId(), contactId));
+        return ResponseEntity.ok(contactModule.acceptContactRequest(currentUser.getId(), contactId));
     }
 
     @PutMapping("/{contactId}/block")
@@ -64,7 +64,17 @@ public class ContactController {
         if (currentUser == null) {
             throw new BadRequestException("User not authenticated");
         }
-        return ResponseEntity.ok(contactService.blockUser(currentUser.getId(), contactId));
+        return ResponseEntity.ok(contactModule.blockUser(currentUser.getId(), contactId));
+    }
+
+    @PutMapping("/{contactId}/unblock")
+    public ResponseEntity<Void> unblockUser(@PathVariable Long contactId,
+                                            @AuthenticationPrincipal UserPrincipal currentUser) {
+        if (currentUser == null) {
+            throw new BadRequestException("User not authenticated");
+        }
+        contactModule.unblockUser(currentUser.getId(), contactId);
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{contactId}/neglect")
@@ -73,7 +83,7 @@ public class ContactController {
         if (currentUser == null) {
             throw new BadRequestException("User not authenticated");
         }
-        return ResponseEntity.ok(contactService.neglectRequest(currentUser.getId(), contactId));
+        return ResponseEntity.ok(contactModule.rejectContactRequest(currentUser.getId(), contactId));
     }
 
     @GetMapping("/blocked")
@@ -81,7 +91,7 @@ public class ContactController {
         if (currentUser == null) {
             throw new BadRequestException("User not authenticated");
         }
-        return ResponseEntity.ok(contactService.getBlockedContacts(currentUser.getId()));
+        return ResponseEntity.ok(contactModule.getBlockedUsers(currentUser.getId()));
     }
 
     @GetMapping("/requests")
@@ -89,6 +99,15 @@ public class ContactController {
         if (currentUser == null) {
             throw new BadRequestException("User not authenticated");
         }
-        return ResponseEntity.ok(contactService.getPendingRequests(currentUser.getId()));
+        return ResponseEntity.ok(contactModule.getContactRequests(currentUser.getId()));
+    }
+
+    @GetMapping("/mutual/{otherUserId}")
+    public ResponseEntity<List<ContactDto>> getMutualContacts(@PathVariable Long otherUserId,
+                                                              @AuthenticationPrincipal UserPrincipal currentUser) {
+        if (currentUser == null) {
+            throw new BadRequestException("User not authenticated");
+        }
+        return ResponseEntity.ok(contactModule.getMutualContacts(currentUser.getId(), otherUserId));
     }
 }

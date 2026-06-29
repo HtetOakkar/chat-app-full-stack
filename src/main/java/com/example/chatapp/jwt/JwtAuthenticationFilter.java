@@ -63,7 +63,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (authorities.isEmpty()) {
                     authorities = Collections.emptyList();
                 }
-                UserPrincipal userPrincipal = new UserPrincipal(userId, username, null, authorities);
+                String fullName = claims.get("fullName", String.class);
+                UserPrincipal userPrincipal = new UserPrincipal(userId, username, null, fullName, authorities);
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         userPrincipal, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(authentication);

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { useWebSocket } from "@/context/WebSocketContext";
+import { usePresence } from "@/context/PresenceContext";
 
 interface UserProfileCardProps {
   userId: number | null;
@@ -41,7 +41,7 @@ export default function UserProfileCard({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
-  const { onlineUsers } = useWebSocket();
+  const { onlineUsers } = usePresence();
 
   useEffect(() => {
     if (userId) {
@@ -82,6 +82,8 @@ export default function UserProfileCard({
       (isContact.status === "ACCEPTED" || isContact.status === "CONTACT")) ||
     userStatus === "ACCEPTED" ||
     userStatus === "CONTACT";
+  const isBlocked =
+    (isContact && isContact.status === "BLOCKED") || userStatus === "BLOCKED";
 
   return (
     <div className="flex-1 flex justify-center overflow-y-auto bg-background custom-scrollbar w-full">
@@ -148,7 +150,43 @@ export default function UserProfileCard({
                     {(() => {
                       if (isSelf || !userId) return null;
 
-                      if (isAcceptedContact) {
+                      if (isBlocked) {
+                        return (
+                          <button
+                            type="button"
+                            disabled={actionLoading}
+                            onClick={async () => {
+                              setActionLoading(true);
+                              try {
+                                await apiFetch(
+                                  `/api/v1/contacts/${userId}/unblock`,
+                                  { method: "PUT" }
+                                );
+                                window.dispatchEvent(
+                                  new CustomEvent("contacts:updated")
+                                );
+                                onBack();
+                              } catch {
+                                // handle silently
+                              } finally {
+                                setActionLoading(false);
+                              }
+                            }}
+                            className="flex items-center justify-center gap-2 px-6 py-2 bg-error/10 text-error text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-error hover:text-white transition-all border border-error/15 shadow-sm active:scale-98 disabled:opacity-50 cursor-pointer"
+                          >
+                            {actionLoading ? (
+                              <span className="material-symbols-outlined animate-spin text-sm">
+                                rotate_right
+                              </span>
+                            ) : (
+                              <span className="material-symbols-outlined text-sm">
+                                lock_open
+                              </span>
+                            )}
+                            Unblock
+                          </button>
+                        );
+                      } else if (isAcceptedContact) {
                         return (
                           <button
                             type="button"
@@ -352,7 +390,38 @@ export default function UserProfileCard({
                 </div>
               </div>
 
-              {/* Actions List (Block, Delete) */}
+              {/* Actions List (Block, Delete, Unblock) */}
+              {isBlocked && (
+                <div className="mt-4 pt-4 border-t border-outline-variant/10 flex flex-col gap-1">
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={async () => {
+                      if (!userId) return;
+                      setActionLoading(true);
+                      try {
+                        await apiFetch(`/api/v1/contacts/${userId}/unblock`, {
+                          method: "PUT",
+                        });
+                        window.dispatchEvent(
+                          new CustomEvent("contacts:updated")
+                        );
+                        onBack();
+                      } catch {
+                        // Silent fail
+                      } finally {
+                        setActionLoading(false);
+                      }
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-sm">
+                      lock_open
+                    </span>
+                    Unblock
+                  </button>
+                </div>
+              )}
               {isAcceptedContact && (
                 <div className="mt-4 pt-4 border-t border-outline-variant/10 flex flex-col gap-1">
                   <button

@@ -73,7 +73,7 @@ public class User {
     @Column(name = "last_seen_at")
     private Instant lastSeenAt;
 
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY, optional = false)
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private UserSettings settings;
 }
 

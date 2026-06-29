@@ -1,15 +1,14 @@
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import ChatDashboard from "./ChatDashboard";
 import { AuthProvider } from "@/context/AuthContext";
-import { WebSocketProvider } from "@/context/WebSocketContext";
+import { ConnectionProvider } from "@/context/ConnectionContext";
+import { MessageStoreProvider } from "@/context/MessageStore";
+import { PresenceProvider } from "@/context/PresenceContext";
+import React from "react";
 
 // Mock child components to make testing simpler
 jest.mock("./Sidebar", () => {
   return function MockSidebar({ activeChat, viewMode }: any) {
-    // Note: since viewMode isn't passed to Sidebar yet, we will check how Sidebar is styled or mocked.
-    // Wait, Sidebar styling is inside Sidebar.tsx itself.
-    // If we mock Sidebar, we won't be able to test its internal className logic directly from ChatDashboard tests
-    // unless we render the actual Sidebar or check the props passed to it.
     return <div data-testid="sidebar">Sidebar {viewMode}</div>;
   };
 });
@@ -37,7 +36,11 @@ jest.mock("@/lib/api", () => ({
 const renderWithProviders = (ui: React.ReactElement) => {
   return render(
     <AuthProvider>
-      <WebSocketProvider>{ui}</WebSocketProvider>
+      <ConnectionProvider>
+        <MessageStoreProvider>
+          <PresenceProvider>{ui}</PresenceProvider>
+        </MessageStoreProvider>
+      </ConnectionProvider>
     </AuthProvider>
   );
 };

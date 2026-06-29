@@ -1,14 +1,17 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import React from "react";
 import { apiFetch } from "@/lib/api";
-import { useWebSocket } from "@/context/WebSocketContext";
+import { usePresence } from "@/context/PresenceContext";
 import { useAuth } from "@/context/AuthContext";
+import { Virtuoso } from "react-virtuoso";
 
 type Contact = {
   id: number;
   contactUserId: number;
   contactUsername: string;
+  contactFullName?: string | null;
   status: string;
   createdAt: string;
   lastMessageContent?: string | null;
@@ -27,9 +30,24 @@ type UserDto = {
 export type ActiveChat = {
   id: number;
   username: string;
+  fullName?: string | null;
   isPublic: boolean;
   status?: string;
 };
+
+const SidebarVirtuosoList = React.forwardRef<HTMLDivElement, any>(
+  ({ children, style, ...props }, ref) => (
+    <div
+      {...props}
+      ref={ref}
+      style={{ ...style }}
+      className="flex flex-col gap-1"
+    >
+      {children}
+    </div>
+  )
+);
+SidebarVirtuosoList.displayName = "SidebarVirtuosoList";
 
 interface SidebarProps {
   activeChat: ActiveChat | null;
@@ -50,7 +68,7 @@ export default function Sidebar({
   refreshTrigger,
   viewMode = "chat",
 }: SidebarProps) {
-  const { onlineUsers } = useWebSocket();
+  const { onlineUsers } = usePresence();
   const { userId: currentUserId } = useAuth();
 
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -295,7 +313,11 @@ export default function Sidebar({
   return (
     <aside
       className={`${
-        activeChat === null && viewMode === "chat" ? "flex w-full" : "hidden"
+        viewMode !== "chat"
+          ? "hidden"
+          : activeChat === null
+            ? "flex w-full"
+            : "hidden"
       } md:flex flex-col h-full w-80 lg:w-96 bg-surface-container-low/60 border-r border-outline-variant/10 shrink-0`}
     >
       {/* Header */}
@@ -442,229 +464,248 @@ export default function Sidebar({
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-3 pb-4 space-y-1">
-        {sidebarView === "chats" && (
-          <>
-            {/* Section Label */}
-            <div className="px-2 pt-2 pb-1.5">
-              <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-outline">
-                Channels
+      <div className="flex-1 flex flex-col min-h-0 px-3 pb-4 overflow-hidden">
+        {sidebarView === "chats" &&
+          (loadingContacts ? (
+            <div className="flex justify-center py-8 shrink-0">
+              <span className="material-symbols-outlined animate-spin text-xl text-primary">
+                rotate_right
               </span>
             </div>
+          ) : (
+            (() => {
+              const sortedContacts = [...contacts]
+                .filter((c) => c.status !== "BLOCKED")
+                .sort((a, b) => {
+                  const timeA = a.lastMessageTimestamp
+                    ? new Date(a.lastMessageTimestamp).getTime()
+                    : new Date(a.createdAt).getTime();
+                  const timeB = b.lastMessageTimestamp
+                    ? new Date(b.lastMessageTimestamp).getTime()
+                    : new Date(b.createdAt).getTime();
+                  return timeB - timeA;
+                });
+              return (
+                <Virtuoso
+                  className="flex-1 custom-scrollbar"
+                  style={{ flex: 1 }}
+                  data={sortedContacts}
+                  itemContent={(index, contact) => {
+                    const isSelected =
+                      activeChat &&
+                      !activeChat.isPublic &&
+                      activeChat.id === contact.contactUserId;
+                    const userStatus =
+                      onlineUsers[contact.contactUserId]?.status || "OFFLINE";
 
-            {/* Global Public Chat */}
-            <button
-              type="button"
-              onClick={() =>
-                onSelectChat({
-                  id: 0,
-                  username: "Global Registry Chat",
-                  isPublic: true,
-                })
-              }
-              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left ${
-                activeChat?.isPublic
-                  ? "bg-primary/8 border border-primary/15"
-                  : "hover:bg-surface-container-lowest/60 border border-transparent"
-              }`}
-            >
-              <div
-                className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                  activeChat?.isPublic
-                    ? "bg-primary text-white shadow-sm shadow-primary/20"
-                    : "bg-primary/10 text-primary"
-                }`}
-              >
-                <span className="material-symbols-outlined text-lg">
-                  language
-                </span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <h4 className="font-bold text-xs text-on-surface leading-tight truncate">
-                  Global Registry Chat
-                </h4>
-                <p className="text-[9px] text-outline font-medium mt-0.5 truncate">
-                  Public channel for all curators
-                </p>
-              </div>
-              <span className="px-1.5 py-0.5 rounded text-[7px] font-bold tracking-wider uppercase bg-primary/10 text-primary shrink-0">
-                Public
-              </span>
-            </button>
-
-            {/* Contacts Section */}
-            <div className="px-2 pt-4 pb-1.5">
-              <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-outline">
-                Contacts
-              </span>
-            </div>
-
-            {loadingContacts ? (
-              <div className="flex justify-center py-8">
-                <span className="material-symbols-outlined animate-spin text-xl text-primary">
-                  rotate_right
-                </span>
-              </div>
-            ) : contacts.filter((c) => c.status !== "BLOCKED").length === 0 ? (
-              <div className="text-center py-8 px-4">
-                <span className="material-symbols-outlined text-outline/30 text-2xl mb-2 block">
-                  person_search
-                </span>
-                <p className="text-[10px] text-outline leading-relaxed">
-                  No contacts yet. Use the search bar above to discover
-                  curators.
-                </p>
-              </div>
-            ) : (
-              (() => {
-                const sortedContacts = [...contacts]
-                  .filter((c) => c.status !== "BLOCKED")
-                  .sort((a, b) => {
-                    const timeA = a.lastMessageTimestamp
-                      ? new Date(a.lastMessageTimestamp).getTime()
-                      : new Date(a.createdAt).getTime();
-                    const timeB = b.lastMessageTimestamp
-                      ? new Date(b.lastMessageTimestamp).getTime()
-                      : new Date(b.createdAt).getTime();
-                    return timeB - timeA;
-                  });
-                return sortedContacts.map((contact) => {
-                  const isSelected =
-                    activeChat &&
-                    !activeChat.isPublic &&
-                    activeChat.id === contact.contactUserId;
-                  const userStatus =
-                    onlineUsers[contact.contactUserId]?.status || "OFFLINE";
-
-                  return (
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      key={contact.id}
-                      onClick={() =>
-                        onSelectChat({
-                          id: contact.contactUserId,
-                          username: contact.contactUsername,
-                          isPublic: false,
-                          status: contact.status,
-                        })
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
+                    return (
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        key={contact.id}
+                        onClick={() =>
                           onSelectChat({
                             id: contact.contactUserId,
                             username: contact.contactUsername,
+                            fullName: contact.contactFullName,
                             isPublic: false,
                             status: contact.status,
-                          });
+                          })
                         }
-                      }}
-                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left cursor-pointer group relative ${
-                        isSelected
-                          ? "bg-primary/8 border border-primary/15"
-                          : "hover:bg-surface-container-lowest/60 border border-transparent"
-                      }`}
-                    >
-                      <div className="relative">
-                        <div className="w-9 h-9 rounded-lg bg-primary/5 flex items-center justify-center text-xs font-extrabold text-primary border border-primary/10">
-                          {contact.contactUsername.charAt(0).toUpperCase()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            onSelectChat({
+                              id: contact.contactUserId,
+                              username: contact.contactUsername,
+                              fullName: contact.contactFullName,
+                              isPublic: false,
+                              status: contact.status,
+                            });
+                          }
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left cursor-pointer group relative ${
+                          isSelected
+                            ? "bg-primary/8 border border-primary/15"
+                            : "hover:bg-surface-container-lowest/60 border border-transparent"
+                        }`}
+                      >
+                        <div className="relative">
+                          <div className="w-9 h-9 rounded-lg bg-primary/5 flex items-center justify-center text-xs font-extrabold text-primary border border-primary/10">
+                            {(
+                              contact.contactFullName || contact.contactUsername
+                            )
+                              .charAt(0)
+                              .toUpperCase()}
+                          </div>
+                          {/* Online indicator */}
+                          <div
+                            className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 border-2 border-surface-container-low rounded-full ${
+                              userStatus === "ONLINE"
+                                ? "bg-tertiary"
+                                : "bg-outline/30"
+                            }`}
+                          />
                         </div>
-                        {/* Online indicator */}
-                        <div
-                          className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 border-2 border-surface-container-low rounded-full ${
-                            userStatus === "ONLINE"
-                              ? "bg-tertiary"
-                              : "bg-outline/30"
-                          }`}
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1">
-                          <h4 className="font-bold text-xs text-on-surface leading-tight truncate">
-                            {contact.contactUsername}
-                          </h4>
-                          {contact.lastMessageTimestamp && (
-                            <span className="text-[8px] text-outline shrink-0">
-                              {new Date(
-                                contact.lastMessageTimestamp
-                              ).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between gap-1 mt-1">
-                          <p className="text-[10px] text-outline truncate flex-1 min-w-0 font-medium">
-                            {contact.lastMessageContent
-                              ? contact.lastMessageSenderId === currentUserId
-                                ? `You: ${contact.lastMessageContent}`
-                                : contact.lastMessageContent
-                              : `${userStatus.toLowerCase()}`}
-                          </p>
-                          <div className="flex items-center gap-1 shrink-0">
-                            {contact.unreadCount && contact.unreadCount > 0 ? (
-                              <span className="w-4.5 h-4.5 rounded-full bg-primary text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-sm shadow-primary/20">
-                                {contact.unreadCount}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <h4 className="font-bold text-xs text-on-surface leading-tight truncate">
+                              {contact.contactFullName ||
+                                contact.contactUsername}
+                            </h4>
+                            {contact.lastMessageTimestamp && (
+                              <span className="text-[8px] text-outline shrink-0">
+                                {new Date(
+                                  contact.lastMessageTimestamp
+                                ).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
                               </span>
-                            ) : null}
-                            {/* Chat options button visible on hover/focus */}
-                            <div className="relative">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveMenuContactId(
-                                    activeMenuContactId ===
-                                      contact.contactUserId
-                                      ? null
-                                      : contact.contactUserId
-                                  );
-                                }}
-                                className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-0.5 text-outline hover:text-on-surface rounded-full hover:bg-surface-container-high flex items-center justify-center"
-                                title="Chat options"
-                              >
-                                <span className="material-symbols-outlined text-sm">
-                                  more_vert
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-1 mt-1">
+                            <p className="text-[10px] text-outline truncate flex-1 min-w-0 font-medium">
+                              {contact.lastMessageContent
+                                ? contact.lastMessageSenderId === currentUserId
+                                  ? `You: ${contact.lastMessageContent}`
+                                  : contact.lastMessageContent
+                                : `${userStatus.toLowerCase()}`}
+                            </p>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {contact.unreadCount &&
+                              contact.unreadCount > 0 ? (
+                                <span className="w-4.5 h-4.5 rounded-full bg-primary text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-sm shadow-primary/20">
+                                  {contact.unreadCount}
                                 </span>
-                              </button>
-                              {activeMenuContactId ===
-                                contact.contactUserId && (
-                                <div className="absolute right-0 top-full mt-1 z-35 bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.08)] py-1.5 min-w-[130px] animate-[fadeIn_0.15s_ease-out]">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleDeleteChat(contact.contactUserId)
-                                    }
-                                    className="w-full text-left px-3.5 py-2 text-xs text-error hover:bg-surface-container-low transition-colors flex items-center gap-1.5 font-bold uppercase tracking-wider"
-                                  >
-                                    <span className="material-symbols-outlined text-sm text-error">
-                                      delete
-                                    </span>
-                                    Delete Chat
-                                  </button>
-                                </div>
-                              )}
+                              ) : null}
+                              {/* Chat options button visible on hover/focus */}
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveMenuContactId(
+                                      activeMenuContactId ===
+                                        contact.contactUserId
+                                        ? null
+                                        : contact.contactUserId
+                                    );
+                                  }}
+                                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 transition-opacity p-0.5 text-outline hover:text-on-surface rounded-full hover:bg-surface-container-high flex items-center justify-center"
+                                  title="Chat options"
+                                >
+                                  <span className="material-symbols-outlined text-sm">
+                                    more_vert
+                                  </span>
+                                </button>
+                                {activeMenuContactId ===
+                                  contact.contactUserId && (
+                                  <div className="absolute right-0 top-full mt-1 z-35 bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.08)] py-1.5 min-w-[130px] animate-[fadeIn_0.15s_ease-out]">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleDeleteChat(contact.contactUserId)
+                                      }
+                                      className="w-full text-left px-3.5 py-2 text-xs text-error hover:bg-surface-container-low transition-colors flex items-center gap-1.5 font-bold uppercase tracking-wider"
+                                    >
+                                      <span className="material-symbols-outlined text-sm text-error">
+                                        delete
+                                      </span>
+                                      Delete Chat
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                });
-              })()
-            )}
-          </>
-        )}
+                    );
+                  }}
+                  components={{
+                    Header: () => (
+                      <>
+                        {/* Section Label: Channels */}
+                        <div className="px-2 pt-2 pb-1.5">
+                          <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-outline">
+                            Channels
+                          </span>
+                        </div>
+
+                        {/* Global Public Chat */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onSelectChat({
+                              id: 0,
+                              username: "Global Registry Chat",
+                              isPublic: true,
+                            })
+                          }
+                          className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left ${
+                            activeChat?.isPublic
+                              ? "bg-primary/8 border border-primary/15"
+                              : "hover:bg-surface-container-lowest/60 border border-transparent"
+                          }`}
+                        >
+                          <div
+                            className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                              activeChat?.isPublic
+                                ? "bg-primary text-white shadow-sm shadow-primary/20"
+                                : "bg-primary/10 text-primary"
+                            }`}
+                          >
+                            <span className="material-symbols-outlined text-lg">
+                              language
+                            </span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-bold text-xs text-on-surface leading-tight truncate">
+                              Global Registry Chat
+                            </h4>
+                            <p className="text-[9px] text-outline font-medium mt-0.5 truncate">
+                              Public channel for all curators
+                            </p>
+                          </div>
+                          <span className="px-1.5 py-0.5 rounded text-[7px] font-bold tracking-wider uppercase bg-primary/10 text-primary shrink-0">
+                            Public
+                          </span>
+                        </button>
+
+                        {/* Contacts Section Label */}
+                        <div className="px-2 pt-4 pb-1.5">
+                          <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-outline">
+                            Contacts
+                          </span>
+                        </div>
+                      </>
+                    ),
+                    EmptyPlaceholder: () => (
+                      <div className="text-center py-8 px-4">
+                        <span className="material-symbols-outlined text-outline/30 text-2xl mb-2 block">
+                          person_search
+                        </span>
+                        <p className="text-[10px] text-outline leading-relaxed">
+                          No contacts yet. Use the search bar above to discover
+                          curators.
+                        </p>
+                      </div>
+                    ),
+                    List: SidebarVirtuosoList,
+                  }}
+                />
+              );
+            })()
+          ))}
         {sidebarView === "contacts" && (
-          <div className="space-y-1 animate-[fadeIn_0.2s_ease-out]">
-            <div className="px-2 pt-2 pb-3 flex flex-col gap-2">
+          <div className="flex flex-col flex-1 min-h-0 space-y-1">
+            <div className="px-2 pt-2 pb-3 flex flex-col gap-2 shrink-0">
               <input
                 type="text"
                 placeholder="Search contacts..."
                 value={contactsSearchQuery}
                 onChange={(e) => setContactsSearchQuery(e.target.value)}
-                className="bg-surface-container-lowest rounded-lg text-xs px-3 py-2 text-on-surface placeholder:text-outline border border-outline-variant/30 focus:border-primary/50 outline-none transition-all"
+                className="bg-surface-container-lowest rounded-lg text-xs px-3 py-2 text-on-surface placeholder:text-outline border border-outline-variant/30 focus:border-primary/50 outline-none transition-all w-full"
               />
               <div className="flex gap-2">
                 <button
@@ -685,127 +726,157 @@ export default function Sidebar({
             </div>
 
             {loadingContacts ? (
-              <div className="flex justify-center py-8">
+              <div className="flex justify-center py-8 shrink-0">
                 <span className="material-symbols-outlined animate-spin text-xl text-primary">
                   rotate_right
                 </span>
               </div>
-            ) : contacts.filter(
-                (c) =>
-                  c.status === contactsFilter &&
-                  c.contactUsername
-                    .toLowerCase()
-                    .includes(contactsSearchQuery.toLowerCase())
-              ).length === 0 ? (
-              <div className="text-center py-8 px-4">
-                <p className="text-[10px] text-outline">No contacts found.</p>
-              </div>
             ) : (
-              contacts
-                .filter(
+              (() => {
+                const filteredContacts = contacts.filter(
                   (c) =>
                     c.status === contactsFilter &&
                     c.contactUsername
                       .toLowerCase()
                       .includes(contactsSearchQuery.toLowerCase())
-                )
-                .map((contact) => (
-                  <div
-                    key={`contact-${contact.id}`}
-                    onClick={() =>
-                      onSelectProfileUser({
-                        id: contact.contactUserId,
-                        username: contact.contactUsername,
-                        status: contact.status,
-                      })
-                    }
-                    className="w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left cursor-pointer hover:bg-surface-container-lowest/60 border border-transparent"
-                  >
-                    <div className="relative">
-                      <div className="w-9 h-9 rounded-lg bg-primary/5 flex items-center justify-center text-xs font-extrabold text-primary border border-primary/10">
-                        {contact.contactUsername.charAt(0).toUpperCase()}
-                      </div>
-                      <div
-                        className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 border-2 border-surface-container-low rounded-full ${onlineUsers[contact.contactUserId]?.status === "ONLINE" ? "bg-tertiary" : "bg-outline/30"}`}
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-bold text-xs text-on-surface leading-tight truncate">
-                        {contact.contactUsername}
-                      </h4>
-                    </div>
-                  </div>
-                ))
+                );
+                return (
+                  <Virtuoso
+                    className="flex-grow custom-scrollbar"
+                    style={{ flex: 1 }}
+                    data={filteredContacts}
+                    itemContent={(index, contact) => {
+                      const userStatus =
+                        onlineUsers[contact.contactUserId]?.status || "OFFLINE";
+                      return (
+                        <div
+                          key={`contact-${contact.id}`}
+                          onClick={() =>
+                            onSelectProfileUser({
+                              id: contact.contactUserId,
+                              username: contact.contactUsername,
+                              status: contact.status,
+                            })
+                          }
+                          className="w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left cursor-pointer hover:bg-surface-container-lowest/60 border border-transparent"
+                        >
+                          <div className="relative">
+                            <div className="w-9 h-9 rounded-lg bg-primary/5 flex items-center justify-center text-xs font-extrabold text-primary border border-primary/10">
+                              {(
+                                contact.contactFullName ||
+                                contact.contactUsername
+                              )
+                                .charAt(0)
+                                .toUpperCase()}
+                            </div>
+                            <div
+                              className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 border-2 border-surface-container-low rounded-full ${onlineUsers[contact.contactUserId]?.status === "ONLINE" ? "bg-tertiary" : "bg-outline/30"}`}
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-bold text-xs text-on-surface leading-tight truncate">
+                              {contact.contactFullName ||
+                                contact.contactUsername}
+                            </h4>
+                          </div>
+                        </div>
+                      );
+                    }}
+                    components={{
+                      EmptyPlaceholder: () => (
+                        <div className="text-center py-8 px-4">
+                          <p className="text-[10px] text-outline">
+                            No contacts found.
+                          </p>
+                        </div>
+                      ),
+                      List: SidebarVirtuosoList,
+                    }}
+                  />
+                );
+              })()
             )}
           </div>
         )}
         {sidebarView === "requests" && (
-          <div className="space-y-1 animate-[fadeIn_0.2s_ease-out]">
+          <div className="flex flex-col flex-1 min-h-0 space-y-1">
             {/* Section Label */}
-            <div className="px-2 pt-2 pb-1.5 flex items-center gap-2">
+            <div className="px-2 pt-2 pb-1.5 shrink-0">
               <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-outline">
                 Pending Requests
               </span>
             </div>
 
             {loadingContacts ? (
-              <div className="flex justify-center py-8">
+              <div className="flex justify-center py-8 shrink-0">
                 <span className="material-symbols-outlined animate-spin text-xl text-primary">
                   rotate_right
                 </span>
               </div>
-            ) : requests.length === 0 ? (
-              <div className="text-center py-12 px-4 flex flex-col items-center justify-center">
-                <span className="material-symbols-outlined text-outline/30 text-3xl mb-2">
-                  person_add_disabled
-                </span>
-                <p className="text-[10px] text-outline leading-relaxed">
-                  No pending message requests.
-                </p>
-              </div>
             ) : (
-              requests.map((request) => {
-                const isSelected =
-                  activeChat &&
-                  !activeChat.isPublic &&
-                  activeChat.id === request.contactUserId;
-                return (
-                  <button
-                    type="button"
-                    key={`req-${request.id}`}
-                    onClick={() =>
-                      onSelectChat({
-                        id: request.contactUserId,
-                        username: request.contactUsername,
-                        isPublic: false,
-                        status: "PENDING_REQUEST",
-                      })
-                    }
-                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left border ${
-                      isSelected
-                        ? "bg-secondary/8 border-secondary/15"
-                        : "hover:bg-surface-container-lowest/60 border border-transparent"
-                    }`}
-                  >
-                    <div className="relative">
-                      <div className="w-9 h-9 rounded-lg bg-secondary/10 flex items-center justify-center text-xs font-extrabold text-secondary border border-secondary/15">
-                        {request.contactUsername.charAt(0).toUpperCase()}
+              <Virtuoso
+                className="flex-grow custom-scrollbar"
+                style={{ flex: 1 }}
+                data={requests}
+                itemContent={(index, request) => {
+                  const isSelected =
+                    activeChat &&
+                    !activeChat.isPublic &&
+                    activeChat.id === request.contactUserId;
+                  return (
+                    <button
+                      type="button"
+                      key={`req-${request.id}`}
+                      onClick={() =>
+                        onSelectChat({
+                          id: request.contactUserId,
+                          username: request.contactUsername,
+                          fullName: request.contactFullName,
+                          isPublic: false,
+                          status: "PENDING_REQUEST",
+                        })
+                      }
+                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 text-left border ${
+                        isSelected
+                          ? "bg-secondary/8 border-secondary/15"
+                          : "hover:bg-surface-container-lowest/60 border border-transparent"
+                      }`}
+                    >
+                      <div className="relative">
+                        <div className="w-9 h-9 rounded-lg bg-secondary/10 flex items-center justify-center text-xs font-extrabold text-secondary border border-secondary/15">
+                          {(request.contactFullName || request.contactUsername)
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
                       </div>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-bold text-xs text-on-surface leading-tight truncate">
-                        {request.contactUsername}
-                      </h4>
-                      <p className="text-[9px] text-outline mt-0.5">
-                        Wants to chat with you
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-bold text-xs text-on-surface leading-tight truncate">
+                          {request.contactFullName || request.contactUsername}
+                        </h4>
+                        <p className="text-[9px] text-outline mt-0.5">
+                          Wants to chat with you
+                        </p>
+                      </div>
+                      <span className="px-1.5 py-0.5 rounded text-[7px] font-bold tracking-wider uppercase bg-secondary/10 text-secondary shrink-0 animate-pulse">
+                        Pending
+                      </span>
+                    </button>
+                  );
+                }}
+                components={{
+                  EmptyPlaceholder: () => (
+                    <div className="text-center py-12 px-4 flex flex-col items-center justify-center">
+                      <span className="material-symbols-outlined text-outline/30 text-3xl mb-2">
+                        person_add_disabled
+                      </span>
+                      <p className="text-[10px] text-outline leading-relaxed">
+                        No pending message requests.
                       </p>
                     </div>
-                    <span className="px-1.5 py-0.5 rounded text-[7px] font-bold tracking-wider uppercase bg-secondary/10 text-secondary shrink-0 animate-pulse">
-                      Pending
-                    </span>
-                  </button>
-                );
-              })
+                  ),
+                  List: SidebarVirtuosoList,
+                }}
+              />
             )}
           </div>
         )}

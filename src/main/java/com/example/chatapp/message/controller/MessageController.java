@@ -7,9 +7,9 @@ import com.example.chatapp.message.model.dto.MessagePage;
 import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.message.service.MessageService;
 import com.example.chatapp.user.repository.ContactRepository;
+import com.example.chatapp.websocket.MessageBroker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,7 +24,7 @@ public class MessageController {
     private final MessageService messageService;
     private final ContactRepository contactRepository;
     private final MessageRepository messageRepository;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final MessageBroker messageBroker;
 
     @GetMapping("/public")
     public MessagePage getPublicMessages(
@@ -92,10 +92,10 @@ public class MessageController {
         MessageDto deletedMessage = messageService.deleteMessage(messageId, ts, currentUser.getId());
 
         if (deletedMessage.getRecipientId() == null) {
-            messagingTemplate.convertAndSend("/topic/public", deletedMessage);
+            messageBroker.publishToTopic("/topic/public", deletedMessage);
         } else {
-            messagingTemplate.convertAndSendToUser(deletedMessage.getSenderId().toString(), "/queue/messages", deletedMessage);
-            messagingTemplate.convertAndSendToUser(deletedMessage.getRecipientId().toString(), "/queue/messages", deletedMessage);
+            messageBroker.publishToUser(deletedMessage.getSenderId().toString(), "/queue/messages", deletedMessage);
+            messageBroker.publishToUser(deletedMessage.getRecipientId().toString(), "/queue/messages", deletedMessage);
         }
 
         return deletedMessage;
