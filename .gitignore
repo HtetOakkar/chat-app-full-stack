@@ -40,7 +40,15 @@ build/
 .agents/
 .scratch/
 CONTEXT.md
+GLOSSARY.md
+MISSION.md
+RESOURCES.md
+TEST_INFRA.md
+TEST_READY.md
+progress.md
 skills-lock.json
 docs/PRD.md
 docs/PRD-*.md
+resend_docs.txt
+test_resend*.py
 

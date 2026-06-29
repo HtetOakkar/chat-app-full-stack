@@ -3,6 +3,8 @@ package com.example.chatapp.websocket;
 import com.example.chatapp.exception.UnauthorizedException;
 import com.example.chatapp.jwt.UserPrincipal;
 import com.example.chatapp.jwt.service.JwtService;
+import com.example.chatapp.user.model.entity.User;
+import com.example.chatapp.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
@@ -22,8 +24,8 @@ import org.springframework.util.StringUtils;
 public class AuthChannelInterceptor implements ChannelInterceptor {
 
     private final JwtService jwtService;
-
     private final UserDetailsService userDetailsService;
+    private final UserRepository userRepository;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -48,6 +50,10 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
 
                     UserDetails userDetails = userDetailsService.loadUserByUsername(username);
                     if (userDetails instanceof UserPrincipal userPrincipalDetails) {
+                        User user = userRepository.findByUsername(username).orElse(null);
+                        if (user != null && user.getEmail() != null && !user.isEmailVerified()) {
+                            throw new UnauthorizedException("Email not verified");
+                        }
                         accessor.setUser(userPrincipalDetails);
                         log.info("User ID '{}' authenticated successfully and principal set.",
                                 userPrincipalDetails.getName());

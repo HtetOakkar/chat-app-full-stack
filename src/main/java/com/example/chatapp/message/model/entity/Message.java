@@ -28,6 +28,10 @@ public class Message {
     @Column(name = "is_read", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean isRead;
 
+    @Builder.Default
+    @Column(name = "is_deleted", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private Boolean isDeleted = false;
+
     @Column(name = "is_delivered", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean isDelivered;
 

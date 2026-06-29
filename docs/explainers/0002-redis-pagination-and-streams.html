@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scaling Lesson 2: Redis Pagination and Streams</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d0f14;
+            --panel-bg: rgba(22, 28, 38, 0.6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --primary: #4f46e5;
+            --primary-glow: rgba(79, 70, 229, 0.4);
+            --accent: #06b6d4;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --danger: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+            line-height: 1.6;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(79, 70, 229, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(6, 118, 212, 0.15) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 50%, #22d3ee 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .section-card {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: #a5b4fc;
+        }
+
+        h2::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 1.5rem;
+            background-color: var(--primary);
+            border-radius: 2px;
+        }
+
+        p {
+            margin-bottom: 1.25rem;
+            color: #d1d5db;
+        }
+
+        code {
+            font-family: 'Courier New', Courier, monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            color: #f472b6;
+            font-size: 0.9em;
+        }
+
+        .code-block-ref {
+            background: rgba(0, 0, 0, 0.4);
+            border-left: 3px solid var(--accent);
+            padding: 1rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1.5rem 0;
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #e5e7eb;
+            overflow-x: auto;
+        }
+
+        /* Shift Visualizer */
+        .shift-visualizer {
+            background: rgba(13, 15, 20, 0.8);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .list-container {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            overflow-x: auto;
+            padding: 1rem 0;
+        }
+
+        .list-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            min-width: 80px;
+            text-align: center;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .list-item.active-window {
+            border-color: var(--accent);
+            background: rgba(6, 182, 212, 0.15);
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+        }
+
+        .list-item.new-item {
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.15);
+            animation: pulse-green 1s infinite alternate;
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 5px rgba(16, 185, 129, 0.2); }
+            100% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.5); }
+        }
+
+        .btn-action {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .btn-action:hover {
+            background: #4338ca;
+        }
+
+        /* Quiz */
+        .quiz-option {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+            color: #d1d5db;
+            width: 100%;
+            margin-bottom: 0.75rem;
+        }
+
+        .quiz-option:hover {
+            background: rgba(79, 70, 229, 0.1);
+            border-color: var(--primary);
+        }
+
+        .quiz-option.correct {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: var(--success);
+            color: #a7f3d0;
+        }
+
+        .quiz-option.incorrect {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: var(--danger);
+            color: #fca5a5;
+        }
+
+        .quiz-feedback {
+            margin-top: 1rem;
+            font-weight: 500;
+            display: none;
+        }
+
+        .try-this-callout {
+            background: rgba(6, 182, 212, 0.05);
+            border: 1px dashed var(--accent);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Scaling Lesson 2: Redis Pagination and Streams</h1>
+            <div class="subtitle">Replacing O(N) range fetches with stable sharding structures</div>
+        </header>
+
+        <!-- Section 1: The Offset Pagination Trap -->
+        <section class="section-card">
+            <h2>The Danger of Index-Based List Ranges</h2>
+            <p>
+                In your current code, <code>peekMessages()</code> loads the entire list:
+                <code>listOps.range(MESSAGE_KEY, 0, -1)</code>. As you correctly suggested, we could retrieve these messages **batch-by-batch** (e.g., using range boundaries like <code>0 to 99</code>, then <code>100 to 199</code>).
+            </p>
+            <p>
+                However, in highly active production applications, doing index-based pagination (using offsets) on a Redis List creates two critical problems:
+            </p>
+            <ol style="margin-left: 1.5rem; margin-bottom: 1.5rem;">
+                <li style="margin-bottom: 0.5rem;">
+                    <strong>O(N) Traversal Time:</strong> Redis Lists are implemented as linked lists. Accessing an element at index 10,000 requires traversing 10,000 nodes. Under load, this blocks Redis's single thread, causing timeout cascades.
+                </li>
+                <li style="margin-bottom: 0.5rem;">
+                    <strong>Data Drift (Duplicates / Misses):</strong> Because your batch scheduler constantly pops items from the right, and users push new items to the left, the indices are constantly moving!
+                </li>
+            </ol>
+        </section>
+
+        <!-- Section 2: Shift Visualizer -->
+        <section class="section-card">
+            <h2>Drift Visualizer</h2>
+            <p>
+                Press **"Add New Message"** (mimicking a user sending a message) or **"Batch Pop"** (mimicking the Spring Batch scheduler popping messages), and see how your pagination window (in <span style="color:var(--accent);">blue</span>) drifts, causing duplication or missed items.
+            </p>
+
+            <div class="shift-visualizer">
+                <div style="display:flex; gap:1rem; margin-bottom:1rem;">
+                    <button class="btn-action" onclick="addItem()">Add New Msg (Left)</button>
+                    <button class="btn-action" style="background:var(--warning)" onclick="popItem()">Batch Pop Msg (Right)</button>
+                </div>
+                <div class="list-container" id="list-render">
+                    <!-- Dynamic rendering -->
+                </div>
+                <p id="visualizer-status" style="font-size:0.9em; font-style:italic; color:var(--text-muted);"></p>
+            </div>
+        </section>
+
+        <!-- Section 3: Transitioning to Sorted Sets (ZSET) -->
+        <section class="section-card">
+            <h2>The Solution: Cursor-Based Pagination with ZSETs or Streams</h2>
+            <p>
+                Instead of using Redis Lists, high-performance chat apps use one of two structures:
+            </p>
+            
+            <h3 style="color:#a5b4fc; margin-bottom:0.75rem;">1. Redis Sorted Sets (ZSET)</h3>
+            <p>
+                In a Sorted Set, every message is saved with a score representing a timestamp (or sequential ID).
+                Instead of requesting index ranges, we query by score boundaries:
+            </p>
+            <div class="code-block-ref">
+// Fetch messages older than the sentAt timestamp of the last message (cursor)
+listOps.zrangeByScore(KEY, "-inf", maxTimestampScore, offset, limit);
+            </div>
+            <p>
+                Since it uses a skip list internally, queries run in <code>O(log(N) + M)</code> time where M is the limit size, regardless of how deep the offset is.
+            </p>
+
+            <h3 style="color:#a5b4fc; margin-bottom:0.75rem;">2. Redis Streams</h3>
+            <p>
+                Streams are append-only logs specifically designed for real-time messaging. They support consumer groups, allowing multiple Spring Boot app instances to read batches cooperatively without duplicating work.
+            </p>
+        </section>
+
+        <!-- Section 4: Quiz -->
+        <section class="section-card">
+            <h2>Test Your Knowledge</h2>
+            <div class="quiz-options">
+                <button class="quiz-option" onclick="checkAnswer(this, false, 'No. Accessing index 50,000 requires traversing 50,000 nodes, which is O(N) complexity.')">
+                    Retrieving elements 50,000 to 50,100 in a Redis List takes the same amount of time as retrieving elements 0 to 100.
+                </button>
+                <button class="quiz-option" onclick="checkAnswer(this, true, 'Correct! Because ZSETs order items by a score, we can use cursor pagination (based on the timestamp of the last message). This is unaffected by items being pushed or popped.')">
+                    Using a Sorted Set (ZSET) with cursor-based score limits prevents duplicate or missed messages when items are popped concurrently.
+                </button>
+            </div>
+            <div class="quiz-feedback" id="quiz-feedback">Feedback message will appear here.</div>
+        </section>
+
+        <!-- Try This -->
+        <div class="try-this-callout">
+            <div style="color:var(--accent); font-weight:700; margin-bottom:0.5rem;">🚀 Challenge: Designing a Batch Batcher</div>
+            <p>
+                To resolve the database lookup amplification we found in <a href="file:///Users/htetoakkar/Projects/chatapp/src/main/java/com/example/chatapp/config/BatchConfig.java#L46-L56" style="color:var(--accent);">BatchConfig.java</a>:
+            </p>
+            <p>
+                Instead of calling <code>userRepository.findById(...)</code> for every single message individually, we should batch our database reads! We can collect all unique user IDs in the batch chunk and load them in a single query:
+                <br><code>userRepository.findAllById(userIds)</code>.
+            </p>
+            <p>
+                Would you like to write the code to optimize the Spring Batch processor to use bulk database reads?
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let items = ['Msg 1', 'Msg 2', 'Msg 3', 'Msg 4', 'Msg 5'];
+        let counter = 6;
+
+        function renderList() {
+            const container = document.getElementById('list-render');
+            container.innerHTML = '';
+            
+            items.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                // Highlight index 1 and 2 as our current page window
+                if (idx === 1 || idx === 2) {
+                    div.classList.add('active-window');
+                }
+                div.textContent = item;
+                container.appendChild(div);
+            });
+
+            document.getElementById('visualizer-status').innerHTML = `
+                Current Page Window (indices 1 to 2): <strong>[${items[1] || 'none'}, ${items[2] || 'none'}]</strong>
+            `;
+        }
+
+        function addItem() {
+            items.unshift('Msg ' + (counter++));
+            renderList();
+        }
+
+        function popItem() {
+            items.pop();
+            renderList();
+        }
+
+        function checkAnswer(btn, isCorrect, feedback) {
+            const options = document.querySelectorAll('.quiz-option');
+            options.forEach(opt => {
+                opt.disabled = true;
+                opt.classList.remove('correct', 'incorrect');
+            });
+
+            if (isCorrect) {
+                btn.classList.add('correct');
+                document.getElementById('quiz-feedback').style.color = 'var(--success)';
+            } else {
+                btn.classList.add('incorrect');
+                document.getElementById('quiz-feedback').style.color = 'var(--danger)';
+            }
+
+            const feedbackDiv = document.getElementById('quiz-feedback');
+            feedbackDiv.textContent = feedback;
+            feedbackDiv.style.display = 'block';
+        }
+
+        renderList();
+    </script>
+</body>
+</html>

@@ -69,5 +69,11 @@ public class User {
 
     @Column(name = "last_code_requested_at")
     private Instant lastCodeRequestedAt;
+
+    @Column(name = "last_seen_at")
+    private Instant lastSeenAt;
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private UserSettings settings;
 }
 

@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class ContactServiceImpl implements ContactService {
+public class ContactModuleImpl implements ContactModule {
 
     private final ContactRepository contactRepository;
     private final UserRepository userRepository;
@@ -45,6 +45,10 @@ public class ContactServiceImpl implements ContactService {
             throw new BadRequestException("You cannot add yourself as a contact");
         }
 
+        if (contactUser.getEmail() != null && !contactUser.isEmailVerified()) {
+            throw new BadRequestException("Cannot add unverified user as contact");
+        }
+
         Optional<Contact> existingContactOpt = contactRepository.findByOwnerIdAndContactUserId(owner.getId(), contactUser.getId());
         Contact contact;
         if (existingContactOpt.isPresent()) {
@@ -61,6 +65,17 @@ public class ContactServiceImpl implements ContactService {
                     .build();
         }
 
+        // Create/update reverse relation for the contactUser as PENDING_REQUEST
+        Optional<Contact> reverseContactOpt = contactRepository.findByOwnerIdAndContactUserId(contactUser.getId(), owner.getId());
+        if (reverseContactOpt.isEmpty()) {
+            Contact reverseContact = Contact.builder()
+                    .owner(contactUser)
+                    .contactUser(owner)
+                    .status(ContactStatus.PENDING_REQUEST)
+                    .build();
+            contactRepository.save(reverseContact);
+        }
+
         Contact saved = contactRepository.save(contact);
         return mapToDto(saved);
     }
@@ -68,8 +83,9 @@ public class ContactServiceImpl implements ContactService {
     @Override
     @Transactional(readOnly = true)
     public List<ContactDto> getContacts(Long ownerId) {
-        return contactRepository.findByOwnerIdAndStatusIn(ownerId, List.of(ContactStatus.CONTACT, ContactStatus.ACCEPTED)).stream()
+        return contactRepository.findContactsNative(ownerId).stream()
                 .map(contact -> mapToEnrichedDto(contact, ownerId))
+                .filter(dto -> dto.getClearedAt() == null || dto.getLastMessageTimestamp() != null)
                 .collect(Collectors.toList());
     }
 
@@ -82,8 +98,24 @@ public class ContactServiceImpl implements ContactService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<ContactDto> getMutualContacts(Long userId, Long otherUserId) {
+        return contactRepository.findMutualContactsNative(userId, otherUserId).stream()
+                .map(contact -> mapToEnrichedDto(contact, userId))
+                .collect(Collectors.toList());
+    }
+
+    @Override
     @Transactional
-    public ContactDto acceptRequest(Long ownerId, Long contactId) {
+    public ContactDto sendContactRequest(Long ownerId, String contactUsername) {
+        AddContactRequest request = new AddContactRequest();
+        request.setUsername(contactUsername);
+        return addContact(ownerId, request);
+    }
+
+    @Override
+    @Transactional
+    public ContactDto acceptContactRequest(Long ownerId, Long contactId) {
         Contact contact = contactRepository.findByOwnerIdAndContactUserId(ownerId, contactId)
                 .orElseThrow(() -> new NotFoundException("Contact request not found"));
         if (contact.getStatus() != ContactStatus.PENDING_REQUEST) {
@@ -96,7 +128,31 @@ public class ContactServiceImpl implements ContactService {
 
     @Override
     @Transactional
+    public ContactDto rejectContactRequest(Long ownerId, Long contactId) {
+        Contact contact = contactRepository.findByOwnerIdAndContactUserId(ownerId, contactId)
+                .orElseThrow(() -> new NotFoundException("Contact request not found"));
+        if (contact.getStatus() != ContactStatus.PENDING_REQUEST) {
+            throw new BadRequestException("No pending contact request found to neglect");
+        }
+        contact.setStatus(ContactStatus.NEGLECTED);
+        Contact saved = contactRepository.save(contact);
+        return mapToDto(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ContactDto> getContactRequests(Long ownerId) {
+        return contactRepository.findByOwnerIdAndStatus(ownerId, ContactStatus.PENDING_REQUEST).stream()
+                .map(contact -> mapToEnrichedDto(contact, ownerId))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
     public ContactDto blockUser(Long ownerId, Long contactId) {
+        if (ownerId.equals(contactId)) {
+            throw new NotFoundException("Cannot block yourself");
+        }
         User owner = userRepository.findById(ownerId)
                 .orElseThrow(() -> new NotFoundException("Owner not found"));
         User contactUser = userRepository.findById(contactId)
@@ -115,48 +171,60 @@ public class ContactServiceImpl implements ContactService {
 
     @Override
     @Transactional
-    public ContactDto neglectRequest(Long ownerId, Long contactId) {
+    public void unblockUser(Long ownerId, Long contactId) {
         Contact contact = contactRepository.findByOwnerIdAndContactUserId(ownerId, contactId)
-                .orElseThrow(() -> new NotFoundException("Contact request not found"));
-        if (contact.getStatus() != ContactStatus.PENDING_REQUEST) {
-            throw new BadRequestException("No pending contact request found to neglect");
+                .orElseThrow(() -> new NotFoundException("Block relation not found"));
+        if (contact.getStatus() != ContactStatus.BLOCKED) {
+            throw new BadRequestException("User is not blocked");
         }
-        contact.setStatus(ContactStatus.NEGLECTED);
-        Contact saved = contactRepository.save(contact);
-        return mapToDto(saved);
+        contactRepository.delete(contact);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<ContactDto> getPendingRequests(Long ownerId) {
-        return contactRepository.findByOwnerIdAndStatus(ownerId, ContactStatus.PENDING_REQUEST).stream()
+    public List<ContactDto> getBlockedUsers(Long ownerId) {
+        return contactRepository.findBlockedContactsNative(ownerId).stream()
                 .map(contact -> mapToEnrichedDto(contact, ownerId))
                 .collect(Collectors.toList());
     }
 
+    @Override
+    @Transactional
+    public void acceptRequestIfPending(Long ownerId, Long contactId) {
+        contactRepository.findByOwnerIdAndContactUserId(ownerId, contactId).ifPresent(contact -> {
+            if (contact.getStatus() == ContactStatus.PENDING_REQUEST || contact.getStatus() == ContactStatus.NEGLECTED) {
+                contact.setStatus(ContactStatus.ACCEPTED);
+                contactRepository.save(contact);
+            }
+        });
+    }
+
     private ContactDto mapToEnrichedDto(Contact contact, Long ownerId) {
         Long contactUserId = contact.getContactUser().getId();
+        Instant clearedAt = contact.getClearedAt();
 
         // 1. Calculate unread count (DB + Redis)
-        long dbUnreadCount = messageRepository.countUnreadMessages(contactUserId, ownerId);
+        long dbUnreadCount = messageRepository.countUnreadMessages(contactUserId, ownerId, clearedAt);
         long redisUnreadCount = redisMessageRepository.peekMessages().stream()
                 .filter(msg -> msg.getSenderId().equals(contactUserId) &&
                         msg.getRecipientId() != null &&
                         msg.getRecipientId().equals(ownerId) &&
-                        (msg.getIsRead() == null || !msg.getIsRead()))
+                        (msg.getIsRead() == null || !msg.getIsRead()) &&
+                        (clearedAt == null || msg.getTimestamp().isAfter(clearedAt)))
                 .count();
         long unreadCount = dbUnreadCount + redisUnreadCount;
 
         // 2. Determine latest message content & timestamp
         // From DB
-        List<Message> dbLatestList = messageRepository.findLatestMessageBetweenUsers(ownerId, contactUserId, PageRequest.of(0, 1));
+        List<Message> dbLatestList = messageRepository.findLatestMessageBetweenUsers(ownerId, contactUserId, clearedAt, PageRequest.of(0, 1));
         Message dbLatest = dbLatestList.isEmpty() ? null : dbLatestList.get(0);
 
         // From Redis
         com.example.chatapp.message.model.dto.MessageDto redisLatest = redisMessageRepository.peekMessages().stream()
                 .filter(msg -> msg.getRecipientId() != null &&
                         ((msg.getSenderId().equals(ownerId) && msg.getRecipientId().equals(contactUserId)) ||
-                         (msg.getSenderId().equals(contactUserId) && msg.getRecipientId().equals(ownerId))))
+                         (msg.getSenderId().equals(contactUserId) && msg.getRecipientId().equals(ownerId))) &&
+                        (clearedAt == null || msg.getTimestamp().isAfter(clearedAt)))
                 .findFirst()
                 .orElse(null);
 
@@ -188,8 +256,10 @@ public class ContactServiceImpl implements ContactService {
                 .id(contact.getId())
                 .contactUserId(contactUserId)
                 .contactUsername(contact.getContactUser().getUsername())
+                .contactFullName(contact.getContactUser().getFullName())
                 .status(contact.getStatus())
                 .createdAt(contact.getCreatedAt())
+                .clearedAt(clearedAt)
                 .lastMessageContent(lastMessageContent)
                 .lastMessageTimestamp(lastMessageTimestamp)
                 .lastMessageSenderId(lastMessageSenderId)
@@ -202,8 +272,10 @@ public class ContactServiceImpl implements ContactService {
                 .id(contact.getId())
                 .contactUserId(contact.getContactUser().getId())
                 .contactUsername(contact.getContactUser().getUsername())
+                .contactFullName(contact.getContactUser().getFullName())
                 .status(contact.getStatus())
                 .createdAt(contact.getCreatedAt())
+                .clearedAt(contact.getClearedAt())
                 .build();
     }
 }

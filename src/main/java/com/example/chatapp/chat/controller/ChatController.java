@@ -4,6 +4,7 @@ import com.example.chatapp.exception.BadRequestException;
 import com.example.chatapp.jwt.UserPrincipal;
 import com.example.chatapp.message.model.dto.MessageDto;
 import com.example.chatapp.message.model.dto.OnlineStatusDto;
+import com.example.chatapp.message.model.dto.TypingIndicatorDto;
 import com.example.chatapp.message.model.entity.MessageType;
 import com.example.chatapp.message.service.MessageService;
 import com.example.chatapp.user.model.entity.Contact;
@@ -11,13 +12,15 @@ import com.example.chatapp.user.model.entity.ContactStatus;
 import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.user.repository.ContactRepository;
 import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.user.service.ContactModule;
+import com.example.chatapp.user.service.PresenceModule;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import com.example.chatapp.websocket.MessageBroker;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
 import java.security.Principal;
@@ -30,21 +33,25 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class ChatController {
-    private final SimpMessagingTemplate messagingTemplate;
+    private final MessageBroker messageBroker;
     private final MessageService messageService;
     private final ContactRepository contactRepository;
     private final UserRepository userRepository;
+    private final ContactModule contactModule;
+    private final PresenceModule presenceModule;
+
 
     @MessageMapping("/chat.public")
     public void sendPublicMessage(@Valid @Payload MessageDto messageDto, Principal principal) {
         UserPrincipal authenticatedUser = getAuthenticatedUser(principal);
         messageDto.setSenderId(authenticatedUser.getId());
         messageDto.setSenderUsername(authenticatedUser.getUsername());
+        messageDto.setSenderFullName(authenticatedUser.getFullName());
         messageDto.setRecipientId(null);
         messageDto.setMessageType(messageDto.getMessageType() == null ? MessageType.TEXT : messageDto.getMessageType());
         messageDto.setTimestamp(Instant.now());
         messageService.saveMessage(messageDto);
-        messagingTemplate.convertAndSend("/topic/public", messageDto);
+        messageBroker.publishToTopic("/topic/public", messageDto);
     }
 
     @MessageMapping("/chat.private")
@@ -59,6 +66,7 @@ public class ChatController {
 
         messageDto.setSenderId(senderId);
         messageDto.setSenderUsername(authenticatedUser.getUsername());
+        messageDto.setSenderFullName(authenticatedUser.getFullName());
         messageDto.setMessageType(messageDto.getMessageType() == null ? MessageType.TEXT : messageDto.getMessageType());
         messageDto.setTimestamp(Instant.now());
 
@@ -76,7 +84,7 @@ public class ChatController {
             messageService.saveMessage(messageDto);
             
             // Only send to sender's own WS queue
-            messagingTemplate.convertAndSendToUser(senderId.toString(), "/queue/messages", messageDto);
+            messageBroker.publishToUser(senderId.toString(), "/queue/messages", messageDto);
             return;
         }
 
@@ -94,17 +102,20 @@ public class ChatController {
             recipientStatus = ContactStatus.PENDING_REQUEST;
         }
 
+        // Update sender's relation to recipient if it is PENDING_REQUEST or NEGLECTED
+        contactModule.acceptRequestIfPending(senderId, recipientId);
+
         // Save the message to Redis/DB
         messageService.saveMessage(messageDto);
 
         // Send to sender's own queue
-        messagingTemplate.convertAndSendToUser(senderId.toString(), "/queue/messages", messageDto);
+        messageBroker.publishToUser(senderId.toString(), "/queue/messages", messageDto);
 
         // Route to recipient based on status
         if (recipientStatus == ContactStatus.PENDING_REQUEST || recipientStatus == ContactStatus.NEGLECTED) {
-            messagingTemplate.convertAndSendToUser(recipientId.toString(), "/queue/requests", messageDto);
+            messageBroker.publishToUser(recipientId.toString(), "/queue/requests", messageDto);
         } else { // ACCEPTED or CONTACT
-            messagingTemplate.convertAndSendToUser(recipientId.toString(), "/queue/messages", messageDto);
+            messageBroker.publishToUser(recipientId.toString(), "/queue/messages", messageDto);
         }
     }
 
@@ -112,11 +123,36 @@ public class ChatController {
     public void sendOnlineStatus(@Valid @Payload OnlineStatusDto onlineStatusDto, Principal principal) {
         UserPrincipal authenticatedUser = getAuthenticatedUser(principal);
         Map<String, Object> map = new HashMap<>();
-        map.put("userid", authenticatedUser.getId());
+        map.put("userId", authenticatedUser.getId());
         map.put("status", onlineStatusDto.getStatus());
         map.put("timestamp", Instant.now());
         map.put("username", authenticatedUser.getUsername());
-        messagingTemplate.convertAndSend("/topic/online", map);
+
+        java.util.Set<Long> receivers = presenceModule.getEligiblePresenceReceivers(authenticatedUser.getId());
+        for (Long receiverId : receivers) {
+            messageBroker.publishToUser(receiverId.toString(), "/queue/online", map);
+        }
+        messageBroker.publishToUser(authenticatedUser.getId().toString(), "/queue/online", map);
+    }
+
+    @MessageMapping("/typing")
+    public void sendTypingIndicator(@Valid @Payload TypingIndicatorDto typingDto, Principal principal) {
+        UserPrincipal authenticatedUser = getAuthenticatedUser(principal);
+        typingDto.setSenderId(authenticatedUser.getId());
+
+        Long recipientId = typingDto.getRecipientId();
+        if (recipientId == null) {
+            throw new BadRequestException("recipientId is required for typing events");
+        }
+
+        // Check if recipient has blocked sender
+        Optional<Contact> relationOpt = contactRepository.findByOwnerIdAndContactUserId(recipientId, authenticatedUser.getId());
+        if (relationOpt.isPresent() && relationOpt.get().getStatus() == ContactStatus.BLOCKED) {
+            return; // Drop typing indicator if recipient blocked sender
+        }
+
+        // Send typing indicator directly since it's an explicit action
+        messageBroker.publishToUser(recipientId.toString(), "/queue/typing", typingDto);
     }
 
     private void createSymmetricRelations(Long recipientId, Long senderId) {

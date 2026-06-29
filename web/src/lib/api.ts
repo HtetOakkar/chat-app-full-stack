@@ -1,6 +1,7 @@
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
   const headers = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
@@ -19,25 +20,21 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     let errorMsg = "API request failed";
     try {
       const errorData = await response.json();
-      errorMsg = errorData.message || errorMsg;
+      errorMsg = errorData.message || errorData.error || errorMsg;
     } catch {
-      if (response.status === 401) {
-        // Handle unauthorized generically if needed
-        errorMsg = "Unauthorized/Session Expired";
-      }
+      // JSON parsing failed, keep fallback
     }
 
-    if (response.status === 401 && typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+    if (response.status === 401) {
+      errorMsg = "Unauthorized/Session Expired";
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+      }
     }
 
     throw new Error(errorMsg);
   }
 
-  // Some endpoints return 204 No Content with no body
-  if (response.status === 204) {
-    return null;
-  }
-
-  return response.json();
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
 }

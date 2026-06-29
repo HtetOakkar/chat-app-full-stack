@@ -66,12 +66,16 @@ export default function AuthContainer() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
-        const errMsg = errorData?.message ||
+        const errMsg =
+          errorData?.message ||
           (formMode === "login"
             ? "Invalid username or password"
             : "Registration failed. Username may already exist.");
 
-        if (formMode === "login" && errMsg === "Email is not verified. Please verify your email first.") {
+        if (
+          formMode === "login" &&
+          errMsg === "Email is not verified. Please verify your email first."
+        ) {
           setUsernameOrEmailForVerify(username);
           setVerificationView(true);
           setCooldown(60);
@@ -91,7 +95,8 @@ export default function AuthContainer() {
         login(data.token);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "An unexpected error occurred.";
+      const message =
+        err instanceof Error ? err.message : "An unexpected error occurred.";
       setError(message);
     } finally {
       setLoading(false);
@@ -121,7 +126,8 @@ export default function AuthContainer() {
       const data = await res.json();
       login(data.token);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "An unexpected error occurred.";
+      const message =
+        err instanceof Error ? err.message : "An unexpected error occurred.";
       setError(message);
     } finally {
       setLoading(false);
@@ -149,7 +155,8 @@ export default function AuthContainer() {
 
       setCooldown(60);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "An unexpected error occurred.";
+      const message =
+        err instanceof Error ? err.message : "An unexpected error occurred.";
       setError(message);
     } finally {
       setLoading(false);
@@ -188,7 +195,8 @@ export default function AuthContainer() {
                 <span className="font-bold text-primary block mb-0.5">
                   Email Activation Required
                 </span>
-                To complete access key provisioning, enter the 6-digit verification code printed to the offline ledger console.
+                To complete access key provisioning, enter the 6-digit
+                verification code printed to the offline ledger console.
               </div>
             </div>
 
@@ -205,7 +213,10 @@ export default function AuthContainer() {
               Verify Account
             </h1>
             <p className="text-center text-xs text-outline mb-6">
-              Enter code for <span className="font-bold text-on-surface">{usernameOrEmailForVerify}</span>
+              Enter code for{" "}
+              <span className="font-bold text-on-surface">
+                {usernameOrEmailForVerify}
+              </span>
             </p>
 
             {/* Error Display */}
@@ -234,7 +245,9 @@ export default function AuthContainer() {
                   maxLength={6}
                   pattern="[0-9]{6}"
                   value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) =>
+                    setVerificationCode(e.target.value.replace(/\D/g, ""))
+                  }
                   className="w-full bg-surface-container-low border border-transparent rounded-lg py-3 px-4 text-sm text-on-surface focus:border-primary focus:bg-surface-container text-center tracking-[0.5em] font-mono text-lg transition-all outline-none"
                   placeholder="000000"
                 />
@@ -383,7 +396,7 @@ export default function AuthContainer() {
                       htmlFor="auth-email"
                       className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5"
                     >
-                      Email (Optional)
+                      Email
                     </label>
                     <input
                       id="auth-email"
@@ -400,7 +413,7 @@ export default function AuthContainer() {
                       htmlFor="auth-fullname"
                       className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5"
                     >
-                      Full Name (Optional)
+                      Full Name
                     </label>
                     <input
                       id="auth-fullname"
@@ -451,7 +464,9 @@ export default function AuthContainer() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface focus:outline-none flex items-center justify-center p-1"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                   >
                     <span className="material-symbols-outlined text-[20px]">
                       {showPassword ? "visibility_off" : "visibility"}
@@ -480,9 +495,15 @@ export default function AuthContainer() {
                     />
                     <button
                       type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      onClick={() =>
+                        setShowConfirmPassword(!showConfirmPassword)
+                      }
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface focus:outline-none flex items-center justify-center p-1"
-                      aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                      aria-label={
+                        showConfirmPassword
+                          ? "Hide confirm password"
+                          : "Show confirm password"
+                      }
                     >
                       <span className="material-symbols-outlined text-[20px]">
                         {showConfirmPassword ? "visibility_off" : "visibility"}

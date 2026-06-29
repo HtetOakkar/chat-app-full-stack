@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scaling Lesson 1: Bottleneck Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d0f14;
+            --panel-bg: rgba(22, 28, 38, 0.6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --primary: #4f46e5;
+            --primary-glow: rgba(79, 70, 229, 0.4);
+            --accent: #06b6d4;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --danger: #ef4444;
+            --danger-glow: rgba(239, 68, 68, 0.2);
+            --warning: #f59e0b;
+            --success: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+            line-height: 1.6;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(79, 70, 229, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(6, 118, 212, 0.15) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 50%, #22d3ee 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .section-card {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .section-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(79, 70, 229, 0.05);
+        }
+
+        h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: #a5b4fc;
+        }
+
+        h2::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 1.5rem;
+            background-color: var(--primary);
+            border-radius: 2px;
+        }
+
+        p {
+            margin-bottom: 1.25rem;
+            color: #d1d5db;
+        }
+
+        code {
+            font-family: 'Courier New', Courier, monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            color: #f472b6;
+            font-size: 0.9em;
+        }
+
+        .code-block-ref {
+            background: rgba(0, 0, 0, 0.4);
+            border-left: 3px solid var(--accent);
+            padding: 1rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1.5rem 0;
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #e5e7eb;
+            overflow-x: auto;
+        }
+
+        /* Interactive Calculator Styles */
+        .calculator {
+            margin-top: 2rem;
+            padding: 2rem;
+            background: rgba(13, 15, 20, 0.8);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .slider-container {
+            margin-bottom: 2rem;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .slider-value {
+            color: var(--accent);
+            font-size: 1.25rem;
+            font-weight: 800;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 0 10px var(--primary-glow);
+            transition: background 0.15s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: var(--accent);
+        }
+
+        .grid-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 1.5rem;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-card .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
+            color: var(--text-main);
+        }
+
+        .stat-card .label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .warning-indicator {
+            background: var(--danger-glow);
+            border: 1px solid var(--danger);
+            border-radius: 8px;
+            padding: 1rem;
+            color: #fca5a5;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .warning-indicator.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Quiz Styles */
+        .quiz-container {
+            margin-top: 1.5rem;
+        }
+
+        .quiz-question {
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #e5e7eb;
+        }
+
+        .quiz-options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .quiz-option {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+            color: #d1d5db;
+        }
+
+        .quiz-option:hover {
+            background: rgba(79, 70, 229, 0.1);
+            border-color: var(--primary);
+        }
+
+        .quiz-option.correct {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: var(--success);
+            color: #a7f3d0;
+        }
+
+        .quiz-option.incorrect {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: var(--danger);
+            color: #fca5a5;
+        }
+
+        .quiz-feedback {
+            margin-top: 1rem;
+            font-weight: 500;
+            display: none;
+        }
+
+        /* Steps list */
+        ol.steps-list {
+            margin-left: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        ol.steps-list li {
+            margin-bottom: 0.75rem;
+            color: #d1d5db;
+        }
+
+        /* Backups / Callouts */
+        .try-this-callout {
+            background: rgba(6, 182, 212, 0.05);
+            border: 1px dashed var(--accent);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .try-this-title {
+            color: var(--accent);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .citations {
+            margin-top: 3rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1.5rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .citations a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .citations a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Scaling Lesson 1: Identifying Bottlenecks</h1>
+            <div class="subtitle">Analyzing the current chat app architecture under massive message loads</div>
+        </header>
+
+        <!-- Section 1: Current Architecture -->
+        <section class="section-card">
+            <h2>The Current Flow of Messages</h2>
+            <p>
+                In our current chat app project, messaging is buffered to reduce database load. When a user sends a message, it follows this pathway:
+            </p>
+            <ol class="steps-list">
+                <li>
+                    <strong>Buffering:</strong> The message is received by the application server and pushed onto a single Redis list:
+                    <div class="code-block-ref">listOps.leftPush("chat_messages", messageDto);</div>
+                </li>
+                <li>
+                    <strong>Scheduling:</strong> A scheduled Spring Batch job runs once every minute (<code>@Scheduled(fixedRate = 60000)</code>).
+                </li>
+                <li>
+                    <strong>Processing:</strong> The job reads the messages, queries MySQL to check if the sender and recipient exist, and maps them to entities.
+                </li>
+                <li>
+                    <strong>Writing:</strong> The processed messages are batch-inserted into MySQL via JPA <code>saveAll()</code>.
+                </li>
+            </ol>
+            <p>
+                While this design is neat for a low-traffic demo, it falls over completely when scaled to millions of messages per second. Let's see why.
+            </p>
+        </section>
+
+        <!-- Section 2: Interactive Calculator -->
+        <section class="section-card">
+            <h2>Interactive Crash Simulator</h2>
+            <p>
+                Adjust the slider below to change the input traffic rate (messages per second) and observe the simulated load placed on Redis, MySQL, and JVM memory.
+            </p>
+
+            <div class="calculator">
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>Input Message Rate:</span>
+                        <span class="slider-value" id="rate-value">1,000 msg/sec</span>
+                    </div>
+                    <input type="range" id="rate-slider" min="10" max="2000000" step="50" value="1000">
+                </div>
+
+                <div class="grid-stats">
+                    <div class="stat-card">
+                        <div class="label">Redis Queue Size (1 min)</div>
+                        <div class="value" id="redis-queue">60,000</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">MySQL Lookups/min</div>
+                        <div class="value" id="mysql-lookups">120,000</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">JVM Heap sorting</div>
+                        <div class="value" id="jvm-memory">15.0 MB</div>
+                    </div>
+                </div>
+
+                <div class="warning-indicator" id="warning-box">
+                    <span>⚠️</span>
+                    <span id="warning-text">Everything looks normal. System load is within limits.</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: The Fatal Bottlenecks -->
+        <section class="section-card">
+            <h2>Why the System Collapses</h2>
+            <p>
+                As the slider demonstrates, scaling to millions of messages per second triggers multiple critical points of failure:
+            </p>
+            <ol class="steps-list">
+                <li>
+                    <strong>Redis List Lockups:</strong> Standard Redis List structures operate on a single key (<code>chat_messages</code>). Pushing and popping millions of times per second locks the Redis thread, causing thread starvation.
+                </li>
+                <li>
+                    <strong>Query Amplification (N+1 queries):</strong> Look at <a href="file:///Users/htetoakkar/Projects/chatapp/src/main/java/com/example/chatapp/config/BatchConfig.java#L46-L56" target="_blank">BatchConfig.java</a>. The <code>messageProcessor</code> queries the database <em>twice for every single message</em>:
+                    <div class="code-block-ref">
+User sender = userRepository.findById(messageDto.getSenderId()).orElseThrow(...);
+User recipient = userRepository.findById(messageDto.getRecipientId()).orElseThrow(...);
+                    </div>
+                    At 1M msg/sec, this triggers <strong>120 million database SELECT statements</strong> every minute. MySQL will freeze immediately.
+                </li>
+                <li>
+                    <strong>JVM Memory Out of Memory (OOM):</strong> In <a href="file:///Users/htetoakkar/Projects/chatapp/src/main/java/com/example/chatapp/message/service/MessageServiceImpl.java#L56-L64" target="_blank">MessageServiceImpl.java</a>, loading active messages calls:
+                    <div class="code-block-ref">redisMessageRepository.peekMessages();</div>
+                    This calls <code>listOps.range(MESSAGE_KEY, 0, -1)</code>, loading the entire list into Java heap memory. With millions of messages, this triggers a catastrophic JVM <code>OutOfMemoryError</code>.
+                </li>
+            </ol>
+        </section>
+
+        <!-- Section 4: Quiz -->
+        <section class="section-card">
+            <h2>Test Your Knowledge</h2>
+            <div class="quiz-container">
+                <div class="quiz-question">
+                    Which of the following codebase patterns creates the most severe database query amplification during batch processing?
+                </div>
+                <div class="quiz-options">
+                    <button class="quiz-option" onclick="checkAnswer(this, false, 'JPA saveAll is batching inserts, which is relatively fast, but it is not the main query amplifier.')">
+                        Using JPA's saveAll() to insert message objects.
+                    </button>
+                    <button class="quiz-option" onclick="checkAnswer(this, true, 'Correct! Querying userRepository.findById() per message inside the batch processor creates 2 database reads per message. At scale, this locks up the database.')">
+                        Running userRepository.findById() on each message to resolve sender and recipient in the ItemProcessor.
+                    </button>
+                    <button class="quiz-option" onclick="checkAnswer(this, false, 'Using fixedRate = 60000 on the Scheduler delays writes, but it does not directly multiply the number of select queries.')">
+                        Scheduling the batch job to run at a fixed rate of 60 seconds.
+                    </button>
+                </div>
+                <div class="quiz-feedback" id="quiz-feedback">Feedback message will appear here.</div>
+            </div>
+        </section>
+
+        <!-- Try This Callout -->
+        <div class="try-this-callout">
+            <div class="try-this-title">🚀 Try This Exercise</div>
+            <p>
+                1. Open <a href="file:///Users/htetoakkar/Projects/chatapp/src/main/java/com/example/chatapp/config/BatchConfig.java#L44-L72" style="color:var(--accent);">BatchConfig.java (lines 44-72)</a> in your IDE. Identify the database read statements inside the item processor.
+            </p>
+            <p>
+                2. Open <a href="file:///Users/htetoakkar/Projects/chatapp/src/main/java/com/example/chatapp/message/repository/RedisMessageRepository.java#L36-L42" style="color:var(--accent);">RedisMessageRepository.java (lines 36-42)</a> and examine <code>peekMessages()</code>. Think about how we can prevent loading all messages into memory.
+            </p>
+        </div>
+
+        <div class="citations">
+            References:
+            [1] <a href="https://bytebytego.com/" target="_blank">Alex Xu - System Design Interview (Chat System)</a> |
+            [2] <a href="https://redis.io/docs/data-types/streams/" target="_blank">Redis Streams & Consumer Groups</a>
+        </div>
+    </div>
+
+    <script>
+        const slider = document.getElementById('rate-slider');
+        const rateValue = document.getElementById('rate-value');
+        const redisQueue = document.getElementById('redis-queue');
+        const mysqlLookups = document.getElementById('mysql-lookups');
+        const jvmMemory = document.getElementById('jvm-memory');
+        const warningBox = document.getElementById('warning-box');
+        const warningText = document.getElementById('warning-text');
+
+        function formatNumber(num) {
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        slider.addEventListener('input', () => {
+            const val = parseInt(slider.value);
+            rateValue.textContent = formatNumber(val) + " msg/sec";
+
+            // Calculate values
+            const queueSize = val * 60;
+            const lookups = queueSize * 2;
+            const memoryMB = (queueSize * 0.25) / 1024; // Assume 250 bytes per message DTO
+
+            redisQueue.textContent = formatNumber(queueSize);
+            mysqlLookups.textContent = formatNumber(lookups);
+            jvmMemory.textContent = memoryMB.toFixed(1) + " MB";
+
+            // Warning indicators
+            if (val > 500000) {
+                warningBox.style.background = 'rgba(239, 68, 68, 0.2)';
+                warningBox.style.borderColor = 'var(--danger)';
+                warningBox.style.color = '#fca5a5';
+                warningText.textContent = "CRITICAL COLLAPSE: JVM OutOfMemoryError and MySQL lockup. System completely unresponsive.";
+                warningBox.classList.add('visible');
+            } else if (val > 5000) {
+                warningBox.style.background = 'rgba(245, 158, 11, 0.2)';
+                warningBox.style.borderColor = 'var(--warning)';
+                warningBox.style.color = '#fde68a';
+                warningText.textContent = "WARNING: MySQL CPU utilization at 100%. WebSocket connections dropping due to thread blockages.";
+                warningBox.classList.add('visible');
+            } else {
+                warningBox.classList.remove('visible');
+            }
+        });
+
+        function checkAnswer(btn, isCorrect, feedback) {
+            const options = document.querySelectorAll('.quiz-option');
+            options.forEach(opt => {
+                opt.disabled = true;
+                opt.classList.remove('correct', 'incorrect');
+            });
+
+            if (isCorrect) {
+                btn.classList.add('correct');
+                document.getElementById('quiz-feedback').style.color = 'var(--success)';
+            } else {
+                btn.classList.add('incorrect');
+                document.getElementById('quiz-feedback').style.color = 'var(--danger)';
+            }
+
+            const feedbackDiv = document.getElementById('quiz-feedback');
+            feedbackDiv.textContent = feedback;
+            feedbackDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { usePresence } from "@/context/PresenceContext";
 
 interface UserProfileCardProps {
   userId: number | null;
@@ -40,6 +41,7 @@ export default function UserProfileCard({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const { onlineUsers } = usePresence();
 
   useEffect(() => {
     if (userId) {
@@ -63,9 +65,25 @@ export default function UserProfileCard({
     }
   }, [userId]);
 
-  const avatarLetter = (profile?.fullName || profile?.username || fallbackUsername || "C")
+  const avatarLetter = (
+    profile?.fullName ||
+    profile?.username ||
+    fallbackUsername ||
+    "C"
+  )
     .charAt(0)
     .toUpperCase();
+
+  const isSelf = userId === currentUserId;
+  const isContact = contacts?.find((c) => c.contactUserId === userId);
+  const isPending = requests?.find((r) => r.contactUserId === userId);
+  const isAcceptedContact =
+    (isContact &&
+      (isContact.status === "ACCEPTED" || isContact.status === "CONTACT")) ||
+    userStatus === "ACCEPTED" ||
+    userStatus === "CONTACT";
+  const isBlocked =
+    (isContact && isContact.status === "BLOCKED") || userStatus === "BLOCKED";
 
   return (
     <div className="flex-1 flex justify-center overflow-y-auto bg-background custom-scrollbar w-full">
@@ -81,12 +99,18 @@ export default function UserProfileCard({
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <span className="material-symbols-outlined animate-spin text-primary text-3xl">rotate_right</span>
-            <span className="text-sm text-outline font-bold uppercase tracking-wider">Loading Profile...</span>
+            <span className="material-symbols-outlined animate-spin text-primary text-3xl">
+              rotate_right
+            </span>
+            <span className="text-sm text-outline font-bold uppercase tracking-wider">
+              Loading Profile...
+            </span>
           </div>
         ) : error ? (
           <div className="bg-error-container text-on-error-container text-xs p-3 rounded-lg flex items-center gap-2 border border-error/10">
-            <span className="material-symbols-outlined text-error text-base">error</span>
+            <span className="material-symbols-outlined text-error text-base">
+              error
+            </span>
             {error}
           </div>
         ) : (
@@ -99,10 +123,18 @@ export default function UserProfileCard({
             {/* Profile Info Section with Overlapping Avatar */}
             <div className="px-6 pb-6 relative">
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 -mt-12 mb-6">
-                <div className="w-24 h-24 rounded-2xl bg-surface-container-lowest p-1 shadow-lg border border-outline-variant/20 shrink-0">
+                <div className="w-24 h-24 rounded-2xl bg-surface-container-lowest p-1 shadow-lg border border-outline-variant/20 shrink-0 relative">
                   <div className="w-full h-full rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-3xl">
                     {avatarLetter}
                   </div>
+                  {/* Online indicator */}
+                  <div
+                    className={`absolute -bottom-1 -right-1 w-5 h-5 border-4 border-surface-container-lowest rounded-full ${
+                      userId && onlineUsers[userId]?.status === "ONLINE"
+                        ? "bg-tertiary"
+                        : "bg-outline/30"
+                    }`}
+                  />
                 </div>
                 <div className="flex-1 text-center sm:text-left mt-2 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                   <div>
@@ -116,17 +148,45 @@ export default function UserProfileCard({
                   <div className="flex-shrink-0">
                     {/* Connection Status and Actions */}
                     {(() => {
-                      const isSelf = userId === currentUserId;
-                      const isContact = contacts?.find((c) => c.contactUserId === userId);
-                      const isPending = requests?.find((r) => r.contactUserId === userId);
-
                       if (isSelf || !userId) return null;
 
-                      const isAcceptedContact = 
-                        (isContact && (isContact.status === "ACCEPTED" || isContact.status === "CONTACT")) ||
-                        userStatus === "ACCEPTED" || userStatus === "CONTACT";
-
-                      if (isAcceptedContact) {
+                      if (isBlocked) {
+                        return (
+                          <button
+                            type="button"
+                            disabled={actionLoading}
+                            onClick={async () => {
+                              setActionLoading(true);
+                              try {
+                                await apiFetch(
+                                  `/api/v1/contacts/${userId}/unblock`,
+                                  { method: "PUT" }
+                                );
+                                window.dispatchEvent(
+                                  new CustomEvent("contacts:updated")
+                                );
+                                onBack();
+                              } catch {
+                                // handle silently
+                              } finally {
+                                setActionLoading(false);
+                              }
+                            }}
+                            className="flex items-center justify-center gap-2 px-6 py-2 bg-error/10 text-error text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-error hover:text-white transition-all border border-error/15 shadow-sm active:scale-98 disabled:opacity-50 cursor-pointer"
+                          >
+                            {actionLoading ? (
+                              <span className="material-symbols-outlined animate-spin text-sm">
+                                rotate_right
+                              </span>
+                            ) : (
+                              <span className="material-symbols-outlined text-sm">
+                                lock_open
+                              </span>
+                            )}
+                            Unblock
+                          </button>
+                        );
+                      } else if (isAcceptedContact) {
                         return (
                           <button
                             type="button"
@@ -134,7 +194,8 @@ export default function UserProfileCard({
                               if (onSelectChat) {
                                 onSelectChat({
                                   id: userId,
-                                  username: profile?.username || fallbackUsername || "",
+                                  username:
+                                    profile?.username || fallbackUsername || "",
                                   isPublic: false,
                                   status: isContact?.status || userStatus,
                                 });
@@ -142,8 +203,10 @@ export default function UserProfileCard({
                             }}
                             className="flex items-center justify-center gap-2 px-6 py-2 bg-primary text-white text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-primary/90 transition-all shadow-md active:scale-98 cursor-pointer"
                           >
-                            <span className="material-symbols-outlined text-sm">chat</span>
-                            Chat
+                            <span className="material-symbols-outlined text-sm">
+                              chat
+                            </span>
+                            Message
                           </button>
                         );
                       } else if (isPending) {
@@ -157,13 +220,21 @@ export default function UserProfileCard({
                                 if (onAcceptRequest) {
                                   await onAcceptRequest(userId);
                                 } else {
-                                  await apiFetch(`/api/v1/contacts/${userId}/accept`, { method: "PUT" });
-                                  window.dispatchEvent(new CustomEvent("contacts:updated"));
+                                  await apiFetch(
+                                    `/api/v1/contacts/${userId}/accept`,
+                                    { method: "PUT" }
+                                  );
+                                  window.dispatchEvent(
+                                    new CustomEvent("contacts:updated")
+                                  );
                                 }
                                 if (onSelectChat) {
                                   onSelectChat({
                                     id: userId,
-                                    username: profile?.username || fallbackUsername || "",
+                                    username:
+                                      profile?.username ||
+                                      fallbackUsername ||
+                                      "",
                                     isPublic: false,
                                     status: "ACCEPTED",
                                   });
@@ -177,9 +248,13 @@ export default function UserProfileCard({
                             className="flex items-center justify-center gap-2 px-6 py-2 bg-secondary text-white text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-secondary/90 transition-all shadow-md active:scale-98 disabled:opacity-50 cursor-pointer"
                           >
                             {actionLoading ? (
-                              <span className="material-symbols-outlined animate-spin text-sm">rotate_right</span>
+                              <span className="material-symbols-outlined animate-spin text-sm">
+                                rotate_right
+                              </span>
                             ) : (
-                              <span className="material-symbols-outlined text-sm">person_add</span>
+                              <span className="material-symbols-outlined text-sm">
+                                person_add
+                              </span>
                             )}
                             Connect
                           </button>
@@ -193,18 +268,31 @@ export default function UserProfileCard({
                               setActionLoading(true);
                               try {
                                 if (onAddContact) {
-                                  await onAddContact(profile?.username || fallbackUsername || "", userId);
+                                  await onAddContact(
+                                    profile?.username || fallbackUsername || "",
+                                    userId
+                                  );
                                 } else {
                                   await apiFetch("/api/v1/contacts", {
                                     method: "POST",
-                                    body: JSON.stringify({ username: profile?.username || fallbackUsername || "" }),
+                                    body: JSON.stringify({
+                                      username:
+                                        profile?.username ||
+                                        fallbackUsername ||
+                                        "",
+                                    }),
                                   });
-                                  window.dispatchEvent(new CustomEvent("contacts:updated"));
+                                  window.dispatchEvent(
+                                    new CustomEvent("contacts:updated")
+                                  );
                                 }
                                 if (onSelectChat) {
                                   onSelectChat({
                                     id: userId,
-                                    username: profile?.username || fallbackUsername || "",
+                                    username:
+                                      profile?.username ||
+                                      fallbackUsername ||
+                                      "",
                                     isPublic: false,
                                     status: "CONTACT",
                                   });
@@ -218,9 +306,13 @@ export default function UserProfileCard({
                             className="flex items-center justify-center gap-2 px-6 py-2 bg-primary/10 text-primary text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-primary hover:text-white transition-all border border-primary/15 shadow-sm active:scale-98 disabled:opacity-50 cursor-pointer"
                           >
                             {actionLoading ? (
-                              <span className="material-symbols-outlined animate-spin text-sm">rotate_right</span>
+                              <span className="material-symbols-outlined animate-spin text-sm">
+                                rotate_right
+                              </span>
                             ) : (
-                              <span className="material-symbols-outlined text-sm">person_add</span>
+                              <span className="material-symbols-outlined text-sm">
+                                person_add
+                              </span>
                             )}
                             Add
                           </button>
@@ -250,14 +342,19 @@ export default function UserProfileCard({
                   </span>
                   <div className="bg-surface-container-low/30 border border-outline-variant/10 rounded-lg p-3 text-xs text-on-surface font-semibold">
                     {profile?.birthDate ? (
-                      new Date(profile.birthDate).toLocaleDateString(undefined, {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        timeZone: 'UTC'
-                      })
+                      new Date(profile.birthDate).toLocaleDateString(
+                        undefined,
+                        {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                          timeZone: "UTC",
+                        }
+                      )
                     ) : (
-                      <span className="text-outline italic font-normal">Not specified</span>
+                      <span className="text-outline italic font-normal">
+                        Not specified
+                      </span>
                     )}
                   </div>
                 </div>
@@ -270,13 +367,17 @@ export default function UserProfileCard({
                   {profile?.email ? (
                     <div className="bg-surface-container-low/30 border border-outline-variant/10 rounded-lg p-3 flex items-center justify-between text-xs text-on-surface font-semibold">
                       <span>{profile.email}</span>
-                      <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest flex items-center gap-1 border ${
-                        profile.emailVerified
-                          ? "bg-primary/10 text-primary border-primary/20"
-                          : "bg-error-container text-on-error-container border-error/15"
-                      }`}>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest flex items-center gap-1 border ${
+                          profile.emailVerified
+                            ? "bg-primary/10 text-primary border-primary/20"
+                            : "bg-error-container text-on-error-container border-error/15"
+                        }`}
+                      >
                         <span className="material-symbols-outlined text-[10px]">
-                          {profile.emailVerified ? "verified" : "pending_actions"}
+                          {profile.emailVerified
+                            ? "verified"
+                            : "pending_actions"}
                         </span>
                         {profile.emailVerified ? "Verified" : "Unverified"}
                       </span>
@@ -288,6 +389,107 @@ export default function UserProfileCard({
                   )}
                 </div>
               </div>
+
+              {/* Actions List (Block, Delete, Unblock) */}
+              {isBlocked && (
+                <div className="mt-4 pt-4 border-t border-outline-variant/10 flex flex-col gap-1">
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={async () => {
+                      if (!userId) return;
+                      setActionLoading(true);
+                      try {
+                        await apiFetch(`/api/v1/contacts/${userId}/unblock`, {
+                          method: "PUT",
+                        });
+                        window.dispatchEvent(
+                          new CustomEvent("contacts:updated")
+                        );
+                        onBack();
+                      } catch {
+                        // Silent fail
+                      } finally {
+                        setActionLoading(false);
+                      }
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-sm">
+                      lock_open
+                    </span>
+                    Unblock
+                  </button>
+                </div>
+              )}
+              {isAcceptedContact && (
+                <div className="mt-4 pt-4 border-t border-outline-variant/10 flex flex-col gap-1">
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={async () => {
+                      if (!userId) return;
+                      setActionLoading(true);
+                      try {
+                        await apiFetch(`/api/v1/contacts/${userId}/block`, {
+                          method: "PUT",
+                        });
+                        window.dispatchEvent(
+                          new CustomEvent("contacts:updated")
+                        );
+                        window.dispatchEvent(
+                          new CustomEvent("chat:deleted", {
+                            detail: { contactUserId: userId },
+                          })
+                        );
+                        onBack();
+                      } catch {
+                        // Silent fail
+                      } finally {
+                        setActionLoading(false);
+                      }
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-sm">
+                      block
+                    </span>
+                    Block
+                  </button>
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={async () => {
+                      if (!userId) return;
+                      setActionLoading(true);
+                      try {
+                        await apiFetch(`/api/v1/contacts/${userId}`, {
+                          method: "DELETE",
+                        });
+                        window.dispatchEvent(
+                          new CustomEvent("contacts:updated")
+                        );
+                        window.dispatchEvent(
+                          new CustomEvent("chat:deleted", {
+                            detail: { contactUserId: userId },
+                          })
+                        );
+                        onBack();
+                      } catch {
+                        // Silent fail
+                      } finally {
+                        setActionLoading(false);
+                      }
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold text-error hover:bg-error-container/30 transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-sm">
+                      person_remove
+                    </span>
+                    Delete Contact
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

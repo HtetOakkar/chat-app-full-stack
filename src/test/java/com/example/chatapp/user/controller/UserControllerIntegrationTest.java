@@ -15,6 +15,8 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import com.example.chatapp.email.service.EmailService;
 import org.mockito.Mockito;
 import org.mockito.ArgumentMatchers;
+import com.example.chatapp.user.service.PresenceModule;
+import com.example.chatapp.message.model.dto.OnlineStatusDto;
 
 
 import java.util.Map;
@@ -49,6 +51,15 @@ class UserControllerIntegrationTest {
 
     @MockBean
     private EmailService emailService;
+
+    @MockBean
+    private PresenceModule presenceModule;
+
+    @MockBean
+    private org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
+
+    @MockBean
+    private com.example.chatapp.websocket.SessionRegistry sessionRegistry;
 
 
     @BeforeEach
@@ -350,6 +361,38 @@ class UserControllerIntegrationTest {
                 .andExpect(jsonPath("$.fullName").value("Bob Profile"))
                 .andExpect(jsonPath("$.email").value("bob@example.com"))
                 .andExpect(jsonPath("$.birthDate").value("1995-05-15"));
+    }
+
+    @Test
+    void getOnlineUsersShouldReturnEmptyListWhenNoActiveSessions() throws Exception {
+        Mockito.when(presenceModule.getOnlineUsers(ArgumentMatchers.anyLong()))
+               .thenReturn(java.util.Collections.emptyList());
+
+        mockMvc.perform(get("/api/v1/users/online")
+                        .header("Authorization", userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void getOnlineUsersShouldReturnActiveUsers() throws Exception {
+        OnlineStatusDto onlineStatus = new OnlineStatusDto();
+        onlineStatus.setUserId("100");
+        onlineStatus.setUsername("onlineuser");
+        onlineStatus.setStatus("ONLINE");
+
+        Mockito.when(presenceModule.getOnlineUsers(ArgumentMatchers.anyLong()))
+               .thenReturn(java.util.Collections.singletonList(onlineStatus));
+
+        mockMvc.perform(get("/api/v1/users/online")
+                        .header("Authorization", userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].userId").value("100"))
+                .andExpect(jsonPath("$[0].username").value("onlineuser"))
+                .andExpect(jsonPath("$[0].status").value("ONLINE"));
     }
 }
 

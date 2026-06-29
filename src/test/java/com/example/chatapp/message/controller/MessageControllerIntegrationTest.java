@@ -47,6 +47,9 @@ class MessageControllerIntegrationTest {
     private com.example.chatapp.message.repository.RedisMessageRepository redisMessageRepository;
 
     @Autowired
+    private com.example.chatapp.message.service.MessageService messageService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     private String aliceToken;
@@ -269,4 +272,321 @@ class MessageControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].unreadCount").value(0));
     }
+
+    @Test
+    void deletePublicMessageInRedisSuccessfully() throws Exception {
+        Instant now = Instant.now();
+        com.example.chatapp.message.model.dto.MessageDto redisMsg = com.example.chatapp.message.model.dto.MessageDto.builder()
+                .id(9999L)
+                .senderId(alice.getId())
+                .senderUsername(alice.getUsername())
+                .recipientId(null)
+                .content("Hello public")
+                .isRead(false)
+                .isDelivered(true)
+                .messageType(MessageType.TEXT)
+                .timestamp(now)
+                .build();
+        redisMessageRepository.saveMessage(redisMsg);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/messages/9999")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(9999))
+                .andExpect(jsonPath("$.content").value("Deleted message"))
+                .andExpect(jsonPath("$.isDeleted").value(true));
+
+        // Verify it was updated in Redis in-place
+        java.util.List<com.example.chatapp.message.model.dto.MessageDto> peeked = redisMessageRepository.peekMessages();
+        org.junit.jupiter.api.Assertions.assertEquals(1, peeked.size());
+        org.junit.jupiter.api.Assertions.assertEquals("Deleted message", peeked.get(0).getContent());
+        org.junit.jupiter.api.Assertions.assertTrue(peeked.get(0).getIsDeleted());
+    }
+
+    @Test
+    void deletePublicMessageInDbSuccessfully() throws Exception {
+        User system = userRepository.findByUsername("system").orElseThrow();
+        Message dbMsg = Message.builder()
+                .content("Hello db message")
+                .messageType(MessageType.TEXT)
+                .isRead(false)
+                .isDelivered(true)
+                .sender(alice)
+                .recipient(system)
+                .build();
+        dbMsg = messageRepository.save(dbMsg);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/messages/" + dbMsg.getId())
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(dbMsg.getId()))
+                .andExpect(jsonPath("$.content").value("Deleted message"))
+                .andExpect(jsonPath("$.isDeleted").value(true));
+
+        // Verify database state
+        Message updated = messageRepository.findById(dbMsg.getId()).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("Deleted message", updated.getContent());
+        org.junit.jupiter.api.Assertions.assertTrue(updated.getIsDeleted());
+    }
+
+    @Test
+    void deletePublicMessageWithFallbackLookupSuccessfully() throws Exception {
+        User system = userRepository.findByUsername("system").orElseThrow();
+        Instant timestamp = Instant.parse("2026-06-11T12:00:00Z");
+
+        Message dbMsg = Message.builder()
+                .content("Hello fallback message")
+                .messageType(MessageType.TEXT)
+                .isRead(false)
+                .isDelivered(true)
+                .sender(alice)
+                .recipient(system)
+                .build();
+        dbMsg = messageRepository.save(dbMsg);
+
+        // Update timestamp directly in DB to bypass @CreationTimestamp or PrePersist
+        jdbcTemplate.update("UPDATE messages SET sent_at = ? WHERE id = ?", java.sql.Timestamp.from(timestamp), dbMsg.getId());
+
+        // Perform DELETE with a non-existent ID (e.g. 123456) but matching timestamp
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/messages/123456?timestamp=" + timestamp.toString())
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(dbMsg.getId()))
+                .andExpect(jsonPath("$.content").value("Deleted message"))
+                .andExpect(jsonPath("$.isDeleted").value(true));
+
+        // Verify database state
+        Message updated = messageRepository.findById(dbMsg.getId()).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("Deleted message", updated.getContent());
+        org.junit.jupiter.api.Assertions.assertTrue(updated.getIsDeleted());
+    }
+
+    @Test
+    void deletePublicMessageByAnotherUserShouldBeUnauthorized() throws Exception {
+        User system = userRepository.findByUsername("system").orElseThrow();
+        Message dbMsg = Message.builder()
+                .content("Hello db message")
+                .messageType(MessageType.TEXT)
+                .isRead(false)
+                .isDelivered(true)
+                .sender(alice)
+                .recipient(system)
+                .build();
+        dbMsg = messageRepository.save(dbMsg);
+
+        // Bob tries to delete Alice's message
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/messages/" + dbMsg.getId())
+                        .header("Authorization", bobToken))
+                .andExpect(status().isUnauthorized());
+
+        // Verify message content in DB was NOT modified
+        Message updated = messageRepository.findById(dbMsg.getId()).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("Hello db message", updated.getContent());
+        org.junit.jupiter.api.Assertions.assertFalse(updated.getIsDeleted());
+    }
+
+    @Test
+    void deletePrivateMessageInRedisSuccessfully() throws Exception {
+        Instant now = Instant.now();
+        com.example.chatapp.message.model.dto.MessageDto redisMsg = com.example.chatapp.message.model.dto.MessageDto.builder()
+                .id(7777L)
+                .senderId(alice.getId())
+                .senderUsername(alice.getUsername())
+                .recipientId(bob.getId())
+                .content("Hello Bob private")
+                .isRead(false)
+                .isDelivered(true)
+                .messageType(MessageType.TEXT)
+                .timestamp(now)
+                .build();
+        redisMessageRepository.saveMessage(redisMsg);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/messages/7777")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(7777))
+                .andExpect(jsonPath("$.recipientId").value(bob.getId()))
+                .andExpect(jsonPath("$.content").value("Deleted message"))
+                .andExpect(jsonPath("$.isDeleted").value(true));
+
+        // Verify it was updated in Redis in-place
+        java.util.List<com.example.chatapp.message.model.dto.MessageDto> peeked = redisMessageRepository.peekMessages();
+        org.junit.jupiter.api.Assertions.assertEquals(1, peeked.size());
+        org.junit.jupiter.api.Assertions.assertEquals("Deleted message", peeked.get(0).getContent());
+        org.junit.jupiter.api.Assertions.assertTrue(peeked.get(0).getIsDeleted());
+    }
+
+    @Test
+    void deletePrivateMessageInDbSuccessfully() throws Exception {
+        Message dbMsg = Message.builder()
+                .content("Hello Bob private db")
+                .messageType(MessageType.TEXT)
+                .isRead(false)
+                .isDelivered(true)
+                .sender(alice)
+                .recipient(bob)
+                .build();
+        dbMsg = messageRepository.save(dbMsg);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/messages/" + dbMsg.getId())
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(dbMsg.getId()))
+                .andExpect(jsonPath("$.recipientId").value(bob.getId()))
+                .andExpect(jsonPath("$.content").value("Deleted message"))
+                .andExpect(jsonPath("$.isDeleted").value(true));
+
+        // Verify database state
+        Message updated = messageRepository.findById(dbMsg.getId()).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("Deleted message", updated.getContent());
+        org.junit.jupiter.api.Assertions.assertTrue(updated.getIsDeleted());
+    }
+
+    @Test
+    void deletePrivateMessageWithFallbackLookupSuccessfully() throws Exception {
+        Instant timestamp = Instant.parse("2026-06-11T12:30:00Z");
+        Message dbMsg = Message.builder()
+                .content("Hello Bob private fallback")
+                .messageType(MessageType.TEXT)
+                .isRead(false)
+                .isDelivered(true)
+                .sender(alice)
+                .recipient(bob)
+                .build();
+        dbMsg = messageRepository.save(dbMsg);
+
+        // Update timestamp directly in DB to bypass @CreationTimestamp or PrePersist
+        jdbcTemplate.update("UPDATE messages SET sent_at = ? WHERE id = ?", java.sql.Timestamp.from(timestamp), dbMsg.getId());
+
+        // Perform DELETE with a non-existent ID but matching timestamp
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/messages/999999?timestamp=" + timestamp.toString())
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(dbMsg.getId()))
+                .andExpect(jsonPath("$.recipientId").value(bob.getId()))
+                .andExpect(jsonPath("$.content").value("Deleted message"))
+                .andExpect(jsonPath("$.isDeleted").value(true));
+
+        // Verify database state
+        Message updated = messageRepository.findById(dbMsg.getId()).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("Deleted message", updated.getContent());
+        org.junit.jupiter.api.Assertions.assertTrue(updated.getIsDeleted());
+    }
+
+    @Test
+    void deletePrivateMessageByAnotherUserShouldBeUnauthorized() throws Exception {
+        Message dbMsg = Message.builder()
+                .content("Hello Bob private secure")
+                .messageType(MessageType.TEXT)
+                .isRead(false)
+                .isDelivered(true)
+                .sender(alice)
+                .recipient(bob)
+                .build();
+        dbMsg = messageRepository.save(dbMsg);
+
+        // Bob tries to delete Alice's private message to him -> should be unauthorized
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/messages/" + dbMsg.getId())
+                        .header("Authorization", bobToken))
+                .andExpect(status().isUnauthorized());
+
+        // Verify message content in DB was NOT modified
+        Message updated = messageRepository.findById(dbMsg.getId()).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("Hello Bob private secure", updated.getContent());
+        org.junit.jupiter.api.Assertions.assertFalse(updated.getIsDeleted());
+    }
+
+    @Test
+    void deleteMessageWithInvalidTimestampShouldReturnBadRequest() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/messages/999999?timestamp=invalid-date")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deleteMessageWithOffsetTimestampSuccessfully() throws Exception {
+        User system = userRepository.findByUsername("system").orElseThrow();
+        // 2026-06-11T12:30:00Z is 2026-06-11T19:00:00+06:30
+        Instant utcInstant = Instant.parse("2026-06-11T12:30:00Z");
+        
+        Message dbMsg = Message.builder()
+                .content("Hello offset message")
+                .messageType(MessageType.TEXT)
+                .isRead(false)
+                .isDelivered(true)
+                .sender(alice)
+                .recipient(system)
+                .build();
+        dbMsg = messageRepository.save(dbMsg);
+
+        // Update sent_at timestamp directly in DB to match our test instant
+        jdbcTemplate.update("UPDATE messages SET sent_at = ? WHERE id = ?", java.sql.Timestamp.from(utcInstant), dbMsg.getId());
+
+        // Perform DELETE with non-existent ID but passing offset timestamp in query parameter
+        // 2026-06-11T19:00:00+06:30 must be URL-encoded as 2026-06-11T19:00:00%2B06:30
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/messages/999999")
+                        .queryParam("timestamp", "2026-06-11T19:00:00+06:30")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(dbMsg.getId()))
+                .andExpect(jsonPath("$.content").value("Deleted message"))
+                .andExpect(jsonPath("$.isDeleted").value(true));
+
+        // Verify database state
+        Message updated = messageRepository.findById(dbMsg.getId()).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("Deleted message", updated.getContent());
+        org.junit.jupiter.api.Assertions.assertTrue(updated.getIsDeleted());
+    }
+
+    @Test
+    void generatedTransientIdsShouldBeWithinJsSafeLimit() {
+        for (int i = 0; i < 1000; i++) {
+            com.example.chatapp.message.model.dto.MessageDto dto = com.example.chatapp.message.model.dto.MessageDto.builder()
+                    .content("test")
+                    .senderId(alice.getId())
+                    .build();
+            messageService.saveMessage(dto);
+            org.junit.jupiter.api.Assertions.assertNotNull(dto.getId());
+            org.junit.jupiter.api.Assertions.assertTrue(dto.getId() >= 1L);
+            org.junit.jupiter.api.Assertions.assertTrue(dto.getId() <= 9007199254740991L, 
+                    "ID " + dto.getId() + " is larger than JS safe integer limit");
+        }
+    }
+
+    @Test
+    void deleteMessageInRedisWithFallbackSuccessfully() throws Exception {
+        Instant timestamp = Instant.parse("2026-06-11T12:00:00Z");
+        com.example.chatapp.message.model.dto.MessageDto redisMsg = com.example.chatapp.message.model.dto.MessageDto.builder()
+                .id(9123456789012345678L) // exceeds JS safe integer limit (simulates browser precision loss/mismatch)
+                .senderId(alice.getId())
+                .senderUsername(alice.getUsername())
+                .recipientId(bob.getId())
+                .content("Hello Bob Redis fallback")
+                .isRead(false)
+                .isDelivered(true)
+                .messageType(MessageType.TEXT)
+                .timestamp(timestamp)
+                .build();
+        redisMessageRepository.saveMessage(redisMsg);
+
+        // Perform DELETE with non-matching ID (simulating precision loss e.g. ending in 000) but matching timestamp
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/messages/9123456789012346000")
+                        .queryParam("timestamp", "2026-06-11T12:00:00Z")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(9123456789012345678L))
+                .andExpect(jsonPath("$.content").value("Deleted message"))
+                .andExpect(jsonPath("$.isDeleted").value(true));
+
+        // Verify it was updated in Redis in-place
+        java.util.List<com.example.chatapp.message.model.dto.MessageDto> peeked = redisMessageRepository.peekMessages();
+        org.junit.jupiter.api.Assertions.assertEquals(1, peeked.size());
+        org.junit.jupiter.api.Assertions.assertEquals("Deleted message", peeked.get(0).getContent());
+        org.junit.jupiter.api.Assertions.assertTrue(peeked.get(0).getIsDeleted());
+    }
 }
+
+
+
+
+

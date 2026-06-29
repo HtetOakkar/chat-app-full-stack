@@ -16,10 +16,12 @@ public class ContactDto {
     private Long id;
     private Long contactUserId;
     private String contactUsername;
+    private String contactFullName;
     private ContactStatus status;
     private Instant createdAt;
     private String lastMessageContent;
     private Instant lastMessageTimestamp;
     private Long lastMessageSenderId;
     private Long unreadCount;
+    private Instant clearedAt;
 }

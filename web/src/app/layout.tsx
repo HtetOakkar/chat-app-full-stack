@@ -13,11 +13,14 @@ const manrope = Manrope({
 });
 
 import { AuthProvider } from "@/context/AuthContext";
-import { WebSocketProvider } from "@/context/WebSocketContext";
+import { ConnectionProvider } from "@/context/ConnectionContext";
+import { MessageStoreProvider } from "@/context/MessageStore";
+import { PresenceProvider } from "@/context/PresenceContext";
 
 export const metadata: Metadata = {
   title: "Meow Chit Chat",
-  description: "Digital Curator Platform — Secure messaging and contact management for authorized personnel.",
+  description:
+    "Digital Curator Platform — Secure messaging and contact management for authorized personnel.",
 };
 
 export default function RootLayout({
@@ -42,9 +45,11 @@ export default function RootLayout({
         className="bg-background text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container h-full overflow-hidden"
       >
         <AuthProvider>
-          <WebSocketProvider>
-            {children}
-          </WebSocketProvider>
+          <ConnectionProvider>
+            <MessageStoreProvider>
+              <PresenceProvider>{children}</PresenceProvider>
+            </MessageStoreProvider>
+          </ConnectionProvider>
         </AuthProvider>
       </body>
     </html>

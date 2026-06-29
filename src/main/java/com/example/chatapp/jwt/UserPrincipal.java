@@ -22,13 +22,22 @@ public class UserPrincipal implements UserDetails, Principal {
     @JsonIgnore
     private final String password;
 
+    @Getter
+    private final String fullName;
+
     private final Collection<? extends GrantedAuthority> authorities;
 
     public UserPrincipal(Long id, String username, String password,
                          Collection<? extends GrantedAuthority> authorities) {
+        this(id, username, password, null, authorities);
+    }
+
+    public UserPrincipal(Long id, String username, String password, String fullName,
+                         Collection<? extends GrantedAuthority> authorities) {
         this.id = id;
         this.username = username;
         this.password = password;
+        this.fullName = fullName;
         this.authorities = authorities;
     }
 
@@ -39,6 +48,7 @@ public class UserPrincipal implements UserDetails, Principal {
                 user.getId(),
                 user.getUsername(),
                 user.getPassword(),
+                user.getFullName(),
                 authorities
         );
     }
