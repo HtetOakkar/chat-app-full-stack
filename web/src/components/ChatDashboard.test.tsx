@@ -8,13 +8,13 @@ import React from "react";
 
 // Mock child components to make testing simpler
 jest.mock("./Sidebar", () => {
-  return function MockSidebar({ activeChat, viewMode }: any) {
+  return function MockSidebar({ activeChat, viewMode }: never) {
     return <div data-testid="sidebar">Sidebar {viewMode}</div>;
   };
 });
 
 jest.mock("./MyProfileCard", () => {
-  return function MockMyProfileCard({ onBack }: any) {
+  return function MockMyProfileCard({ onBack }: never) {
     return (
       <div data-testid="my-profile-card">
         My Profile Card <button onClick={onBack}>Back</button>
