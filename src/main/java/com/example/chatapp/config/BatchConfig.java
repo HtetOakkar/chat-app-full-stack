@@ -139,6 +139,9 @@ public class BatchConfig {
                         .messageType(dto.getMessageType() == null ? MessageType.TEXT : dto.getMessageType())
                         .sentAt(sentAt)
                         .deliveredAt(sentAt)
+                        .callOutcome(dto.getCallOutcome())
+                        .callDuration(dto.getCallDuration())
+                        .videoUsed(dto.getVideoUsed())
                         .build());
             }
 

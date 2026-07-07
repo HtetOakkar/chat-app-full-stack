@@ -24,6 +24,9 @@ public class MessageMapperImpl implements MessageMapper {
                 .isDelivered(message.getIsDelivered())
                 .isRead(message.getIsRead())
                 .isDeleted(message.getIsDeleted())
+                .callOutcome(message.getCallOutcome())
+                .callDuration(message.getCallDuration())
+                .videoUsed(message.getVideoUsed())
                 .build();
     }
 
@@ -33,6 +36,9 @@ public class MessageMapperImpl implements MessageMapper {
                 .messageType(messageDto.getMessageType())
                 .content(messageDto.getContent())
                 .isDeleted(messageDto.getIsDeleted() != null ? messageDto.getIsDeleted() : false)
+                .callOutcome(messageDto.getCallOutcome())
+                .callDuration(messageDto.getCallDuration())
+                .videoUsed(messageDto.getVideoUsed())
                 .build();
     }
 }

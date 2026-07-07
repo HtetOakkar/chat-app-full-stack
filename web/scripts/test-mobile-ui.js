@@ -18,6 +18,7 @@ const userProfilePath = path.join(
   __dirname,
   "../src/components/UserProfileModal.tsx"
 );
+const pagePath = path.join(__dirname, "../src/app/page.tsx");
 
 try {
   console.log("Running Mobile UI & Rebranding static verification tests...");
@@ -357,6 +358,23 @@ try {
     sidebarContent.includes("prevActiveChatRef") &&
       sidebarContent.includes("prevActiveChatRef.current"),
     "Sidebar.tsx must use prevActiveChatRef to track activeChat transitions"
+  );
+
+  // Dynamic Viewport Height checks for Mobile Browser clipping fix
+  assert(
+    dashboardContent.includes("h-dvh") &&
+      !dashboardContent.includes("h-screen"),
+    "ChatDashboard.tsx must use h-dvh instead of h-screen to prevent mobile address bar clipping"
+  );
+  assert(
+    authContainerContent.includes("min-h-dvh") &&
+      !authContainerContent.includes("min-h-screen"),
+    "AuthContainer.tsx must use min-h-dvh instead of min-h-screen to prevent mobile address bar clipping"
+  );
+  const pageContent = fs.readFileSync(pagePath, "utf8");
+  assert(
+    pageContent.includes("h-dvh") && !pageContent.includes("h-screen"),
+    "page.tsx must use h-dvh instead of h-screen to prevent mobile address bar clipping"
   );
 
   console.log("Mobile UI & Rebranding verification tests passed successfully!");

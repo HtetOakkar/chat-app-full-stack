@@ -35,6 +35,34 @@ export type ActiveChat = {
   status?: string;
 };
 
+const formatSidebarMessage = (content?: string | null): string | null => {
+  if (!content) return null;
+  if (
+    content.startsWith('{"outcome":') ||
+    content.startsWith('{"callOutcome":')
+  ) {
+    try {
+      const parsed = JSON.parse(content);
+      const outcome = parsed.outcome || parsed.callOutcome;
+      switch (outcome?.toLowerCase()) {
+        case "completed":
+          return "Call Ended";
+        case "missed":
+          return "Missed Call";
+        case "rejected":
+          return "Call Declined";
+        case "cancelled":
+          return "Call Cancelled";
+        default:
+          return "Call";
+      }
+    } catch {
+      return "Call";
+    }
+  }
+  return content;
+};
+
 const SidebarVirtuosoList = React.forwardRef<HTMLDivElement, any>(
   ({ children, style, ...props }, ref) => (
     <div
@@ -567,8 +595,10 @@ export default function Sidebar({
                             <p className="text-[10px] text-outline truncate flex-1 min-w-0 font-medium">
                               {contact.lastMessageContent
                                 ? contact.lastMessageSenderId === currentUserId
-                                  ? `You: ${contact.lastMessageContent}`
-                                  : contact.lastMessageContent
+                                  ? `You: ${formatSidebarMessage(contact.lastMessageContent)}`
+                                  : formatSidebarMessage(
+                                      contact.lastMessageContent
+                                    )
                                 : `${userStatus.toLowerCase()}`}
                             </p>
                             <div className="flex items-center gap-1 shrink-0">

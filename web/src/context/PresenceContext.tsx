@@ -42,7 +42,7 @@ export const PresenceProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const { isAuthenticated, userId } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { connected, subscribe, stompClientRef } = useConnection();
 
   const [onlineUsers, setOnlineUsers] = useState<
@@ -55,8 +55,9 @@ export const PresenceProvider = ({
 
   // Clean up all timeouts on unmount
   useEffect(() => {
+    const timeouts = typingTimeoutsRef.current;
     return () => {
-      Object.values(typingTimeoutsRef.current).forEach((timeout) => {
+      Object.values(timeouts).forEach((timeout) => {
         clearTimeout(timeout);
       });
     };
@@ -65,10 +66,13 @@ export const PresenceProvider = ({
   // Subscribe to online and typing queues when connection is active
   useEffect(() => {
     if (!isAuthenticated) {
-      setOnlineUsers({});
-      setTypingUsers({});
-      lastSentTypingRef.current = {};
-      return;
+      // Defer state updates to avoid cascading render warning in useEffect
+      const handle = setTimeout(() => {
+        setOnlineUsers({});
+        setTypingUsers({});
+        lastSentTypingRef.current = {};
+      }, 0);
+      return () => clearTimeout(handle);
     }
 
     if (!connected) return;
@@ -122,11 +126,17 @@ export const PresenceProvider = ({
 
     // Fetch initially online users from REST API
     apiFetch("/api/v1/users/online")
-      .then((onlineList: any) => {
+      .then((onlineList: unknown) => {
         if (Array.isArray(onlineList)) {
           setOnlineUsers((prev) => {
             const newOnline = { ...prev };
-            onlineList.forEach((user: any) => {
+            (
+              onlineList as {
+                userId: string | number;
+                status: string;
+                username: string;
+              }[]
+            ).forEach((user) => {
               newOnline[Number(user.userId)] = {
                 status: user.status,
                 username: user.username,

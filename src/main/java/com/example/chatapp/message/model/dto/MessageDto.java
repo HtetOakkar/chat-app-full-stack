@@ -28,5 +28,7 @@ public class MessageDto {
     private Boolean isDelivered;
     private String channel;
     private MessageType messageType;
-
+    private String callOutcome;
+    private Integer callDuration;
+    private Boolean videoUsed;
 }

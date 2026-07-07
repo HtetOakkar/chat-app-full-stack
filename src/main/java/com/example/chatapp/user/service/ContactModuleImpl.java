@@ -13,6 +13,7 @@ import com.example.chatapp.user.repository.UserRepository;
 import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.message.repository.RedisMessageRepository;
 import com.example.chatapp.message.model.entity.Message;
+import com.example.chatapp.message.model.entity.MessageType;
 import org.springframework.data.domain.PageRequest;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -234,20 +235,20 @@ public class ContactModuleImpl implements ContactModule {
 
         if (dbLatest != null && redisLatest != null) {
             if (redisLatest.getTimestamp().isAfter(dbLatest.getSentAt())) {
-                lastMessageContent = redisLatest.getContent();
+                lastMessageContent = formatMessageContent(redisLatest.getContent(), redisLatest.getMessageType(), redisLatest.getCallOutcome());
                 lastMessageTimestamp = redisLatest.getTimestamp();
                 lastMessageSenderId = redisLatest.getSenderId();
             } else {
-                lastMessageContent = dbLatest.getContent();
+                lastMessageContent = formatMessageContent(dbLatest.getContent(), dbLatest.getMessageType(), dbLatest.getCallOutcome());
                 lastMessageTimestamp = dbLatest.getSentAt();
                 lastMessageSenderId = dbLatest.getSender().getId();
             }
         } else if (dbLatest != null) {
-            lastMessageContent = dbLatest.getContent();
+            lastMessageContent = formatMessageContent(dbLatest.getContent(), dbLatest.getMessageType(), dbLatest.getCallOutcome());
             lastMessageTimestamp = dbLatest.getSentAt();
             lastMessageSenderId = dbLatest.getSender().getId();
         } else if (redisLatest != null) {
-            lastMessageContent = redisLatest.getContent();
+            lastMessageContent = formatMessageContent(redisLatest.getContent(), redisLatest.getMessageType(), redisLatest.getCallOutcome());
             lastMessageTimestamp = redisLatest.getTimestamp();
             lastMessageSenderId = redisLatest.getSenderId();
         }
@@ -277,5 +278,26 @@ public class ContactModuleImpl implements ContactModule {
                 .createdAt(contact.getCreatedAt())
                 .clearedAt(contact.getClearedAt())
                 .build();
+    }
+
+    private String formatMessageContent(String content, MessageType messageType, String callOutcome) {
+        if (messageType == MessageType.AUDIO || messageType == MessageType.VIDEO || callOutcome != null || (content != null && content.startsWith("{\"outcome\":"))) {
+            String outcome = callOutcome;
+            if (outcome == null && content != null) {
+                if (content.contains("\"outcome\":\"completed\"")) outcome = "completed";
+                else if (content.contains("\"outcome\":\"missed\"")) outcome = "missed";
+                else if (content.contains("\"outcome\":\"rejected\"")) outcome = "rejected";
+                else if (content.contains("\"outcome\":\"cancelled\"")) outcome = "cancelled";
+            }
+            if (outcome == null) return "Call";
+            return switch (outcome.toLowerCase()) {
+                case "completed" -> "Call Ended";
+                case "missed" -> "Missed Call";
+                case "rejected" -> "Call Declined";
+                case "cancelled" -> "Call Cancelled";
+                default -> "Call";
+            };
+        }
+        return content;
     }
 }

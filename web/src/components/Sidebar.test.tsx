@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Sidebar from "./Sidebar";
 import { useAuth } from "@/context/AuthContext";
 import { usePresence } from "@/context/PresenceContext";
@@ -27,7 +27,6 @@ describe("Sidebar", () => {
   });
 
   it("renders three navigation tabs: Chats, Contacts, and Requests", async () => {
-    const { waitFor } = require("@testing-library/react");
     render(
       <Sidebar
         activeChat={null}
@@ -52,7 +51,6 @@ describe("Sidebar", () => {
   });
 
   it("renders only CONTACT status contacts in the Contacts tab", async () => {
-    const { waitFor } = require("@testing-library/react");
     (apiFetch as jest.Mock).mockImplementation((url) => {
       if (url === "/api/v1/contacts") {
         return Promise.resolve([
@@ -109,7 +107,6 @@ describe("Sidebar", () => {
   });
 
   it("renders BLOCKED status contacts when Blocked filter is clicked", async () => {
-    const { waitFor } = require("@testing-library/react");
     (apiFetch as jest.Mock).mockImplementation((url) => {
       if (url === "/api/v1/contacts") {
         return Promise.resolve([
@@ -173,5 +170,41 @@ describe("Sidebar", () => {
     const aside = container.querySelector("aside");
     expect(aside).toHaveClass("hidden");
     expect(aside).not.toHaveClass("flex w-full");
+  });
+
+  it("formats call history JSON in lastMessageContent into a readable label", async () => {
+    (apiFetch as jest.Mock).mockImplementation((url: string) => {
+      if (url === "/api/v1/contacts") {
+        return Promise.resolve([
+          {
+            id: 1,
+            contactUserId: 2,
+            contactUsername: "caller_bob",
+            status: "ACCEPTED",
+            lastMessageContent:
+              '{"outcome":"completed","duration":10,"videoUsed":true}',
+            lastMessageSenderId: 2,
+            unreadCount: 0,
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(
+      <Sidebar
+        activeChat={null}
+        onSelectChat={jest.fn()}
+        onSelectProfileUser={jest.fn()}
+        refreshTrigger={0}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("caller_bob")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Call Ended")).toBeInTheDocument();
+    expect(screen.queryByText(/outcome/)).not.toBeInTheDocument();
   });
 });

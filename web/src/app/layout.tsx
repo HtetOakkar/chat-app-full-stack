@@ -16,6 +16,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { ConnectionProvider } from "@/context/ConnectionContext";
 import { MessageStoreProvider } from "@/context/MessageStore";
 import { PresenceProvider } from "@/context/PresenceContext";
+import { CallProvider } from "@/context/CallContext";
 
 export const metadata: Metadata = {
   title: "Meow Chit Chat",
@@ -47,7 +48,9 @@ export default function RootLayout({
         <AuthProvider>
           <ConnectionProvider>
             <MessageStoreProvider>
-              <PresenceProvider>{children}</PresenceProvider>
+              <PresenceProvider>
+                <CallProvider>{children}</CallProvider>
+              </PresenceProvider>
             </MessageStoreProvider>
           </ConnectionProvider>
         </AuthProvider>

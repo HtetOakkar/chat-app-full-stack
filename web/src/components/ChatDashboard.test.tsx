@@ -4,6 +4,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { ConnectionProvider } from "@/context/ConnectionContext";
 import { MessageStoreProvider } from "@/context/MessageStore";
 import { PresenceProvider } from "@/context/PresenceContext";
+import { CallProvider } from "@/context/CallContext";
 import React from "react";
 
 // Mock child components to make testing simpler
@@ -38,7 +39,9 @@ const renderWithProviders = (ui: React.ReactElement) => {
     <AuthProvider>
       <ConnectionProvider>
         <MessageStoreProvider>
-          <PresenceProvider>{ui}</PresenceProvider>
+          <PresenceProvider>
+            <CallProvider>{ui}</CallProvider>
+          </PresenceProvider>
         </MessageStoreProvider>
       </ConnectionProvider>
     </AuthProvider>
@@ -50,5 +53,11 @@ describe("ChatDashboard mobile view profile", () => {
     renderWithProviders(<ChatDashboard />);
     // Initial state: Sidebar is visible
     expect(screen.getByTestId("sidebar")).toBeInTheDocument();
+  });
+
+  it("uses dynamic viewport height (h-dvh) instead of h-screen to prevent clipping on mobile browsers", () => {
+    const { container } = renderWithProviders(<ChatDashboard />);
+    expect(container.firstChild).toHaveClass("h-dvh");
+    expect(container.firstChild).not.toHaveClass("h-screen");
   });
 });

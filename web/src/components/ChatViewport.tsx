@@ -10,6 +10,7 @@ import { Virtuoso } from "react-virtuoso";
 import { apiFetch } from "@/lib/api";
 import type { ActiveChat } from "./Sidebar";
 import EmojiPicker, { Theme, EmojiStyle } from "emoji-picker-react";
+import { useCall } from "@/context/CallContext";
 
 const formatDateHeader = (timestampString: string) => {
   const date = new Date(timestampString);
@@ -74,6 +75,7 @@ export default function ChatViewport({
     hasMorePrivateHistory,
   } = useMessageStore();
   const { onlineUsers, typingUsers, sendTypingIndicator } = usePresence();
+  const { initiateCall } = useCall();
 
   const { userId } = useAuth();
   const [inputText, setInputText] = useState("");
@@ -286,6 +288,51 @@ export default function ChatViewport({
         : null;
       const showDateSeparator = msgDate !== prevMsgDate;
 
+      const isCallRecord =
+        msg.messageType === "AUDIO" || msg.messageType === "VIDEO";
+
+      // Build human-friendly Call Record content
+      const renderCallRecord = () => {
+        const outcome = msg.callOutcome || "completed";
+        const duration = msg.callDuration || 0;
+        const isVideo = msg.messageType === "VIDEO";
+
+        const outcomeLabels: Record<string, string> = {
+          completed: "Call Ended",
+          missed: "Missed Call",
+          rejected: "Call Declined",
+          cancelled: "Call Cancelled",
+        };
+        const label = outcomeLabels[outcome] || "Call";
+
+        const formatCallDuration = (secs: number) => {
+          if (secs <= 0) return "";
+          const m = Math.floor(secs / 60)
+            .toString()
+            .padStart(2, "0");
+          const s = (secs % 60).toString().padStart(2, "0");
+          return `${m}:${s}`;
+        };
+
+        const durationText = formatCallDuration(duration);
+
+        return (
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-sm">
+              {isVideo ? "videocam" : "call"}
+            </span>
+            <div className="flex flex-col">
+              <span className="font-bold text-[10px] uppercase tracking-wider">
+                {label}
+              </span>
+              {durationText && (
+                <span className="text-[9px] opacity-70">{durationText}</span>
+              )}
+            </div>
+          </div>
+        );
+      };
+
       return (
         <div key={msg.id || `msg-${index}`} className="flex flex-col w-full">
           {showDateSeparator && (
@@ -297,70 +344,13 @@ export default function ChatViewport({
               <div className="h-px bg-outline-variant/20 flex-1" />
             </div>
           )}
-          <div
-            className={`flex flex-col max-w-[75%] ${
-              isOwnMessage ? "self-end items-end" : "self-start items-start"
-            }`}
-          >
-            {!isOwnMessage && activeChat?.isPublic && (
-              <span className="text-[9px] font-semibold text-outline mb-1 ml-1 uppercase tracking-wide">
-                {msg.senderFullName || msg.senderUsername}
-              </span>
-            )}
-            <div className="relative group flex items-center gap-2">
-              {isOwnMessage && !msg.isDeleted && (
-                <div className="relative shrink-0">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveMenuMessageId(
-                        activeMenuMessageId === msg.id ? null : msg.id
-                      );
-                    }}
-                    className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded-full hover:bg-surface-container-high flex items-center justify-center shrink-0"
-                  >
-                    <span className="material-symbols-outlined text-sm">
-                      more_vert
-                    </span>
-                  </button>
 
-                  {activeMenuMessageId === msg.id && (
-                    <div className="absolute right-0 top-[100%] mt-1 z-30 bg-surface-container-lowest border border-outline-variant/20 rounded-lg shadow-lg py-1 min-w-[100px] animate-[fadeIn_0.15s_ease-out]">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDeleteMessage(msg.id, msg.timestamp)
-                        }
-                        className="w-full text-left px-3 py-1.5 text-xs text-error hover:bg-surface-container-low transition-colors flex items-center gap-1.5 font-bold uppercase tracking-wider"
-                      >
-                        <span className="material-symbols-outlined text-sm text-error">
-                          delete
-                        </span>
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div
-                className={`p-3.5 rounded-2xl text-xs leading-relaxed ${
-                  msg.isDeleted
-                    ? `bg-surface-container-low/50 text-outline italic border border-outline-variant/10 ${isOwnMessage ? "rounded-br-sm" : "rounded-bl-sm"}`
-                    : isOwnMessage
-                      ? "bg-primary text-white rounded-br-sm shadow-sm shadow-primary/10"
-                      : "bg-surface-container-lowest text-on-surface rounded-bl-sm border border-outline-variant/10"
-                }`}
-              >
-                <p>{msg.content}</p>
-                <span
-                  className={`text-[8px] font-bold mt-1.5 block tracking-tighter uppercase ${
-                    isOwnMessage && !msg.isDeleted
-                      ? "text-white/60 text-right"
-                      : "text-outline"
-                  }`}
-                >
+          {isCallRecord ? (
+            /* Call Record bubble — centered system-style message */
+            <div className="flex justify-center my-2">
+              <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-surface-container-low border border-outline-variant/15 text-on-surface">
+                {renderCallRecord()}
+                <span className="text-[8px] font-bold tracking-tighter uppercase text-outline ml-2">
                   {new Date(msg.timestamp).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
@@ -368,7 +358,80 @@ export default function ChatViewport({
                 </span>
               </div>
             </div>
-          </div>
+          ) : (
+            <div
+              className={`flex flex-col max-w-[75%] ${
+                isOwnMessage ? "self-end items-end" : "self-start items-start"
+              }`}
+            >
+              {!isOwnMessage && activeChat?.isPublic && (
+                <span className="text-[9px] font-semibold text-outline mb-1 ml-1 uppercase tracking-wide">
+                  {msg.senderFullName || msg.senderUsername}
+                </span>
+              )}
+              <div className="relative group flex items-center gap-2">
+                {isOwnMessage && !msg.isDeleted && (
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuMessageId(
+                          activeMenuMessageId === msg.id ? null : msg.id
+                        );
+                      }}
+                      className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded-full hover:bg-surface-container-high flex items-center justify-center shrink-0"
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        more_vert
+                      </span>
+                    </button>
+
+                    {activeMenuMessageId === msg.id && (
+                      <div className="absolute right-0 top-[100%] mt-1 z-30 bg-surface-container-lowest border border-outline-variant/20 rounded-lg shadow-lg py-1 min-w-[100px] animate-[fadeIn_0.15s_ease-out]">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleDeleteMessage(msg.id, msg.timestamp)
+                          }
+                          className="w-full text-left px-3 py-1.5 text-xs text-error hover:bg-surface-container-low transition-colors flex items-center gap-1.5 font-bold uppercase tracking-wider"
+                        >
+                          <span className="material-symbols-outlined text-sm text-error">
+                            delete
+                          </span>
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div
+                  className={`p-3.5 rounded-2xl text-xs leading-relaxed ${
+                    msg.isDeleted
+                      ? `bg-surface-container-low/50 text-outline italic border border-outline-variant/10 ${isOwnMessage ? "rounded-br-sm" : "rounded-bl-sm"}`
+                      : isOwnMessage
+                        ? "bg-primary text-white rounded-br-sm shadow-sm shadow-primary/10"
+                        : "bg-surface-container-lowest text-on-surface rounded-bl-sm border border-outline-variant/10"
+                  }`}
+                >
+                  <p>{msg.content}</p>
+                  <span
+                    className={`text-[8px] font-bold mt-1.5 block tracking-tighter uppercase ${
+                      isOwnMessage && !msg.isDeleted
+                        ? "text-white/60 text-right"
+                        : "text-outline"
+                    }`}
+                  >
+                    {new Date(msg.timestamp).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     },
@@ -495,6 +558,45 @@ export default function ChatViewport({
             />
             {connected ? "Connected" : "Offline"}
           </span>
+
+          {!activeChat.isPublic &&
+            (activeChat.status === "ACCEPTED" ||
+              activeChat.status === "CONTACT") && (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    initiateCall(
+                      activeChat.id,
+                      "AUDIO",
+                      activeChat.fullName || activeChat.username
+                    )
+                  }
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors"
+                  title="Audio Call"
+                >
+                  <span className="material-symbols-outlined text-lg">
+                    call
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    initiateCall(
+                      activeChat.id,
+                      "VIDEO",
+                      activeChat.fullName || activeChat.username
+                    )
+                  }
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors"
+                  title="Video Call"
+                >
+                  <span className="material-symbols-outlined text-lg">
+                    videocam
+                  </span>
+                </button>
+              </>
+            )}
 
           {!activeChat.isPublic && (
             <div className="relative">

@@ -6,8 +6,9 @@ import { apiFetch } from "@/lib/api";
 import Sidebar, { type ActiveChat } from "./Sidebar";
 import ChatViewport from "./ChatViewport";
 import MyProfileCard from "./MyProfileCard";
-
 import UserProfileCard from "./UserProfileCard";
+import IncomingCallModal from "./IncomingCallModal";
+import ActiveCallOverlay from "./ActiveCallOverlay";
 
 export default function ChatDashboard() {
   const { logout, username, userId } = useAuth();
@@ -96,7 +97,7 @@ export default function ChatDashboard() {
   }, []);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background">
+    <div className="flex flex-col h-dvh overflow-hidden bg-background">
       {/* Global Top Bar */}
       <header className="shrink-0 bg-surface-container-lowest/80 backdrop-blur-sm border-b border-outline-variant/10 px-4 md:px-6 py-3 md:py-2.5 flex items-center justify-between z-20 relative">
         <div className="flex items-center gap-3">
@@ -242,6 +243,9 @@ export default function ChatDashboard() {
           </div>
         </div>
       )}
+      {/* Call UI Components */}
+      <IncomingCallModal />
+      <ActiveCallOverlay />
     </div>
   );
 }

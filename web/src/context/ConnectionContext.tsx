@@ -9,7 +9,7 @@ import React, {
   useCallback,
 } from "react";
 import { useAuth } from "./AuthContext";
-import { Client } from "@stomp/stompjs";
+import { Client, IMessage, StompSubscription } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
 export interface ConnectionContextType {
@@ -17,7 +17,7 @@ export interface ConnectionContextType {
   stompClientRef: React.MutableRefObject<Client | null>;
   subscribe: (
     destination: string,
-    callback: (message: any) => void
+    callback: (message: IMessage) => void
   ) => () => void;
 }
 
@@ -38,20 +38,20 @@ export const ConnectionProvider = ({
       string,
       {
         destination: string;
-        callback: (message: any) => void;
-        stompSubscription?: any;
+        callback: (message: IMessage) => void;
+        stompSubscription?: StompSubscription;
       }
     >
   >(new Map());
 
   // Subscription helper
   const subscribe = useCallback(
-    (destination: string, callback: (message: any) => void) => {
+    (destination: string, callback: (message: IMessage) => void) => {
       const id = Math.random().toString(36).substring(2, 9);
       const subObj: {
         destination: string;
-        callback: (message: any) => void;
-        stompSubscription?: any;
+        callback: (message: IMessage) => void;
+        stompSubscription?: StompSubscription;
       } = {
         destination,
         callback,
@@ -99,13 +99,22 @@ export const ConnectionProvider = ({
         stompClientRef.current.deactivate();
         stompClientRef.current = null;
       }
-      setConnected(false);
-      return;
+      // Defer state update to avoid cascading render warning in useEffect
+      const handle = setTimeout(() => {
+        setConnected(false);
+      }, 0);
+      return () => clearTimeout(handle);
     }
 
     // Connect to Backend WebSocket
-    const socketUrl =
-      process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8181/ws";
+    let socketUrl = process.env.NEXT_PUBLIC_WS_URL;
+    if (!socketUrl) {
+      if (typeof window !== "undefined" && window.location) {
+        socketUrl = `${window.location.protocol}//${window.location.hostname}:8181/ws`;
+      } else {
+        socketUrl = "http://localhost:8181/ws";
+      }
+    }
     const client = new Client({
       webSocketFactory: () => new SockJS(socketUrl),
       connectHeaders: {

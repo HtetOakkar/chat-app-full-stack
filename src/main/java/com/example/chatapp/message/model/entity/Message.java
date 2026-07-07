@@ -52,6 +52,15 @@ public class Message {
     @Column
     private Instant deliveredAt;
 
+    @Column(name = "call_outcome")
+    private String callOutcome;
+
+    @Column(name = "call_duration")
+    private Integer callDuration;
+
+    @Column(name = "video_used")
+    private Boolean videoUsed;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sender_id", referencedColumnName = "id", nullable = false)
     private User sender;

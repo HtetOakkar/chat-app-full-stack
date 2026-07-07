@@ -123,6 +123,7 @@ public class ChatAppE2eTest {
         public final LinkedBlockingQueue<Map> online = new LinkedBlockingQueue<>();
         public final LinkedBlockingQueue<TypingIndicatorDto> typing = new LinkedBlockingQueue<>();
         public final LinkedBlockingQueue<MessageDto> publicMessages = new LinkedBlockingQueue<>();
+        public final LinkedBlockingQueue<CallSignalDto> call = new LinkedBlockingQueue<>();
 
         public StompTestSession(StompSession session) {
             this.session = session;
@@ -162,6 +163,13 @@ public class ChatAppE2eTest {
                 public Type getPayloadType(StompHeaders headers) { return MessageDto.class; }
                 @Override
                 public void handleFrame(StompHeaders headers, Object payload) { publicMessages.add((MessageDto) payload); }
+            });
+
+            session.subscribe("/user/queue/call", new StompFrameHandler() {
+                @Override
+                public Type getPayloadType(StompHeaders headers) { return CallSignalDto.class; }
+                @Override
+                public void handleFrame(StompHeaders headers, Object payload) { call.add((CallSignalDto) payload); }
             });
         }
 
@@ -1923,5 +1931,392 @@ public class ChatAppE2eTest {
                 .isTyping(isTyping)
                 .build();
         session.session.send("/app/typing", dto);
+    }
+
+    private void sendCallSignal(StompTestSession session, Long recipientId, String type, String callType, String sdp) {
+        CallSignalDto dto = CallSignalDto.builder()
+                .recipientId(recipientId)
+                .type(type)
+                .callType(callType)
+                .sdp(sdp)
+                .build();
+        session.session.send("/app/call." + type, dto);
+    }
+
+    @Test
+    public void test_callSignalingRouting_success() throws Exception {
+        String tA = signupAndVerify("call_user_a", "calla@example.com", "password123");
+        String tB = signupAndVerify("call_user_b", "callb@example.com", "password123");
+        User userA = userRepository.findByUsername("call_user_a").orElseThrow();
+        User userB = userRepository.findByUsername("call_user_b").orElseThrow();
+
+        // Establish symmetric relationship (both accepted contacts)
+        addContact(tA, "call_user_b");
+        acceptContact(tB, userA.getId());
+
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+
+        // A sends call offer to B
+        sendCallSignal(sA, userB.getId(), "offer", "VIDEO", "fake-sdp-offer");
+
+        // B should receive the offer
+        CallSignalDto received = sB.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(received);
+        assertEquals(userA.getId(), received.getSenderId());
+        assertEquals(userA.getUsername(), received.getSenderUsername());
+        assertEquals(userA.getFullName(), received.getSenderFullName());
+        assertEquals("offer", received.getType());
+        assertEquals("VIDEO", received.getCallType());
+        assertEquals("fake-sdp-offer", received.getSdp());
+
+        sA.disconnect();
+        sB.disconnect();
+    }
+
+    @Test
+    public void test_callSignalingRouting_blocked_silentlyIgnored() throws Exception {
+        String tA = signupAndVerify("call_user_blocked_a", "callblocked_a@example.com", "password123");
+        String tB = signupAndVerify("call_user_blocked_b", "callblocked_b@example.com", "password123");
+        User userA = userRepository.findByUsername("call_user_blocked_a").orElseThrow();
+        User userB = userRepository.findByUsername("call_user_blocked_b").orElseThrow();
+
+        // Establish symmetric relationship (both accepted contacts)
+        addContact(tA, "call_user_blocked_b");
+        acceptContact(tB, userA.getId());
+
+        // B blocks A
+        blockContact(tB, userA.getId());
+
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+
+        // A attempts to call B
+        sendCallSignal(sA, userB.getId(), "offer", "VIDEO", "fake-sdp-offer-blocked");
+
+        // B should NOT receive the offer
+        CallSignalDto received = sB.call.poll(2, TimeUnit.SECONDS);
+        assertNull(received);
+
+        sA.disconnect();
+        sB.disconnect();
+    }
+
+    @Test
+    public void test_callSignalingRouting_busy_returnsBusy() throws Exception {
+        String tA = signupAndVerify("call_user_busy_a", "callbusy_a@example.com", "password123");
+        String tB = signupAndVerify("call_user_busy_b", "callbusy_b@example.com", "password123");
+        String tC = signupAndVerify("call_user_busy_c", "callbusy_c@example.com", "password123");
+        User userA = userRepository.findByUsername("call_user_busy_a").orElseThrow();
+        User userB = userRepository.findByUsername("call_user_busy_b").orElseThrow();
+        User userC = userRepository.findByUsername("call_user_busy_c").orElseThrow();
+
+        // A <-> B contact
+        addContact(tA, "call_user_busy_b");
+        acceptContact(tB, userA.getId());
+
+        // C <-> B contact
+        addContact(tC, "call_user_busy_b");
+        acceptContact(tB, userC.getId());
+
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+        StompTestSession sC = connectWebSocket(tC);
+
+        // A calls B (established call)
+        sendCallSignal(sA, userB.getId(), "offer", "VIDEO", "fake-sdp-offer-busy");
+
+        // B receives offer
+        CallSignalDto receivedByB = sB.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(receivedByB);
+
+        // Now C attempts to call B while B is in "dialing" (busy) state
+        sendCallSignal(sC, userB.getId(), "offer", "VIDEO", "fake-sdp-offer-busy-from-c");
+
+        // B should NOT receive the offer from C
+        CallSignalDto receivedByBFromC = sB.call.poll(2, TimeUnit.SECONDS);
+        assertNull(receivedByBFromC);
+
+        // C should receive a "busy" signal
+        CallSignalDto receivedByC = sC.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(receivedByC);
+        assertEquals("busy", receivedByC.getType());
+        assertEquals(userB.getId(), receivedByC.getSenderId());
+
+        sA.disconnect();
+        sB.disconnect();
+        sC.disconnect();
+    }
+
+    @Test
+    public void test_callSignalingRouting_inCallUpgrade_allowsOffer() throws Exception {
+        String tA = signupAndVerify("call_user_upgrade_a", "callup_a@example.com", "password123");
+        String tB = signupAndVerify("call_user_upgrade_b", "callup_b@example.com", "password123");
+        User userA = userRepository.findByUsername("call_user_upgrade_a").orElseThrow();
+        User userB = userRepository.findByUsername("call_user_upgrade_b").orElseThrow();
+
+        // A <-> B contact
+        addContact(tA, "call_user_upgrade_b");
+        acceptContact(tB, userA.getId());
+
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+
+        // A initiates AUDIO call to B
+        sendCallSignal(sA, userB.getId(), "offer", "AUDIO", "fake-sdp-offer-audio");
+
+        // B receives offer
+        CallSignalDto receivedByB = sB.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(receivedByB);
+        assertEquals("AUDIO", receivedByB.getCallType());
+
+        // B answers the call (establishing active call)
+        sendCallSignal(sB, userA.getId(), "answer", "AUDIO", "fake-sdp-answer-audio");
+
+        CallSignalDto answerReceivedByA = sA.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(answerReceivedByA);
+        assertEquals("answer", answerReceivedByA.getType());
+
+        // Now during active call, A turns on camera (upgrades to VIDEO) and sends new offer
+        sendCallSignal(sA, userB.getId(), "offer", "VIDEO", "fake-sdp-offer-upgrade-video");
+
+        // A should NOT receive a "busy" signal back!
+        CallSignalDto busyReceivedByA = sA.call.poll(2, TimeUnit.SECONDS);
+        assertNull(busyReceivedByA);
+
+        // B MUST receive the upgrade video offer!
+        CallSignalDto upgradeOfferReceivedByB = sB.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(upgradeOfferReceivedByB);
+        assertEquals("offer", upgradeOfferReceivedByB.getType());
+        assertEquals("VIDEO", upgradeOfferReceivedByB.getCallType());
+        assertEquals("fake-sdp-offer-upgrade-video", upgradeOfferReceivedByB.getSdp());
+
+        sA.disconnect();
+        sB.disconnect();
+    }
+
+
+    @Test
+    public void test_callSignalingRouting_notContacts_rejected() throws Exception {
+        String tA = signupAndVerify("call_user_nc_a", "callnc_a@example.com", "password123");
+        String tB = signupAndVerify("call_user_nc_b", "callnc_b@example.com", "password123");
+        User userA = userRepository.findByUsername("call_user_nc_a").orElseThrow();
+        User userB = userRepository.findByUsername("call_user_nc_b").orElseThrow();
+
+        // No contact established between A and B
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+
+        // A attempts to call B
+        sendCallSignal(sA, userB.getId(), "offer", "VIDEO", "fake-sdp-offer-nc");
+
+        // B should NOT receive the offer
+        CallSignalDto received = sB.call.poll(2, TimeUnit.SECONDS);
+        assertNull(received);
+
+        sA.disconnect();
+        sB.disconnect();
+    }
+
+    @Test
+    public void test_callSignaling_iceCandidate() throws Exception {
+        String tA = signupAndVerify("call_user_ice_a", "callice_a@example.com", "password123");
+        String tB = signupAndVerify("call_user_ice_b", "callice_b@example.com", "password123");
+        User userA = userRepository.findByUsername("call_user_ice_a").orElseThrow();
+        User userB = userRepository.findByUsername("call_user_ice_b").orElseThrow();
+
+        addContact(tA, "call_user_ice_b");
+        acceptContact(tB, userA.getId());
+
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+
+        // A offers
+        sendCallSignal(sA, userB.getId(), "offer", "VIDEO", "fake-sdp-offer");
+        assertNotNull(sB.call.poll(5, TimeUnit.SECONDS));
+
+        // B answers
+        sendCallSignal(sB, userA.getId(), "answer", "VIDEO", "fake-sdp-answer");
+        assertNotNull(sA.call.poll(5, TimeUnit.SECONDS));
+
+        // A sends ICE candidate
+        java.util.Map<String, Object> candidateMap = new java.util.HashMap<>();
+        candidateMap.put("candidate", "candidate:842163049 1 udp 16777215 192.168.1.100 50000 typ host");
+        candidateMap.put("sdpMid", "0");
+        candidateMap.put("sdpMLineIndex", 0);
+
+        CallSignalDto iceDto = CallSignalDto.builder()
+                .recipientId(userB.getId())
+                .type("ice")
+                .callType("VIDEO")
+                .candidate(candidateMap)
+                .build();
+        sA.session.send("/app/call.ice", iceDto);
+
+        CallSignalDto receivedIce = sB.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(receivedIce);
+        assertEquals("ice", receivedIce.getType());
+        assertNotNull(receivedIce.getCandidate());
+
+        sA.disconnect();
+        sB.disconnect();
+    }
+
+    @Test
+    public void test_callOutcome_completed_persistsRecord() throws Exception {
+        String tA = signupAndVerify("call_pers_a", "callpers_a@example.com", "password123");
+        String tB = signupAndVerify("call_pers_b", "callpers_b@example.com", "password123");
+        User userA = userRepository.findByUsername("call_pers_a").orElseThrow();
+        User userB = userRepository.findByUsername("call_pers_b").orElseThrow();
+
+        addContact(tA, "call_pers_b");
+        acceptContact(tB, userA.getId());
+
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+
+        // A offers
+        sendCallSignal(sA, userB.getId(), "offer", "VIDEO", "offer-sdp");
+        CallSignalDto offerSignal = sB.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(offerSignal);
+
+        // B answers
+        sendCallSignal(sB, userA.getId(), "answer", "VIDEO", "answer-sdp");
+        CallSignalDto answerSignal = sA.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(answerSignal);
+
+        // Active for a moment
+        Thread.sleep(1200);
+
+        // A hangs up
+        sendCallSignal(sA, userB.getId(), "hangup", "VIDEO", null);
+
+        // Allow server to handle hangup
+        Thread.sleep(500);
+
+        runBatchJob();
+
+        // Check history
+        MessagePage history = getPrivateHistory(tA, userB.getId());
+        assertFalse(history.messages().isEmpty());
+        MessageDto record = history.messages().get(0);
+        assertEquals(MessageType.VIDEO, record.getMessageType());
+        assertEquals("Call Ended", record.getContent());
+        assertEquals("completed", record.getCallOutcome());
+        assertTrue(record.getCallDuration() >= 1);
+        assertTrue(record.getVideoUsed());
+
+        sA.disconnect();
+        sB.disconnect();
+    }
+
+    @Test
+    public void test_callOutcome_cancelled_persistsRecord() throws Exception {
+        String tA = signupAndVerify("call_pers_c", "callpers_c@example.com", "password123");
+        String tB = signupAndVerify("call_pers_d", "callpers_d@example.com", "password123");
+        User userA = userRepository.findByUsername("call_pers_c").orElseThrow();
+        User userB = userRepository.findByUsername("call_pers_d").orElseThrow();
+
+        addContact(tA, "call_pers_d");
+        acceptContact(tB, userA.getId());
+
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+
+        // A offers
+        sendCallSignal(sA, userB.getId(), "offer", "AUDIO", "offer-sdp-audio");
+        assertNotNull(sB.call.poll(5, TimeUnit.SECONDS));
+
+        // A cancels
+        sendCallSignal(sA, userB.getId(), "cancel", "AUDIO", null);
+        Thread.sleep(500);
+
+        runBatchJob();
+
+        MessagePage history = getPrivateHistory(tA, userB.getId());
+        assertFalse(history.messages().isEmpty());
+        MessageDto record = history.messages().get(0);
+        assertEquals(MessageType.AUDIO, record.getMessageType());
+        assertEquals("cancelled", record.getCallOutcome());
+        assertEquals(0, record.getCallDuration());
+        assertFalse(record.getVideoUsed());
+
+        sA.disconnect();
+        sB.disconnect();
+    }
+
+    @Test
+    public void test_callOutcome_rejected_persistsRecord() throws Exception {
+        String tA = signupAndVerify("call_pers_e", "callpers_e@example.com", "password123");
+        String tB = signupAndVerify("call_pers_f", "callpers_f@example.com", "password123");
+        User userA = userRepository.findByUsername("call_pers_e").orElseThrow();
+        User userB = userRepository.findByUsername("call_pers_f").orElseThrow();
+
+        addContact(tA, "call_pers_f");
+        acceptContact(tB, userA.getId());
+
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+
+        // A offers
+        sendCallSignal(sA, userB.getId(), "offer", "AUDIO", "offer-sdp-audio");
+        assertNotNull(sB.call.poll(5, TimeUnit.SECONDS));
+
+        // B rejects
+        sendCallSignal(sB, userA.getId(), "reject", "AUDIO", null);
+        Thread.sleep(500);
+
+        runBatchJob();
+
+        MessagePage history = getPrivateHistory(tA, userB.getId());
+        assertFalse(history.messages().isEmpty());
+        MessageDto record = history.messages().get(0);
+        assertEquals(MessageType.AUDIO, record.getMessageType());
+        assertEquals("rejected", record.getCallOutcome());
+        assertEquals(0, record.getCallDuration());
+        assertFalse(record.getVideoUsed());
+
+        sA.disconnect();
+        sB.disconnect();
+    }
+
+    @Test
+    public void test_callOutcome_missed_persistsRecord() throws Exception {
+        String tA = signupAndVerify("call_pers_g", "callpers_g@example.com", "password123");
+        String tB = signupAndVerify("call_pers_h", "callpers_h@example.com", "password123");
+        User userA = userRepository.findByUsername("call_pers_g").orElseThrow();
+        User userB = userRepository.findByUsername("call_pers_h").orElseThrow();
+
+        addContact(tA, "call_pers_h");
+        acceptContact(tB, userA.getId());
+
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+
+        // A offers
+        sendCallSignal(sA, userB.getId(), "offer", "AUDIO", "offer-sdp-audio");
+        assertNotNull(sB.call.poll(5, TimeUnit.SECONDS));
+
+        // A cancels with type "missed" (simulating client timeout)
+        CallSignalDto cancelDto = CallSignalDto.builder()
+                .recipientId(userB.getId())
+                .type("missed")
+                .callType("AUDIO")
+                .build();
+        sA.session.send("/app/call.cancel", cancelDto);
+        Thread.sleep(500);
+
+        runBatchJob();
+
+        MessagePage history = getPrivateHistory(tA, userB.getId());
+        assertFalse(history.messages().isEmpty());
+        MessageDto record = history.messages().get(0);
+        assertEquals(MessageType.AUDIO, record.getMessageType());
+        assertEquals("missed", record.getCallOutcome());
+        assertEquals(0, record.getCallDuration());
+        assertFalse(record.getVideoUsed());
+
+        sA.disconnect();
+        sB.disconnect();
     }
 }

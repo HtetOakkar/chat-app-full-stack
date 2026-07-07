@@ -175,7 +175,7 @@ export default function AuthContainer() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen px-4 py-8 bg-background relative overflow-hidden">
+    <div className="flex items-center justify-center min-h-dvh px-4 py-8 bg-background relative overflow-hidden">
       {/* Background decorative elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-primary/3 rounded-full blur-3xl" />

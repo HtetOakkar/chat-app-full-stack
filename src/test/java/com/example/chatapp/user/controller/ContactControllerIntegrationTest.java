@@ -304,4 +304,35 @@ class ContactControllerIntegrationTest {
                 .andExpect(jsonPath("$[0].lastMessageSenderId").value(bobUser.getId()))
                 .andExpect(jsonPath("$[0].lastMessageTimestamp").exists());
     }
+
+    @Test
+    void getContactsShouldReturnFormattedCallLabelWhenLastMessageIsCallRecord() throws Exception {
+        Contact contactAlice = Contact.builder()
+                .owner(aliceUser)
+                .contactUser(bobUser)
+                .status(ContactStatus.ACCEPTED)
+                .build();
+        contactRepository.save(contactAlice);
+
+        // Simulate an older call record message where content in DB is JSON format
+        Message callMessage = Message.builder()
+                .sender(bobUser)
+                .recipient(aliceUser)
+                .content("{\"outcome\":\"missed\",\"duration\":0,\"videoUsed\":false}")
+                .isRead(false)
+                .isDelivered(true)
+                .messageType(MessageType.AUDIO)
+                .callOutcome("missed")
+                .callDuration(0)
+                .videoUsed(false)
+                .sentAt(Instant.now())
+                .build();
+        messageRepository.save(callMessage);
+
+        mockMvc.perform(get("/api/v1/contacts")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].contactUsername").value("bob"))
+                .andExpect(jsonPath("$[0].lastMessageContent").value("Missed Call"));
+    }
 }
