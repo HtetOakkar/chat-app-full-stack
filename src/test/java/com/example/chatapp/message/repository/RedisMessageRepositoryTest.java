@@ -59,6 +59,76 @@ public class RedisMessageRepositoryTest {
     }
 
     @Test
+    public void publicHistoryShouldUseCursorOrderAcrossPendingMessages() {
+        Instant timestamp = Instant.parse("2026-07-10T06:00:00Z");
+        MessageDto first = MessageDto.builder()
+                .id(100L)
+                .content("newer tie")
+                .senderId(1L)
+                .senderUsername("alice")
+                .recipientId(null)
+                .timestamp(timestamp)
+                .isRead(false)
+                .isDelivered(true)
+                .messageType(MessageType.TEXT)
+                .build();
+        MessageDto second = MessageDto.builder()
+                .id(99L)
+                .content("older tie")
+                .senderId(1L)
+                .senderUsername("alice")
+                .recipientId(null)
+                .timestamp(timestamp)
+                .isRead(false)
+                .isDelivered(true)
+                .messageType(MessageType.TEXT)
+                .build();
+
+        redisMessageRepository.saveMessage(second);
+        redisMessageRepository.saveMessage(first);
+
+        List<MessageDto> firstPage = redisMessageRepository.findPublicMessagesBefore(null, null, 1);
+        assertEquals(1, firstPage.size());
+        assertEquals(100L, firstPage.get(0).getId());
+
+        List<MessageDto> secondPage = redisMessageRepository.findPublicMessagesBefore(timestamp, 100L, 1);
+        assertEquals(1, secondPage.size());
+        assertEquals(99L, secondPage.get(0).getId());
+    }
+
+    @Test
+    public void privateHistoryShouldOnlyReturnTheRequestedConversation() {
+        Instant now = Instant.parse("2026-07-10T06:00:00Z");
+        redisMessageRepository.saveMessage(MessageDto.builder()
+                .id(200L)
+                .content("alice to bob")
+                .senderId(1L)
+                .senderUsername("alice")
+                .recipientId(2L)
+                .timestamp(now)
+                .isRead(false)
+                .isDelivered(true)
+                .messageType(MessageType.TEXT)
+                .build());
+        redisMessageRepository.saveMessage(MessageDto.builder()
+                .id(201L)
+                .content("alice to charlie")
+                .senderId(1L)
+                .senderUsername("alice")
+                .recipientId(3L)
+                .timestamp(now.plusSeconds(1))
+                .isRead(false)
+                .isDelivered(true)
+                .messageType(MessageType.TEXT)
+                .build());
+
+        List<MessageDto> messages = redisMessageRepository.findPrivateMessagesBefore(1L, 2L, null, null, null, 10);
+
+        assertEquals(1, messages.size());
+        assertEquals("alice to bob", messages.get(0).getContent());
+    }
+
+    @Test
     public void testMessageProcessorForPublicMessage() throws Exception {
         User system = userRepository.findByUsername("system")
                 .orElseThrow(() -> new IllegalStateException("System user should be seeded."));

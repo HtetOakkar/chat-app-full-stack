@@ -46,6 +46,8 @@ describe("IncomingCallModal", () => {
     expect(
       screen.getByRole("button", { name: /decline/i })
     ).toBeInTheDocument();
+    expect(screen.queryByText("Accept")).not.toBeInTheDocument();
+    expect(screen.queryByText("Decline")).not.toBeInTheDocument();
   });
 
   test("displays username when fullName is not available", () => {

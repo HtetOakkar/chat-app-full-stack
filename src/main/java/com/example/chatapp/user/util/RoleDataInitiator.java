@@ -48,8 +48,8 @@ public class RoleDataInitiator implements CommandLineRunner {
         if (userRepository.findByUsername("system").isEmpty()) {
             User systemUser = User.builder()
                     .username("system")
-                    .password(passwordEncoder.encode("system_pass_secured_12345"))
-                    .role(adminRole.getId() != null ? adminRole : userRole)
+                    .password(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
+                    .role(userRole)
                     .version(0L)
                     .build();
             UserSettings settings = UserSettings.builder()
@@ -58,7 +58,7 @@ public class RoleDataInitiator implements CommandLineRunner {
                     .build();
             systemUser.setSettings(settings);
             userRepository.save(systemUser);
-            log.info("System user created.");
+            log.info("System user created as a non-loginable service principal.");
         }
     }
 }

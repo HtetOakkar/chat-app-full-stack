@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { usePresence } from "@/context/PresenceContext";
+import { useTranslations } from "@/lib/i18n";
 
 interface UserProfileCardProps {
   userId: number | null;
@@ -19,10 +20,7 @@ interface UserProfileCardProps {
 
 interface ProfileData {
   username: string;
-  email: string | null;
   fullName: string | null;
-  birthDate: string | null;
-  emailVerified: boolean;
 }
 
 export default function UserProfileCard({
@@ -37,6 +35,7 @@ export default function UserProfileCard({
   userStatus,
   onBack,
 }: UserProfileCardProps) {
+  const t = useTranslations();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -54,7 +53,7 @@ export default function UserProfileCard({
             setProfile(data);
           }
         } catch (err: unknown) {
-          setError("Failed to load user profile.");
+          setError(t.failedLoadUserProfile);
         } finally {
           setLoading(false);
         }
@@ -94,7 +93,7 @@ export default function UserProfileCard({
           className="flex items-center gap-2 text-outline hover:text-on-surface mb-6 transition-colors"
         >
           <span className="material-symbols-outlined text-lg">arrow_back</span>
-          <span className="text-sm font-medium">Back to Chat</span>
+          <span className="text-sm font-medium">{t.backToChat}</span>
         </button>
 
         {loading ? (
@@ -103,7 +102,7 @@ export default function UserProfileCard({
               rotate_right
             </span>
             <span className="text-sm text-outline font-bold uppercase tracking-wider">
-              Loading Profile...
+              {t.loadingProfile}
             </span>
           </div>
         ) : error ? (
@@ -139,7 +138,7 @@ export default function UserProfileCard({
                 <div className="flex-1 text-center sm:text-left mt-2 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                   <div>
                     <h2 className="text-xl font-bold text-on-surface leading-tight">
-                      {profile?.fullName || "No Name Specified"}
+                      {profile?.fullName || t.noNameSpecified}
                     </h2>
                     <p className="text-sm font-medium text-outline mt-1">
                       @{profile?.username || fallbackUsername}
@@ -183,7 +182,7 @@ export default function UserProfileCard({
                                 lock_open
                               </span>
                             )}
-                            Unblock
+                            {t.unblock}
                           </button>
                         );
                       } else if (isAcceptedContact) {
@@ -206,7 +205,7 @@ export default function UserProfileCard({
                             <span className="material-symbols-outlined text-sm">
                               chat
                             </span>
-                            Message
+                            {t.message}
                           </button>
                         );
                       } else if (isPending) {
@@ -256,7 +255,7 @@ export default function UserProfileCard({
                                 person_add
                               </span>
                             )}
-                            Connect
+                            {t.accept}
                           </button>
                         );
                       } else {
@@ -314,7 +313,7 @@ export default function UserProfileCard({
                                 person_add
                               </span>
                             )}
-                            Add
+                            {t.add}
                           </button>
                         );
                       }
@@ -328,65 +327,11 @@ export default function UserProfileCard({
                 {/* Username */}
                 <div>
                   <span className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1">
-                    Registry Identity
+                    {t.profileUsername}
                   </span>
                   <div className="bg-surface-container-low/30 border border-outline-variant/10 rounded-lg p-3 text-xs text-on-surface font-semibold">
                     @{profile?.username || fallbackUsername}
                   </div>
-                </div>
-
-                {/* Birth Date */}
-                <div>
-                  <span className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1">
-                    Birth Date
-                  </span>
-                  <div className="bg-surface-container-low/30 border border-outline-variant/10 rounded-lg p-3 text-xs text-on-surface font-semibold">
-                    {profile?.birthDate ? (
-                      new Date(profile.birthDate).toLocaleDateString(
-                        undefined,
-                        {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                          timeZone: "UTC",
-                        }
-                      )
-                    ) : (
-                      <span className="text-outline italic font-normal">
-                        Not specified
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Email Address */}
-                <div>
-                  <span className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1">
-                    Verified Email
-                  </span>
-                  {profile?.email ? (
-                    <div className="bg-surface-container-low/30 border border-outline-variant/10 rounded-lg p-3 flex items-center justify-between text-xs text-on-surface font-semibold">
-                      <span>{profile.email}</span>
-                      <span
-                        className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest flex items-center gap-1 border ${
-                          profile.emailVerified
-                            ? "bg-primary/10 text-primary border-primary/20"
-                            : "bg-error-container text-on-error-container border-error/15"
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-[10px]">
-                          {profile.emailVerified
-                            ? "verified"
-                            : "pending_actions"}
-                        </span>
-                        {profile.emailVerified ? "Verified" : "Unverified"}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="bg-surface-container-low/30 border border-outline-variant/10 rounded-lg p-3 text-xs text-outline italic">
-                      No email address registered.
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -418,7 +363,7 @@ export default function UserProfileCard({
                     <span className="material-symbols-outlined text-sm">
                       lock_open
                     </span>
-                    Unblock
+                    {t.unblock}
                   </button>
                 </div>
               )}
@@ -429,6 +374,7 @@ export default function UserProfileCard({
                     disabled={actionLoading}
                     onClick={async () => {
                       if (!userId) return;
+                      if (!window.confirm(t.blockUserConfirm)) return;
                       setActionLoading(true);
                       try {
                         await apiFetch(`/api/v1/contacts/${userId}/block`, {
@@ -454,13 +400,16 @@ export default function UserProfileCard({
                     <span className="material-symbols-outlined text-sm">
                       block
                     </span>
-                    Block
+                    {t.block}
                   </button>
                   <button
                     type="button"
                     disabled={actionLoading}
                     onClick={async () => {
                       if (!userId) return;
+                      if (!window.confirm(t.removeContactConfirm)) {
+                        return;
+                      }
                       setActionLoading(true);
                       try {
                         await apiFetch(`/api/v1/contacts/${userId}`, {
@@ -486,7 +435,7 @@ export default function UserProfileCard({
                     <span className="material-symbols-outlined text-sm">
                       person_remove
                     </span>
-                    Delete Contact
+                    {t.deleteContact}
                   </button>
                 </div>
               )}

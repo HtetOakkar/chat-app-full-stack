@@ -17,11 +17,12 @@ import { ConnectionProvider } from "@/context/ConnectionContext";
 import { MessageStoreProvider } from "@/context/MessageStore";
 import { PresenceProvider } from "@/context/PresenceContext";
 import { CallProvider } from "@/context/CallContext";
+import { DisplayPreferencesProvider } from "@/context/DisplayPreferencesContext";
 
 export const metadata: Metadata = {
   title: "Meow Chit Chat",
   description:
-    "Digital Curator Platform — Secure messaging and contact management for authorized personnel.",
+    "A friendly chat app for conversations, contacts, profiles, and calls.",
 };
 
 export default function RootLayout({
@@ -45,15 +46,17 @@ export default function RootLayout({
         suppressHydrationWarning
         className="bg-background text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container h-full overflow-hidden"
       >
-        <AuthProvider>
-          <ConnectionProvider>
-            <MessageStoreProvider>
-              <PresenceProvider>
-                <CallProvider>{children}</CallProvider>
-              </PresenceProvider>
-            </MessageStoreProvider>
-          </ConnectionProvider>
-        </AuthProvider>
+        <DisplayPreferencesProvider>
+          <AuthProvider>
+            <ConnectionProvider>
+              <MessageStoreProvider>
+                <PresenceProvider>
+                  <CallProvider>{children}</CallProvider>
+                </PresenceProvider>
+              </MessageStoreProvider>
+            </ConnectionProvider>
+          </AuthProvider>
+        </DisplayPreferencesProvider>
       </body>
     </html>
   );

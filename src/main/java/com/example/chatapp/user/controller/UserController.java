@@ -31,11 +31,12 @@ public class UserController {
     @GetMapping("/search")
     public ResponseEntity<List<UserDto>> searchUsers(
             @AuthenticationPrincipal UserPrincipal currentUser,
-            @RequestParam("keyword") String keyword) {
+            @RequestParam("keyword") String keyword,
+            @RequestParam(value = "limit", required = false) Integer limit) {
         if (keyword == null || keyword.trim().isEmpty()) {
             throw new BadRequestException("Keyword cannot be empty or blank");
         }
-        return ResponseEntity.ok(userService.searchUsers(currentUser.getId(), keyword));
+        return ResponseEntity.ok(userService.searchUsers(currentUser.getId(), keyword, limit));
     }
 
     @GetMapping("/profile")
@@ -68,8 +69,9 @@ public class UserController {
 
     @GetMapping("/{userId}/profile")
     public ResponseEntity<UserProfileResponse> getUserProfileById(
+            @AuthenticationPrincipal UserPrincipal currentUser,
             @PathVariable("userId") Long userId) {
-        return ResponseEntity.ok(userService.getUserProfile(userId));
+        return ResponseEntity.ok(userService.getUserProfile(currentUser.getId(), userId));
     }
 
     @GetMapping("/online")

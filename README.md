@@ -33,9 +33,22 @@ A template configuration is provided in .env.example. To configure the project, 
 - JWT_EXPIRATION_MS: Expiration time for JWTs in milliseconds
 - REDIS_HOST: Hostname for the Redis server
 - REDIS_PORT: Port number for the Redis server
-- APP_CORS_ALLOWED_ORIGINS: Allowed origins for CORS requests
+- APP_CORS_ALLOWED_ORIGINS: Trusted origins for REST and WebSocket requests. Defaults to `*` for testing; use exact origins before production.
+- APP_CORS_ALLOW_LOCAL_DEVELOPMENT_ORIGINS: Enables localhost origin patterns for development only
+- APP_CORS_ALLOW_ANY_ORIGIN: Temporarily allows any browser origin for LAN testing. Set `false` before production.
+- NEXT_PUBLIC_API_PORT: Frontend LAN testing backend port, default `8181`
+- NEXT_PUBLIC_API_URL: Optional explicit frontend API base URL, for example `http://192.168.0.121:8181`
+- AUTH_RATE_LIMIT_LOGIN_MAX_ATTEMPTS: Login attempts per source/account window
+- AUTH_RATE_LIMIT_SIGNUP_MAX_ATTEMPTS: Signup attempts per source window
+- AUTH_RATE_LIMIT_VERIFY_EMAIL_MAX_ATTEMPTS: Public email verification attempts per source/account window
+- AUTH_RATE_LIMIT_RESEND_CODE_MAX_ATTEMPTS: Public resend-code attempts per source/account window
+- AUTH_RATE_LIMIT_WINDOW_SECONDS: Rate-limit window in seconds
+- RESEND_API_KEY: Secret-managed Resend API key
+- RESEND_TEMPLATE_VERIFICATION_ID: Verification email template ID
 - FLYWAY_BASELINE_ON_MIGRATE: Baseline migration configuration
 - FLYWAY_BASELINE_VERSION: Baseline version configuration
+
+See `docs/production-security-baseline.md` for the production security checklist.
 
 ## Getting Started
 

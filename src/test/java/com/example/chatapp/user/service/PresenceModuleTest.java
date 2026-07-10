@@ -101,7 +101,7 @@ class PresenceModuleTest {
         
         when(userRepository.findById(1L)).thenReturn(Optional.of(User.builder().id(1L).build()));
         when(presenceRepository.findEligiblePresenceUsers(currentUserId)).thenReturn(List.of(otherUser));
-        when(sessionRegistry.isOnline(2L)).thenReturn(true);
+        when(sessionRegistry.getOnlineUserIds()).thenReturn(Set.of(2L));
 
         // Act
         List<OnlineStatusDto> onlineUsers = presenceModule.getOnlineUsers(currentUserId);
@@ -111,6 +111,25 @@ class PresenceModuleTest {
         assertEquals("ONLINE", onlineUsers.get(0).getStatus());
         assertEquals("2", onlineUsers.get(0).getUserId());
         assertEquals("other", onlineUsers.get(0).getUsername());
+    }
+
+    @Test
+    void getOnlineUsers_ShouldUseOneOnlineUserSnapshot() {
+        Long currentUserId = 1L;
+        User onlineUser = User.builder().id(2L).username("online").build();
+        User offlineUser = User.builder().id(3L).username("offline").build();
+
+        when(userRepository.findById(currentUserId)).thenReturn(Optional.of(User.builder().id(currentUserId).build()));
+        when(presenceRepository.findEligiblePresenceUsers(currentUserId)).thenReturn(List.of(onlineUser, offlineUser));
+        when(sessionRegistry.getOnlineUserIds()).thenReturn(Set.of(2L));
+
+        List<OnlineStatusDto> onlineUsers = presenceModule.getOnlineUsers(currentUserId);
+
+        assertEquals(1, onlineUsers.size());
+        assertEquals("2", onlineUsers.get(0).getUserId());
+        assertEquals("online", onlineUsers.get(0).getUsername());
+        verify(sessionRegistry).getOnlineUserIds();
+        verify(sessionRegistry, never()).isOnline(any());
     }
 
     @Test

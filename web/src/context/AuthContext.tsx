@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { clearAuthToken, setAuthToken } from "@/lib/authToken";
 
 interface AuthContextType {
   token: string | null;
@@ -27,17 +28,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    if (storedToken) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setToken(storedToken);
-    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(false);
   }, []);
 
   const logout = () => {
-    localStorage.removeItem("token");
+    clearAuthToken();
     setToken(null);
   };
 
@@ -52,7 +48,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const login = (newToken: string) => {
-    localStorage.setItem("token", newToken);
+    setAuthToken(newToken);
     setToken(newToken);
   };
 
@@ -71,7 +67,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ token, userId, username, login, logout, isAuthenticated: !!token, isLoading }}
+      value={{
+        token,
+        userId,
+        username,
+        login,
+        logout,
+        isAuthenticated: !!token,
+        isLoading,
+      }}
     >
       {children}
     </AuthContext.Provider>

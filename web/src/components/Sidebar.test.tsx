@@ -157,6 +157,63 @@ describe("Sidebar", () => {
     expect(screen.queryByText("user1")).not.toBeInTheDocument();
   });
 
+  it("filters contacts locally and opens the selected contact profile", async () => {
+    const mockOnSelectProfileUser = jest.fn();
+    (apiFetch as jest.Mock).mockImplementation((url) => {
+      if (url === "/api/v1/contacts") {
+        return Promise.resolve([
+          {
+            id: 1,
+            contactUserId: 101,
+            contactUsername: "alice",
+            status: "CONTACT",
+            createdAt: "2023-01-01",
+          },
+          {
+            id: 2,
+            contactUserId: 102,
+            contactUsername: "bob",
+            status: "CONTACT",
+            createdAt: "2023-01-01",
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(
+      <Sidebar
+        activeChat={null}
+        onSelectChat={jest.fn()}
+        onSelectProfileUser={mockOnSelectProfileUser}
+        refreshTrigger={0}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("alice")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /contacts/i }));
+    fireEvent.change(screen.getByPlaceholderText("Search contacts..."), {
+      target: { value: "ali" },
+    });
+
+    expect(screen.getByText("alice")).toBeInTheDocument();
+    expect(screen.queryByText("bob")).not.toBeInTheDocument();
+    expect(apiFetch).not.toHaveBeenCalledWith(
+      expect.stringContaining("/api/v1/users/search")
+    );
+
+    fireEvent.click(screen.getByText("alice"));
+
+    expect(mockOnSelectProfileUser).toHaveBeenCalledWith({
+      id: 101,
+      username: "alice",
+      status: "CONTACT",
+    });
+  });
+
   it("hides sidebar on mobile when viewMode is profile and activeChat is null", () => {
     const { container } = render(
       <Sidebar

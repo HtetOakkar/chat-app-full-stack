@@ -80,7 +80,7 @@ public class AuthModuleImpl implements AuthModule {
                     .emailVerificationExpiresAt(Instant.now().plus(java.time.Duration.ofMinutes(15)))
                     .verificationAttempts(0)
                     .lastCodeRequestedAt(Instant.now());
-            log.info("=== EMAIL VERIFICATION CODE FOR SIGNUP {}: {} ===", request.getUsername(), code);
+            log.info("Verification email requested for signup username={}", request.getUsername());
             try {
                 emailService.sendVerificationEmail(request.getEmail(), code);
             } catch (Exception e) {
@@ -107,9 +107,17 @@ public class AuthModuleImpl implements AuthModule {
     @Transactional(readOnly = true)
     public LoginResponse login(UserLoginRequest request) {
         String identifier = request.getUsername();
+        if ("system".equalsIgnoreCase(identifier)) {
+            throw new UnauthorizedException("Invalid username or password");
+        }
+
         Optional<User> userOpt = identifier.contains("@")
                 ? userRepository.findByEmail(identifier)
                 : userRepository.findByUsername(identifier);
+
+        if (userOpt.isEmpty()) {
+            throw new UnauthorizedException("Invalid username or password");
+        }
 
         if (userOpt.isPresent() && userOpt.get().getEmail() != null && !userOpt.get().isEmailVerified()) {
             throw new BadRequestException("Email is not verified. Please verify your email first.");
@@ -197,7 +205,7 @@ public class AuthModuleImpl implements AuthModule {
         user.setLastCodeRequestedAt(now);
         userRepository.save(user);
         
-        log.info("=== EMAIL VERIFICATION CODE RESEND {}: {} ===", user.getUsername(), code);
+        log.info("Verification email resend requested for userId={} username={}", user.getId(), user.getUsername());
         emailService.sendVerificationEmail(user.getEmail(), code);
     }
 

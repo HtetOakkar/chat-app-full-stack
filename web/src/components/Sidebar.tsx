@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { usePresence } from "@/context/PresenceContext";
 import { useAuth } from "@/context/AuthContext";
 import { Virtuoso } from "react-virtuoso";
+import { useTranslations } from "@/lib/i18n";
 
 type Contact = {
   id: number;
@@ -63,18 +64,24 @@ const formatSidebarMessage = (content?: string | null): string | null => {
   return content;
 };
 
-const SidebarVirtuosoList = React.forwardRef<HTMLDivElement, any>(
-  ({ children, style, ...props }, ref) => (
-    <div
-      {...props}
-      ref={ref}
-      style={{ ...style }}
-      className="flex flex-col gap-1"
-    >
-      {children}
-    </div>
-  )
-);
+type SidebarVirtuosoListProps = React.HTMLAttributes<HTMLDivElement> & {
+  children?: React.ReactNode;
+  style?: React.CSSProperties;
+};
+
+const SidebarVirtuosoList = React.forwardRef<
+  HTMLDivElement,
+  SidebarVirtuosoListProps
+>(({ children, style, ...props }, ref) => (
+  <div
+    {...props}
+    ref={ref}
+    style={{ ...style }}
+    className="flex flex-col gap-1"
+  >
+    {children}
+  </div>
+));
 SidebarVirtuosoList.displayName = "SidebarVirtuosoList";
 
 interface SidebarProps {
@@ -86,7 +93,7 @@ interface SidebarProps {
     status?: string;
   }) => void;
   refreshTrigger: number;
-  viewMode?: "chat" | "profile" | "user-profile";
+  viewMode?: "chat" | "profile" | "user-profile" | "settings";
 }
 
 export default function Sidebar({
@@ -96,6 +103,7 @@ export default function Sidebar({
   refreshTrigger,
   viewMode = "chat",
 }: SidebarProps) {
+  const t = useTranslations();
   const { onlineUsers } = usePresence();
   const { userId: currentUserId } = useAuth();
 
@@ -123,11 +131,7 @@ export default function Sidebar({
   );
 
   const handleDeleteChat = async (contactUserId: number) => {
-    if (
-      !confirm(
-        "Are you sure you want to delete this chat? This will clear the conversation history for you. The other user will not be notified."
-      )
-    ) {
+    if (!confirm(t.deleteConversationConfirm)) {
       return;
     }
     try {
@@ -351,21 +355,23 @@ export default function Sidebar({
       {/* Header */}
       <div className="px-5 pt-6 pb-4 shrink-0">
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-sm shadow-primary/20">
-            <span
-              className="material-symbols-outlined text-white text-xl"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              forum
-            </span>
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base font-black text-on-surface font-headline tracking-tight leading-tight truncate">
-              Meow Chit Chat
-            </h2>
-            <p className="text-[9px] text-outline font-bold uppercase tracking-[0.15em] truncate">
-              {contacts.length + requests.length} Connections
-            </p>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-sm shadow-primary/20">
+              <span
+                className="material-symbols-outlined text-white text-xl"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                forum
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-black text-on-surface font-headline tracking-tight leading-tight truncate">
+                Meow Chit Chat
+              </h2>
+              <p className="text-[9px] text-outline font-bold uppercase tracking-[0.15em] truncate">
+                {contacts.length + requests.length} {t.connections}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -376,21 +382,21 @@ export default function Sidebar({
             onClick={() => setSidebarView("chats")}
             className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${sidebarView === "chats" ? "bg-primary text-white shadow-sm shadow-primary/20" : "text-outline hover:text-on-surface"}`}
           >
-            Chats
+            {t.chats}
           </button>
           <button
             type="button"
             onClick={() => setSidebarView("contacts")}
             className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${sidebarView === "contacts" ? "bg-primary text-white shadow-sm shadow-primary/20" : "text-outline hover:text-on-surface"}`}
           >
-            Contacts
+            {t.contacts}
           </button>
           <button
             type="button"
             onClick={() => setSidebarView("requests")}
             className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors flex items-center justify-center gap-1 ${sidebarView === "requests" ? "bg-primary text-white shadow-sm shadow-primary/20" : "text-outline hover:text-on-surface"}`}
           >
-            Requests
+            {t.requests}
             {requests.length > 0 && (
               <span className="w-4 h-4 rounded-full bg-secondary text-white text-[9px] font-bold flex items-center justify-center">
                 {requests.length}
@@ -412,7 +418,7 @@ export default function Sidebar({
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
                 className="flex-1 bg-transparent border-none outline-none focus:ring-0 text-xs px-3 py-3 text-on-surface placeholder:text-outline"
-                placeholder="Search global registry..."
+                placeholder={t.searchPeople}
                 type="text"
               />
               {searchQuery && (
@@ -442,7 +448,7 @@ export default function Sidebar({
                   </div>
                 ) : searchResults.length === 0 ? (
                   <div className="py-6 text-center text-xs text-outline">
-                    No users found for &quot;{searchQuery}&quot;
+                    {t.noUsersFoundFor} &quot;{searchQuery}&quot;
                   </div>
                 ) : (
                   searchResults.map((user) => {
@@ -622,7 +628,7 @@ export default function Sidebar({
                                     );
                                   }}
                                   className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 transition-opacity p-0.5 text-outline hover:text-on-surface rounded-full hover:bg-surface-container-high flex items-center justify-center"
-                                  title="Chat options"
+                                  title={t.conversationSettings}
                                 >
                                   <span className="material-symbols-outlined text-sm">
                                     more_vert
@@ -641,7 +647,7 @@ export default function Sidebar({
                                       <span className="material-symbols-outlined text-sm text-error">
                                         delete
                                       </span>
-                                      Delete Chat
+                                      {t.deleteConversation}
                                     </button>
                                   </div>
                                 )}
@@ -658,7 +664,7 @@ export default function Sidebar({
                         {/* Section Label: Channels */}
                         <div className="px-2 pt-2 pb-1.5">
                           <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-outline">
-                            Channels
+                            {t.publicConversations}
                           </span>
                         </div>
 
@@ -668,7 +674,7 @@ export default function Sidebar({
                           onClick={() =>
                             onSelectChat({
                               id: 0,
-                              username: "Global Registry Chat",
+                              username: t.publicConversation,
                               isPublic: true,
                             })
                           }
@@ -691,21 +697,21 @@ export default function Sidebar({
                           </div>
                           <div className="min-w-0 flex-1">
                             <h4 className="font-bold text-xs text-on-surface leading-tight truncate">
-                              Global Registry Chat
+                              {t.publicConversation}
                             </h4>
                             <p className="text-[9px] text-outline font-medium mt-0.5 truncate">
-                              Public channel for all curators
+                              {t.publicConversationSubtitle}
                             </p>
                           </div>
                           <span className="px-1.5 py-0.5 rounded text-[7px] font-bold tracking-wider uppercase bg-primary/10 text-primary shrink-0">
-                            Public
+                            {t.public}
                           </span>
                         </button>
 
                         {/* Contacts Section Label */}
                         <div className="px-2 pt-4 pb-1.5">
                           <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-outline">
-                            Contacts
+                            {t.contacts}
                           </span>
                         </div>
                       </>
@@ -716,8 +722,7 @@ export default function Sidebar({
                           person_search
                         </span>
                         <p className="text-[10px] text-outline leading-relaxed">
-                          No contacts yet. Use the search bar above to discover
-                          curators.
+                          {t.noContactsYet}
                         </p>
                       </div>
                     ),
@@ -732,7 +737,7 @@ export default function Sidebar({
             <div className="px-2 pt-2 pb-3 flex flex-col gap-2 shrink-0">
               <input
                 type="text"
-                placeholder="Search contacts..."
+                placeholder={t.searchContacts}
                 value={contactsSearchQuery}
                 onChange={(e) => setContactsSearchQuery(e.target.value)}
                 className="bg-surface-container-lowest rounded-lg text-xs px-3 py-2 text-on-surface placeholder:text-outline border border-outline-variant/30 focus:border-primary/50 outline-none transition-all w-full"
@@ -743,14 +748,14 @@ export default function Sidebar({
                   onClick={() => setContactsFilter("CONTACT")}
                   className={`px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide transition-colors ${contactsFilter === "CONTACT" ? "bg-primary/10 text-primary" : "border border-outline-variant/30 text-outline hover:text-on-surface"}`}
                 >
-                  All Contacts
+                  {t.allContacts}
                 </button>
                 <button
                   type="button"
                   onClick={() => setContactsFilter("BLOCKED")}
                   className={`px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide transition-colors ${contactsFilter === "BLOCKED" ? "bg-primary/10 text-primary" : "border border-outline-variant/30 text-outline hover:text-on-surface"}`}
                 >
-                  Blocked
+                  {t.blocked}
                 </button>
               </div>
             </div>

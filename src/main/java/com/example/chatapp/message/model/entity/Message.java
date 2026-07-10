@@ -11,7 +11,12 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.Instant;
 
 @Entity
-@Table(name = "messages")
+@Table(name = "messages", indexes = {
+        @Index(name = "idx_messages_public_recipient_sent_id", columnList = "recipient_id, sent_at, id"),
+        @Index(name = "idx_messages_private_sender_recipient_sent_id", columnList = "sender_id, recipient_id, sent_at, id"),
+        @Index(name = "idx_messages_private_recipient_sender_sent_id", columnList = "recipient_id, sender_id, sent_at, id"),
+        @Index(name = "idx_messages_unread_sender_recipient_read_sent", columnList = "sender_id, recipient_id, is_read, sent_at")
+})
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

@@ -20,7 +20,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -84,8 +86,7 @@ public class ContactModuleImpl implements ContactModule {
     @Override
     @Transactional(readOnly = true)
     public List<ContactDto> getContacts(Long ownerId) {
-        return contactRepository.findContactsNative(ownerId).stream()
-                .map(contact -> mapToEnrichedDto(contact, ownerId))
+        return enrichContacts(contactRepository.findContactsNative(ownerId), ownerId).stream()
                 .filter(dto -> dto.getClearedAt() == null || dto.getLastMessageTimestamp() != null)
                 .collect(Collectors.toList());
     }
@@ -101,9 +102,7 @@ public class ContactModuleImpl implements ContactModule {
     @Override
     @Transactional(readOnly = true)
     public List<ContactDto> getMutualContacts(Long userId, Long otherUserId) {
-        return contactRepository.findMutualContactsNative(userId, otherUserId).stream()
-                .map(contact -> mapToEnrichedDto(contact, userId))
-                .collect(Collectors.toList());
+        return enrichContacts(contactRepository.findMutualContactsNative(userId, otherUserId), userId);
     }
 
     @Override
@@ -143,9 +142,7 @@ public class ContactModuleImpl implements ContactModule {
     @Override
     @Transactional(readOnly = true)
     public List<ContactDto> getContactRequests(Long ownerId) {
-        return contactRepository.findByOwnerIdAndStatus(ownerId, ContactStatus.PENDING_REQUEST).stream()
-                .map(contact -> mapToEnrichedDto(contact, ownerId))
-                .collect(Collectors.toList());
+        return enrichContacts(contactRepository.findByOwnerIdAndStatus(ownerId, ContactStatus.PENDING_REQUEST), ownerId);
     }
 
     @Override
@@ -184,9 +181,7 @@ public class ContactModuleImpl implements ContactModule {
     @Override
     @Transactional(readOnly = true)
     public List<ContactDto> getBlockedUsers(Long ownerId) {
-        return contactRepository.findBlockedContactsNative(ownerId).stream()
-                .map(contact -> mapToEnrichedDto(contact, ownerId))
-                .collect(Collectors.toList());
+        return enrichContacts(contactRepository.findBlockedContactsNative(ownerId), ownerId);
     }
 
     @Override
@@ -266,6 +261,115 @@ public class ContactModuleImpl implements ContactModule {
                 .lastMessageSenderId(lastMessageSenderId)
                 .unreadCount(unreadCount)
                 .build();
+    }
+
+    private List<ContactDto> enrichContacts(List<Contact> contacts, Long ownerId) {
+        if (contacts.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> contactUserIds = contacts.stream()
+                .map(contact -> contact.getContactUser().getId())
+                .toList();
+        Map<Long, ContactSummary> summaries = new HashMap<>();
+        contacts.forEach(contact -> summaries.put(contact.getContactUser().getId(), new ContactSummary()));
+
+        List<Message> dbMessages = messageRepository.findConversationMessagesForContacts(ownerId, contactUserIds);
+        for (Message message : dbMessages) {
+            Long contactUserId = message.getSender().getId().equals(ownerId)
+                    ? message.getRecipient().getId()
+                    : message.getSender().getId();
+            Contact contact = contacts.stream()
+                    .filter(candidate -> candidate.getContactUser().getId().equals(contactUserId))
+                    .findFirst()
+                    .orElse(null);
+            if (contact == null || isBeforeClearedChat(message.getSentAt(), contact.getClearedAt())) {
+                continue;
+            }
+            ContactSummary summary = summaries.get(contactUserId);
+            if (message.getSender().getId().equals(contactUserId) && Boolean.FALSE.equals(message.getIsRead())) {
+                summary.unreadCount++;
+            }
+            summary.acceptLatest(
+                    formatMessageContent(message.getContent(), message.getMessageType(), message.getCallOutcome()),
+                    message.getSentAt(),
+                    message.getSender().getId());
+        }
+
+        List<com.example.chatapp.message.model.dto.MessageDto> pendingMessages = redisMessageRepository.peekMessages();
+        for (com.example.chatapp.message.model.dto.MessageDto message : pendingMessages) {
+            Long contactUserId = contactUserIdForPendingMessage(ownerId, contactUserIds, message);
+            if (contactUserId == null) {
+                continue;
+            }
+            Contact contact = contacts.stream()
+                    .filter(candidate -> candidate.getContactUser().getId().equals(contactUserId))
+                    .findFirst()
+                    .orElse(null);
+            if (contact == null || isBeforeClearedChat(message.getTimestamp(), contact.getClearedAt())) {
+                continue;
+            }
+            ContactSummary summary = summaries.get(contactUserId);
+            if (message.getSenderId().equals(contactUserId) && (message.getIsRead() == null || !message.getIsRead())) {
+                summary.unreadCount++;
+            }
+            summary.acceptLatest(
+                    formatMessageContent(message.getContent(), message.getMessageType(), message.getCallOutcome()),
+                    message.getTimestamp(),
+                    message.getSenderId());
+        }
+
+        return contacts.stream()
+                .map(contact -> {
+                    Long contactUserId = contact.getContactUser().getId();
+                    ContactSummary summary = summaries.get(contactUserId);
+                    return ContactDto.builder()
+                            .id(contact.getId())
+                            .contactUserId(contactUserId)
+                            .contactUsername(contact.getContactUser().getUsername())
+                            .contactFullName(contact.getContactUser().getFullName())
+                            .status(contact.getStatus())
+                            .createdAt(contact.getCreatedAt())
+                            .clearedAt(contact.getClearedAt())
+                            .lastMessageContent(summary.lastMessageContent)
+                            .lastMessageTimestamp(summary.lastMessageTimestamp)
+                            .lastMessageSenderId(summary.lastMessageSenderId)
+                            .unreadCount(summary.unreadCount)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    private Long contactUserIdForPendingMessage(Long ownerId, List<Long> contactUserIds, com.example.chatapp.message.model.dto.MessageDto message) {
+        if (message.getRecipientId() == null) {
+            return null;
+        }
+        if (message.getSenderId().equals(ownerId) && contactUserIds.contains(message.getRecipientId())) {
+            return message.getRecipientId();
+        }
+        if (message.getRecipientId().equals(ownerId) && contactUserIds.contains(message.getSenderId())) {
+            return message.getSenderId();
+        }
+        return null;
+    }
+
+    private boolean isBeforeClearedChat(Instant messageTimestamp, Instant clearedAt) {
+        return clearedAt != null && !messageTimestamp.isAfter(clearedAt);
+    }
+
+    private static class ContactSummary {
+        private String lastMessageContent;
+        private Instant lastMessageTimestamp;
+        private Long lastMessageSenderId;
+        private long unreadCount;
+
+        private void acceptLatest(String content, Instant timestamp, Long senderId) {
+            if (lastMessageTimestamp == null || timestamp.isAfter(lastMessageTimestamp)) {
+                lastMessageContent = content;
+                lastMessageTimestamp = timestamp;
+                lastMessageSenderId = senderId;
+            }
+        }
     }
 
     private ContactDto mapToDto(Contact contact) {

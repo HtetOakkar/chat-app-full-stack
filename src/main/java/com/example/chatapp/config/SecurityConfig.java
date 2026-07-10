@@ -3,7 +3,6 @@ package com.example.chatapp.config;
 import com.example.chatapp.jwt.JwtAuthenticationEntryPoint;
 import com.example.chatapp.jwt.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -20,9 +19,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
-import java.util.List;
-
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity(securedEnabled = true, jsr250Enabled = true)
@@ -33,8 +29,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
-    @Value("${app.cors.allowed-origins:http://localhost:3000}")
-    private String corsAllowedOrigins;
+    private final OriginPolicy originPolicy;
 
     private static final String[] AUTH_WHITELIST = {
             "/v2/api-docs",
@@ -81,35 +76,7 @@ public class SecurityConfig {
 
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        List<String> origins = Arrays.stream(corsAllowedOrigins.split(","))
-                .map(String::trim)
-                .filter(origin -> !origin.isEmpty())
-                .toList();
-
-        List<String> patterns = new java.util.ArrayList<>();
-        patterns.add("http://localhost:*");
-        patterns.add("http://127.0.0.1:*");
-        patterns.add("http://192.168.*:*");
-        patterns.add("http://10.*:*");
-        patterns.add("http://172.*:*");
-        patterns.add("http://*.local:*");
-        patterns.add("https://localhost:*");
-        patterns.add("https://127.0.0.1:*");
-        patterns.add("https://192.168.*:*");
-        patterns.add("https://10.*:*");
-        patterns.add("https://172.*:*");
-        patterns.add("https://*.local:*");
-
-        for (String origin : origins) {
-            patterns.add(origin);
-        }
-
-        configuration.setAllowedOriginPatterns(patterns);
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-        configuration.setAllowCredentials(true);
-
+        CorsConfiguration configuration = originPolicy.toCorsConfiguration();
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

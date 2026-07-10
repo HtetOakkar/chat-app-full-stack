@@ -1,5 +1,11 @@
 import React from "react";
-import { render, act, screen, renderHook } from "@testing-library/react";
+import {
+  render,
+  act,
+  screen,
+  renderHook,
+  waitFor,
+} from "@testing-library/react";
 import { CallProvider, useCall } from "./CallContext";
 import { useConnection } from "./ConnectionContext";
 import { useAuth } from "./AuthContext";
@@ -747,6 +753,27 @@ describe("CallContext Audio Output Routing", () => {
   });
 
   test("automatically prioritizes bluetooth/headphones first, then falls back to speaker for VIDEO and earpiece for AUDIO", async () => {
+    const renderWithDevices = async (
+      devices: Array<{ deviceId: string; label: string; kind: string }>
+    ) => {
+      Object.defineProperty(navigator, "mediaDevices", {
+        value: {
+          ...navigator.mediaDevices,
+          enumerateDevices: jest.fn().mockResolvedValue(devices),
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      const rendered = renderHook(() => useCall(), { wrapper });
+      await waitFor(() =>
+        expect(
+          rendered.result.current.audioOutputDevices.length
+        ).toBeGreaterThan(0)
+      );
+      return rendered;
+    };
+
     // 1. When Bluetooth/Headphones are present, they take priority
     const devicesWithBt = [
       { deviceId: "spk-1", label: "Speakerphone Main", kind: "audiooutput" },
@@ -757,50 +784,41 @@ describe("CallContext Audio Output Routing", () => {
       },
       { deviceId: "ear-1", label: "Phone Earpiece", kind: "audiooutput" },
     ];
-    Object.defineProperty(navigator, "mediaDevices", {
-      value: {
-        ...navigator.mediaDevices,
-        enumerateDevices: jest.fn().mockResolvedValue(devicesWithBt),
-      },
-      writable: true,
-      configurable: true,
-    });
 
-    const { result, rerender } = renderHook(() => useCall(), { wrapper });
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
+    const withBt = await renderWithDevices(devicesWithBt);
 
-    expect(result.current.selectedAudioOutputId).toBe("bt-1");
+    await waitFor(() =>
+      expect(withBt.result.current.selectedAudioOutputId).toBe("bt-1")
+    );
+    withBt.unmount();
 
     // 2. When no Bluetooth/Headphones, VIDEO calls fall back to speaker
     const devicesNoBt = [
       { deviceId: "spk-1", label: "Speakerphone Main", kind: "audiooutput" },
       { deviceId: "ear-1", label: "Phone Earpiece", kind: "audiooutput" },
     ];
-    Object.defineProperty(navigator, "mediaDevices", {
-      value: {
-        ...navigator.mediaDevices,
-        enumerateDevices: jest.fn().mockResolvedValue(devicesNoBt),
-      },
-      writable: true,
-      configurable: true,
-    });
+    const videoFallback = await renderWithDevices(devicesNoBt);
 
     await act(async () => {
-      await result.current.initiateCall(2, "VIDEO", "User Two");
-      await new Promise((r) => setTimeout(r, 50));
+      await videoFallback.result.current.initiateCall(2, "VIDEO", "User Two");
     });
 
-    expect(result.current.selectedAudioOutputId).toBe("spk-1");
+    await waitFor(() =>
+      expect(videoFallback.result.current.selectedAudioOutputId).toBe("spk-1")
+    );
+    videoFallback.unmount();
 
     // 3. When no Bluetooth/Headphones, AUDIO calls fall back to earpiece
+    const audioFallback = await renderWithDevices(devicesNoBt);
+
     await act(async () => {
-      await result.current.initiateCall(3, "AUDIO", "User Three");
-      await new Promise((r) => setTimeout(r, 50));
+      await audioFallback.result.current.initiateCall(3, "AUDIO", "User Three");
     });
 
-    expect(result.current.selectedAudioOutputId).toBe("ear-1");
+    await waitFor(() =>
+      expect(audioFallback.result.current.selectedAudioOutputId).toBe("ear-1")
+    );
+    audioFallback.unmount();
   });
 
   test("allows manual switching of audio output source and overrides default priority", async () => {
@@ -828,7 +846,9 @@ describe("CallContext Audio Output Routing", () => {
     });
 
     // Automatically selected bt-1
-    expect(result.current.selectedAudioOutputId).toBe("bt-1");
+    await waitFor(() =>
+      expect(result.current.selectedAudioOutputId).toBe("bt-1")
+    );
 
     // Manually switch to speaker
     await act(async () => {

@@ -9,6 +9,7 @@ import MyProfileCard from "./MyProfileCard";
 import UserProfileCard from "./UserProfileCard";
 import IncomingCallModal from "./IncomingCallModal";
 import ActiveCallOverlay from "./ActiveCallOverlay";
+import SettingsPage from "./SettingsPage";
 
 export default function ChatDashboard() {
   const { logout, username, userId } = useAuth();
@@ -22,9 +23,9 @@ export default function ChatDashboard() {
     null
   );
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [viewMode, setViewMode] = useState<"chat" | "profile" | "user-profile">(
-    "chat"
-  );
+  const [viewMode, setViewMode] = useState<
+    "chat" | "profile" | "user-profile" | "settings"
+  >("chat");
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [selectedProfileUser, setSelectedProfileUser] = useState<{
     id: number;
@@ -127,7 +128,7 @@ export default function ChatDashboard() {
               </button>
 
               {isUserMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-lg overflow-hidden flex flex-col z-50">
+                <div className="absolute right-0 mt-2 w-56 bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-lg overflow-hidden flex flex-col z-50">
                   <button
                     type="button"
                     onClick={() => {
@@ -140,6 +141,20 @@ export default function ChatDashboard() {
                       person
                     </span>
                     View Profile
+                  </button>
+                  <div className="h-px w-full bg-outline-variant/10" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode("settings");
+                      setIsUserMenuOpen(false);
+                    }}
+                    className="flex items-center gap-2 px-4 py-3 text-sm font-medium text-on-surface hover:bg-surface-container-low transition-colors text-left"
+                  >
+                    <span className="material-symbols-outlined text-base">
+                      settings
+                    </span>
+                    Settings
                   </button>
                   <div className="h-px w-full bg-outline-variant/10" />
                   <button
@@ -184,6 +199,8 @@ export default function ChatDashboard() {
           <div className="flex-1 flex min-h-0">
             {viewMode === "profile" ? (
               <MyProfileCard onBack={() => setViewMode("chat")} />
+            ) : viewMode === "settings" ? (
+              <SettingsPage onBack={() => setViewMode("chat")} />
             ) : viewMode === "user-profile" && selectedProfileUser ? (
               <UserProfileCard
                 userId={selectedProfileUser.id}

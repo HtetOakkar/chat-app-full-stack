@@ -39,6 +39,9 @@ public class MessageServiceImpl implements MessageService {
         if (messageDto.getId() == null) {
             messageDto.setId(java.util.concurrent.ThreadLocalRandom.current().nextLong(1, 9007199254740991L));
         }
+        if (messageDto.getTimestamp() == null) {
+            messageDto.setTimestamp(Instant.now());
+        }
         redisMessageRepository.saveMessage(messageDto);
     }
 
@@ -59,15 +62,7 @@ public class MessageServiceImpl implements MessageService {
                 .map(messageMapper::toMessageDto)
                 .toList();
 
-        List<MessageDto> redisMessages = redisMessageRepository.peekMessages().stream()
-                .filter(msg -> msg.getRecipientId() == null)
-                .filter(msg -> {
-                    if (sentAt == null) return true;
-                    if (msg.getTimestamp().isBefore(sentAt)) return true;
-                    if (msg.getTimestamp().equals(sentAt) && msg.getId() < lastId) return true;
-                    return false;
-                })
-                .toList();
+        List<MessageDto> redisMessages = redisMessageRepository.findPublicMessagesBefore(sentAt, lastId, limit);
 
         List<MessageDto> combined = new java.util.ArrayList<>();
         combined.addAll(redisMessages);
@@ -105,17 +100,8 @@ public class MessageServiceImpl implements MessageService {
                 .map(messageMapper::toMessageDto)
                 .toList();
 
-        List<MessageDto> redisMessages = redisMessageRepository.peekMessages().stream()
-                .filter(msg -> (msg.getSenderId().equals(currentUserId) && contactUserId.equals(msg.getRecipientId())) ||
-                               (msg.getSenderId().equals(contactUserId) && currentUserId.equals(msg.getRecipientId())))
-                .filter(msg -> clearedAt == null || msg.getTimestamp().isAfter(clearedAt))
-                .filter(msg -> {
-                    if (sentAt == null) return true;
-                    if (msg.getTimestamp().isBefore(sentAt)) return true;
-                    if (msg.getTimestamp().equals(sentAt) && msg.getId() < lastId) return true;
-                    return false;
-                })
-                .toList();
+        List<MessageDto> redisMessages = redisMessageRepository.findPrivateMessagesBefore(
+                currentUserId, contactUserId, clearedAt, sentAt, lastId, limit);
 
         List<MessageDto> combined = new java.util.ArrayList<>();
         combined.addAll(redisMessages);
@@ -130,7 +116,7 @@ public class MessageServiceImpl implements MessageService {
         
         String nextCursor = null;
         if (!result.isEmpty()) {
-            MessageDto lastMsg = result.get(result.size() - 1);
+            MessageDto lastMsg = result.getLast();
             nextCursor = CursorCodec.encodeCursor(lastMsg.getTimestamp(), lastMsg.getId());
         }
         
@@ -150,11 +136,7 @@ public class MessageServiceImpl implements MessageService {
         // 1. Try to delete in Redis
         boolean deletedInRedis = redisMessageRepository.deleteMessage(messageId, timestamp, currentUserId);
         if (deletedInRedis) {
-            return redisMessageRepository.peekMessages().stream()
-                    .filter(msg -> msg.getId().equals(messageId) || 
-                            (timestamp != null && msg.getSenderId().equals(currentUserId) && msg.getTimestamp().equals(timestamp)))
-                    .findFirst()
-                    .orElse(null);
+            return redisMessageRepository.findMessage(messageId, timestamp, currentUserId);
         }
 
         // 2. Try to find in Database

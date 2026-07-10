@@ -1,6 +1,7 @@
 package com.example.chatapp.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.Instant;
 
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -47,6 +49,12 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI());
     }
 
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiError> handleRateLimitExceededException(RateLimitExceededException ex,
+                                                                     HttpServletRequest request) {
+        return buildResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request.getRequestURI());
+    }
+
     @ExceptionHandler(java.time.format.DateTimeParseException.class)
     public ResponseEntity<ApiError> handleDateTimeParseException(java.time.format.DateTimeParseException ex,
                                                                  HttpServletRequest request) {
@@ -56,9 +64,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnexpectedException(Exception ex,
                                                               HttpServletRequest request) {
-        ex.printStackTrace(); // Temporarily print stack trace to console for diagnosis
+        log.error("Unexpected exception while handling {}", request.getRequestURI(), ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR,
-                "An unexpected error occurred: " + ex.getMessage(),
+                "An unexpected error occurred.",
                 request.getRequestURI());
     }
 

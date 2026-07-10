@@ -8,6 +8,8 @@ import com.example.chatapp.user.model.response.UserProfileResponse;
 import com.example.chatapp.user.repository.UserRepository;
 import com.example.chatapp.email.service.EmailService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,7 +18,11 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserServiceImpl implements UserService {
+
+    private static final int DEFAULT_SEARCH_LIMIT = 20;
+    private static final int MAX_SEARCH_LIMIT = 50;
 
     private final UserRepository userRepository;
     private final EmailService emailService;
@@ -24,9 +30,15 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public List<UserDto> searchUsers(Long currentUserId, String keyword) {
-        return userRepository.findByUsernameContainingIgnoreCaseOrFullNameContainingIgnoreCase(keyword, keyword)
+        return searchUsers(currentUserId, keyword, DEFAULT_SEARCH_LIMIT);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserDto> searchUsers(Long currentUserId, String keyword, Integer limit) {
+        int boundedLimit = limit == null ? DEFAULT_SEARCH_LIMIT : Math.max(1, Math.min(limit, MAX_SEARCH_LIMIT));
+        return userRepository.searchUsersExcludingCurrent(currentUserId, keyword, PageRequest.of(0, boundedLimit))
                 .stream()
-                .filter(user -> !user.getId().equals(currentUserId))
                 .map(user -> UserDto.builder()
                         .id(user.getId())
                         .username(user.getUsername())
@@ -42,12 +54,34 @@ public class UserServiceImpl implements UserService {
     public UserProfileResponse getUserProfile(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+        return privateProfile(user);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserProfileResponse getUserProfile(Long viewerUserId, Long profileUserId) {
+        User user = userRepository.findById(profileUserId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        if (profileUserId.equals(viewerUserId)) {
+            return privateProfile(user);
+        }
+        return publicProfile(user);
+    }
+
+    private UserProfileResponse privateProfile(User user) {
         return UserProfileResponse.builder()
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .birthDate(user.getBirthDate())
                 .emailVerified(user.isEmailVerified())
+                .build();
+    }
+
+    private UserProfileResponse publicProfile(User user) {
+        return UserProfileResponse.builder()
+                .username(user.getUsername())
+                .fullName(user.getFullName())
                 .build();
     }
 
@@ -75,23 +109,17 @@ public class UserServiceImpl implements UserService {
             user.setEmailVerificationExpiresAt(java.time.Instant.now().plus(java.time.Duration.ofMinutes(15)));
             user.setVerificationAttempts(0);
             user.setLastCodeRequestedAt(java.time.Instant.now());
-            System.out.println("=== EMAIL VERIFICATION CODE FOR UPDATE " + user.getUsername() + ": " + code + " ===");
+            log.info("Verification email requested for profile update userId={} username={}", user.getId(), user.getUsername());
             try {
                 emailService.sendVerificationEmail(user.getEmail(), code);
             } catch (Exception e) {
-                System.err.println("Failed to send verification email for profile update: " + e.getMessage());
+                log.error("Failed to send verification email for profile update userId={}", user.getId(), e);
             }
         }
 
         userRepository.save(user);
         
-        return UserProfileResponse.builder()
-                .username(user.getUsername())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .birthDate(user.getBirthDate())
-                .emailVerified(user.isEmailVerified())
-                .build();
+        return privateProfile(user);
     }
 
     private String generateVerificationCode() {

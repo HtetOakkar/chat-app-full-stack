@@ -88,8 +88,9 @@ public class PresenceModuleImpl implements PresenceModule {
     @Transactional(readOnly = true)
     public List<OnlineStatusDto> getOnlineUsers(Long currentUserId) {
         List<User> visibleUsers = getEligiblePresenceUsers(currentUserId);
+        Set<Long> onlineUserIds = sessionRegistry.getOnlineUserIds();
         return visibleUsers.stream()
-                .filter(user -> sessionRegistry.isOnline(user.getId()))
+                .filter(user -> onlineUserIds.contains(user.getId()))
                 .map(user -> {
                     OnlineStatusDto dto = new OnlineStatusDto();
                     dto.setStatus("ONLINE");

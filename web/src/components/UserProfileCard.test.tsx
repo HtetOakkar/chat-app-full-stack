@@ -19,12 +19,11 @@ describe("UserProfileCard", () => {
     (apiFetch as jest.Mock).mockResolvedValue({
       username: "testuser",
       fullName: "Test User",
-      email: "test@example.com",
-      emailVerified: true,
     });
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
   });
 
@@ -66,8 +65,30 @@ describe("UserProfileCard", () => {
     );
   });
 
+  it("does not display birth date or email fields for another user's profile", async () => {
+    (apiFetch as jest.Mock).mockResolvedValueOnce({
+      username: "testuser",
+      fullName: "Test User",
+      birthDate: "1990-01-01",
+      email: "test@example.com",
+      emailVerified: true,
+    });
+
+    render(<UserProfileCard userId={2} currentUserId={1} onBack={jest.fn()} />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Test User")).toBeInTheDocument()
+    );
+
+    expect(screen.queryByText(/birth date/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/email address/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("test@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText(/verified/i)).not.toBeInTheDocument();
+  });
+
   it("calls block api and navigates back when Block is clicked", async () => {
     const mockOnBack = jest.fn();
+    jest.spyOn(window, "confirm").mockReturnValue(true);
 
     render(
       <UserProfileCard
@@ -89,6 +110,7 @@ describe("UserProfileCard", () => {
 
     fireEvent.click(blockButton);
 
+    expect(window.confirm).toHaveBeenCalledWith("Block this user?");
     expect(apiFetch).toHaveBeenCalledWith(
       "/api/v1/contacts/2/block",
       expect.objectContaining({
@@ -101,8 +123,33 @@ describe("UserProfileCard", () => {
     });
   });
 
+  it("does not block when the confirmation is cancelled", async () => {
+    jest.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(
+      <UserProfileCard
+        userId={2}
+        currentUserId={1}
+        userStatus="CONTACT"
+        onBack={jest.fn()}
+      />
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Test User")).toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /block/i }));
+
+    expect(apiFetch).not.toHaveBeenCalledWith(
+      "/api/v1/contacts/2/block",
+      expect.anything()
+    );
+  });
+
   it("calls delete contact api and navigates back when Delete Contact is clicked", async () => {
     const mockOnBack = jest.fn();
+    jest.spyOn(window, "confirm").mockReturnValue(true);
 
     render(
       <UserProfileCard
@@ -125,6 +172,9 @@ describe("UserProfileCard", () => {
 
     fireEvent.click(deleteButton);
 
+    expect(window.confirm).toHaveBeenCalledWith(
+      "Remove this contact? This will also remove your conversation."
+    );
     expect(apiFetch).toHaveBeenCalledWith(
       "/api/v1/contacts/2",
       expect.objectContaining({
@@ -135,6 +185,30 @@ describe("UserProfileCard", () => {
     await waitFor(() => {
       expect(mockOnBack).toHaveBeenCalled();
     });
+  });
+
+  it("does not delete contact when the confirmation is cancelled", async () => {
+    jest.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(
+      <UserProfileCard
+        userId={2}
+        currentUserId={1}
+        userStatus="CONTACT"
+        onBack={jest.fn()}
+      />
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Test User")).toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /delete contact/i }));
+
+    expect(apiFetch).not.toHaveBeenCalledWith(
+      "/api/v1/contacts/2",
+      expect.anything()
+    );
   });
 
   it("renders Unblock button for a blocked user", async () => {

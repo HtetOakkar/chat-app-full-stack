@@ -2,10 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { apiEndpoint } from "@/lib/apiBase";
+import DisplayPreferencesControls from "./DisplayPreferencesControls";
+import { useTranslations } from "@/lib/i18n";
 
 type FormMode = "login" | "signup";
+const productName = "Meow Chit Chat";
 
 export default function AuthContainer() {
+  const t = useTranslations();
   const [formMode, setFormMode] = useState<FormMode>("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -38,7 +43,7 @@ export default function AuthContainer() {
     setError("");
 
     if (formMode === "signup" && password !== confirmPassword) {
-      setError("Passwords do not match");
+      setError(t.passwordMismatch);
       return;
     }
 
@@ -58,7 +63,7 @@ export default function AuthContainer() {
               birthDate: birthDate || undefined,
             });
 
-      const res = await fetch(endpoint, {
+      const res = await fetch(apiEndpoint(endpoint), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,
@@ -68,9 +73,7 @@ export default function AuthContainer() {
         const errorData = await res.json().catch(() => null);
         const errMsg =
           errorData?.message ||
-          (formMode === "login"
-            ? "Invalid username or password"
-            : "Registration failed. Username may already exist.");
+          (formMode === "login" ? t.invalidLogin : t.registrationFailed);
 
         if (
           formMode === "login" &&
@@ -95,8 +98,7 @@ export default function AuthContainer() {
         login(data.token);
       }
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "An unexpected error occurred.";
+      const message = err instanceof Error ? err.message : t.unexpectedError;
       setError(message);
     } finally {
       setLoading(false);
@@ -109,7 +111,7 @@ export default function AuthContainer() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/v1/auth/verify-email", {
+      const res = await fetch(apiEndpoint("/api/v1/auth/verify-email"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -120,14 +122,13 @@ export default function AuthContainer() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.message || "Verification failed.");
+        throw new Error(errorData?.message || t.verificationFailed);
       }
 
       const data = await res.json();
       login(data.token);
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "An unexpected error occurred.";
+      const message = err instanceof Error ? err.message : t.unexpectedError;
       setError(message);
     } finally {
       setLoading(false);
@@ -140,7 +141,7 @@ export default function AuthContainer() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/v1/auth/resend-code", {
+      const res = await fetch(apiEndpoint("/api/v1/auth/resend-code"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -150,13 +151,12 @@ export default function AuthContainer() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.message || "Failed to resend code.");
+        throw new Error(errorData?.message || t.resendFailed);
       }
 
       setCooldown(60);
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "An unexpected error occurred.";
+      const message = err instanceof Error ? err.message : t.unexpectedError;
       setError(message);
     } finally {
       setLoading(false);
@@ -187,17 +187,19 @@ export default function AuthContainer() {
         {verificationView ? (
           <>
             {/* Verification Security Badge */}
-            <div className="mb-8 p-4 bg-primary/5 rounded-xl border border-primary/10 text-[11px] leading-relaxed text-on-surface-variant flex gap-3">
+            <div className="mb-4 p-4 bg-primary/5 rounded-xl border border-primary/10 text-[11px] leading-relaxed text-on-surface-variant flex gap-3">
               <span className="material-symbols-outlined text-primary text-xl shrink-0">
                 lock_open
               </span>
               <div>
                 <span className="font-bold text-primary block mb-0.5">
-                  Email Activation Required
+                  {t.verificationRequired}
                 </span>
-                To complete access key provisioning, enter the 6-digit
-                verification code printed to the offline ledger console.
+                {t.verificationRequiredBody}
               </div>
+            </div>
+            <div className="mb-8 flex justify-end">
+              <DisplayPreferencesControls compact />
             </div>
 
             {/* Icon */}
@@ -210,10 +212,10 @@ export default function AuthContainer() {
             </div>
 
             <h1 className="text-2xl font-headline font-black text-center mb-1 tracking-tight text-on-surface">
-              Verify Account
+              {t.emailVerification}
             </h1>
             <p className="text-center text-xs text-outline mb-6">
-              Enter code for{" "}
+              {t.enterCodeFor}{" "}
               <span className="font-bold text-on-surface">
                 {usernameOrEmailForVerify}
               </span>
@@ -236,7 +238,7 @@ export default function AuthContainer() {
                   htmlFor="verification-code"
                   className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5"
                 >
-                  Verification Code
+                  {t.verificationCode}
                 </label>
                 <input
                   id="verification-code"
@@ -267,7 +269,7 @@ export default function AuthContainer() {
                     verified
                   </span>
                 )}
-                {loading ? "Activating..." : "Verify Code"}
+                {loading ? t.verifying : t.verifyCode}
               </button>
 
               <button
@@ -279,7 +281,7 @@ export default function AuthContainer() {
                 <span className="material-symbols-outlined text-sm">
                   autorenew
                 </span>
-                {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend Code"}
+                {cooldown > 0 ? `${t.resendIn} ${cooldown}s` : t.resendCode}
               </button>
 
               <button
@@ -290,27 +292,28 @@ export default function AuthContainer() {
                 }}
                 className="w-full text-center text-xs text-primary hover:underline font-bold mt-2"
               >
-                Cancel
+                {t.cancel}
               </button>
             </form>
           </>
         ) : (
           <>
             {/* Anti-Phishing Security Badge */}
-            <div className="mb-8 p-4 bg-primary/5 rounded-xl border border-primary/10 text-[11px] leading-relaxed text-on-surface-variant flex gap-3">
+            <div className="mb-4 p-4 bg-primary/5 rounded-xl border border-primary/10 text-[11px] leading-relaxed text-on-surface-variant flex gap-3">
               <span className="material-symbols-outlined text-primary text-xl shrink-0">
                 shield
               </span>
               <div>
                 <span className="font-bold text-primary block mb-0.5">
                   {formMode === "login"
-                    ? "Registry Security Verification"
-                    : "Admin Provisioning Protocol"}
+                    ? t.loginBadgeTitle
+                    : t.signupBadgeTitle}
                 </span>
-                {formMode === "login"
-                  ? "This gateway belongs to Meow Chit Chat. Access keys are provisioned offline by administrators. Verify that the URL matches your assigned local endpoint."
-                  : "Curator accounts are generated strictly for authorized library personnel. All registered identity keys are logged in the offline ledger. Verify local encryption before submitting."}
+                {formMode === "login" ? t.loginBadgeBody : t.signupBadgeBody}
               </div>
+            </div>
+            <div className="mb-8 flex justify-end">
+              <DisplayPreferencesControls compact />
             </div>
 
             {/* Form Mode Toggle */}
@@ -324,7 +327,7 @@ export default function AuthContainer() {
                     : "text-outline hover:text-on-surface-variant"
                 }`}
               >
-                Sign In
+                {t.signIn}
               </button>
               <button
                 type="button"
@@ -335,7 +338,7 @@ export default function AuthContainer() {
                     : "text-outline hover:text-on-surface-variant"
                 }`}
               >
-                Register
+                {t.signUp}
               </button>
             </div>
 
@@ -349,12 +352,10 @@ export default function AuthContainer() {
             </div>
 
             <h1 className="text-2xl font-headline font-black text-center mb-1 tracking-tight text-on-surface">
-              {formMode === "login" ? "Access Registry" : "Provision Identity"}
+              {formMode === "login" ? t.welcomeBack : t.createYourAccount}
             </h1>
             <p className="text-center text-xs text-outline mb-6">
-              {formMode === "login"
-                ? "Enter your administrator-provided credentials."
-                : "Create a new authenticated curator key."}
+              {formMode === "login" ? t.loginIntro : t.signupIntro}
             </p>
 
             {/* Error Display */}
@@ -374,7 +375,7 @@ export default function AuthContainer() {
                   htmlFor="auth-username"
                   className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5"
                 >
-                  Username
+                  {t.username}
                 </label>
                 <input
                   id="auth-username"
@@ -396,7 +397,7 @@ export default function AuthContainer() {
                       htmlFor="auth-email"
                       className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5"
                     >
-                      Email
+                      {t.email}
                     </label>
                     <input
                       id="auth-email"
@@ -413,7 +414,7 @@ export default function AuthContainer() {
                       htmlFor="auth-fullname"
                       className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5"
                     >
-                      Full Name
+                      {t.fullName}
                     </label>
                     <input
                       id="auth-fullname"
@@ -430,7 +431,7 @@ export default function AuthContainer() {
                       htmlFor="auth-birthdate"
                       className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5"
                     >
-                      Date of Birth (Optional)
+                      {t.dateOfBirthOptional}
                     </label>
                     <input
                       id="auth-birthdate"
@@ -448,7 +449,7 @@ export default function AuthContainer() {
                   htmlFor="auth-password"
                   className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5"
                 >
-                  Password
+                  {t.password}
                 </label>
                 <div className="relative">
                   <input
@@ -481,7 +482,7 @@ export default function AuthContainer() {
                     htmlFor="auth-confirm-password"
                     className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5"
                   >
-                    Re-enter Password
+                    {t.reenterPassword}
                   </label>
                   <div className="relative">
                     <input
@@ -529,11 +530,11 @@ export default function AuthContainer() {
                 )}
                 {loading
                   ? formMode === "login"
-                    ? "Decrypting Vault..."
-                    : "Generating Vault..."
+                    ? t.signingIn
+                    : t.creatingAccount
                   : formMode === "login"
-                    ? "Sign In"
-                    : "Register Key"}
+                    ? t.signIn
+                    : t.createAccount}
               </button>
             </form>
           </>
@@ -541,7 +542,7 @@ export default function AuthContainer() {
 
         {/* Security Signature */}
         <div className="mt-8 text-[9px] text-center text-outline/50 uppercase tracking-widest font-label">
-          Ledger Control Auth System v2026.1
+          {productName}
         </div>
       </div>
     </div>

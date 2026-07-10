@@ -2,8 +2,10 @@
 
 import React from "react";
 import { useCall } from "@/context/CallContext";
+import { useTranslations } from "@/lib/i18n";
 
 export default function IncomingCallModal() {
+  const t = useTranslations();
   const { status, callerInfo, callType, acceptCall, rejectCall } = useCall();
 
   if (status !== "ringing" || !callerInfo) return null;
@@ -24,28 +26,37 @@ export default function IncomingCallModal() {
         </h3>
 
         <p className="text-xs text-outline mb-6">
-          Incoming {callType === "VIDEO" ? "Video" : "Audio"} Call...
+          {t.incomingCall} {callType === "VIDEO" ? t.video : t.audio} {t.call}
+          ...
         </p>
 
-        <div className="flex gap-4 w-full">
+        <div className="flex gap-6 w-full justify-center">
           <button
             type="button"
             onClick={rejectCall}
-            className="flex-1 py-3 px-4 rounded-xl bg-error/15 hover:bg-error/25 text-error text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 border border-error/20"
+            aria-label={t.decline}
+            className="w-16 h-16 rounded-full bg-error hover:bg-error/90 text-on-error shadow-lg shadow-error/20 transition-colors flex items-center justify-center"
           >
-            <span className="material-symbols-outlined text-base">
+            <span
+              className="material-symbols-outlined text-3xl"
+              aria-hidden="true"
+            >
               call_end
             </span>
-            Decline
           </button>
 
           <button
             type="button"
             onClick={acceptCall}
-            className="flex-1 py-3 px-4 rounded-xl bg-tertiary/15 hover:bg-tertiary/25 text-tertiary text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 border border-tertiary/20"
+            aria-label={t.accept}
+            className="w-16 h-16 rounded-full bg-tertiary hover:bg-tertiary/90 text-on-tertiary shadow-lg shadow-tertiary/20 transition-colors flex items-center justify-center"
           >
-            <span className="material-symbols-outlined text-base">call</span>
-            Accept
+            <span
+              className="material-symbols-outlined text-3xl"
+              aria-hidden="true"
+            >
+              call
+            </span>
           </button>
         </div>
       </div>

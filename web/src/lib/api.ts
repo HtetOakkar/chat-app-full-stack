@@ -1,6 +1,8 @@
+import { getAuthToken } from "./authToken";
+import { apiEndpoint } from "./apiBase";
+
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token = getAuthToken();
 
   const headers = {
     "Content-Type": "application/json",
@@ -11,7 +13,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(endpoint, {
+  const response = await fetch(apiEndpoint(endpoint), {
     ...options,
     headers,
   });

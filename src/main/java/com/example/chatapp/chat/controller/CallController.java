@@ -104,12 +104,12 @@ public class CallController {
             throw new BadRequestException("recipientId is required for call answer");
         }
 
-        Optional<CallSession> sessionOpt = callRegistry.getActiveCall(senderId);
-        if (sessionOpt.isPresent()) {
-            CallSession session = sessionOpt.get();
-            session.setStatus("active");
-            session.setStartedAt(Instant.now());
-        }
+        Optional<CallSession> sessionOpt = getAuthorizedActiveCall(senderId, recipientId, "answer");
+        if (sessionOpt.isEmpty()) return;
+
+        CallSession session = sessionOpt.get();
+        session.setStatus("active");
+        session.setStartedAt(Instant.now());
 
         signalDto.setType("answer");
         enrichSenderInfo(signalDto, authenticatedUser);
@@ -126,6 +126,8 @@ public class CallController {
             throw new BadRequestException("recipientId is required for call ice");
         }
 
+        if (getAuthorizedActiveCall(senderId, recipientId, "ice").isEmpty()) return;
+
         signalDto.setType("ice");
         enrichSenderInfo(signalDto, authenticatedUser);
         messageBroker.publishToUser(recipientId.toString(), "/queue/call", signalDto);
@@ -141,13 +143,13 @@ public class CallController {
             throw new BadRequestException("recipientId is required for call cancel");
         }
 
-        Optional<CallSession> sessionOpt = callRegistry.getActiveCall(senderId);
-        if (sessionOpt.isPresent()) {
-            CallSession session = sessionOpt.get();
-            callRegistry.unregisterCall(session);
-            String outcome = "missed".equalsIgnoreCase(signalDto.getType()) ? "missed" : "cancelled";
-            saveCallRecord(session, outcome, 0);
-        }
+        Optional<CallSession> sessionOpt = getAuthorizedActiveCall(senderId, recipientId, "cancel");
+        if (sessionOpt.isEmpty()) return;
+
+        CallSession session = sessionOpt.get();
+        callRegistry.unregisterCall(session);
+        String outcome = "missed".equalsIgnoreCase(signalDto.getType()) ? "missed" : "cancelled";
+        saveCallRecord(session, outcome, 0);
 
         if (signalDto.getType() == null) {
             signalDto.setType("cancel");
@@ -166,12 +168,12 @@ public class CallController {
             throw new BadRequestException("recipientId is required for call reject");
         }
 
-        Optional<CallSession> sessionOpt = callRegistry.getActiveCall(senderId);
-        if (sessionOpt.isPresent()) {
-            CallSession session = sessionOpt.get();
-            callRegistry.unregisterCall(session);
-            saveCallRecord(session, "rejected", 0);
-        }
+        Optional<CallSession> sessionOpt = getAuthorizedActiveCall(senderId, recipientId, "reject");
+        if (sessionOpt.isEmpty()) return;
+
+        CallSession session = sessionOpt.get();
+        callRegistry.unregisterCall(session);
+        saveCallRecord(session, "rejected", 0);
 
         signalDto.setType("reject");
         enrichSenderInfo(signalDto, authenticatedUser);
@@ -188,24 +190,42 @@ public class CallController {
             throw new BadRequestException("recipientId is required for call hangup");
         }
 
-        Optional<CallSession> sessionOpt = callRegistry.getActiveCall(senderId);
-        if (sessionOpt.isPresent()) {
-            CallSession session = sessionOpt.get();
-            callRegistry.unregisterCall(session);
+        Optional<CallSession> sessionOpt = getAuthorizedActiveCall(senderId, recipientId, "hangup");
+        if (sessionOpt.isEmpty()) return;
 
-            long duration = 0;
-            String outcome = "completed";
-            if ("active".equals(session.getStatus()) && session.getStartedAt() != null) {
-                duration = java.time.Duration.between(session.getStartedAt(), Instant.now()).toSeconds();
-            } else {
-                outcome = "cancelled";
-            }
-            saveCallRecord(session, outcome, duration);
+        CallSession session = sessionOpt.get();
+        callRegistry.unregisterCall(session);
+
+        long duration = 0;
+        String outcome = "completed";
+        if ("active".equals(session.getStatus()) && session.getStartedAt() != null) {
+            duration = java.time.Duration.between(session.getStartedAt(), Instant.now()).toSeconds();
+        } else {
+            outcome = "cancelled";
         }
+        saveCallRecord(session, outcome, duration);
 
         signalDto.setType("hangup");
         enrichSenderInfo(signalDto, authenticatedUser);
         messageBroker.publishToUser(recipientId.toString(), "/queue/call", signalDto);
+    }
+
+    private Optional<CallSession> getAuthorizedActiveCall(Long senderId, Long recipientId, String signalType) {
+        Optional<CallSession> sessionOpt = callRegistry.getActiveCall(senderId);
+        if (sessionOpt.isEmpty()) {
+            log.warn("Call {} ignored: sender {} is not in an active call", signalType, senderId);
+            return Optional.empty();
+        }
+
+        CallSession session = sessionOpt.get();
+        boolean senderIsCaller = senderId.equals(session.getCallerId()) && recipientId.equals(session.getCalleeId());
+        boolean senderIsCallee = senderId.equals(session.getCalleeId()) && recipientId.equals(session.getCallerId());
+        if (!senderIsCaller && !senderIsCallee) {
+            log.warn("Call {} ignored: sender {} and recipient {} do not match active call participants", signalType, senderId, recipientId);
+            return Optional.empty();
+        }
+
+        return Optional.of(session);
     }
 
     private void saveCallRecord(CallSession session, String outcome, long duration) {

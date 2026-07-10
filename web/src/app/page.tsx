@@ -3,9 +3,11 @@
 import { useAuth } from "@/context/AuthContext";
 import AuthContainer from "@/components/AuthContainer";
 import ChatDashboard from "@/components/ChatDashboard";
+import { useTranslations } from "@/lib/i18n";
 
 export default function Home() {
   const { isLoading, isAuthenticated } = useAuth();
+  const t = useTranslations();
 
   if (isLoading) {
     return (
@@ -15,7 +17,7 @@ export default function Home() {
             rotate_right
           </span>
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline">
-            Initializing Secure Gateway...
+            {t.loadingApp}
           </span>
         </div>
       </div>

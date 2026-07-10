@@ -17,10 +17,14 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.mockito.Mockito;
 import org.mockito.ArgumentMatchers;
 import com.example.chatapp.email.service.EmailService;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@ExtendWith(OutputCaptureExtension.class)
 class AuthenticationControllerIntegrationTest {
 
     @Autowired
@@ -194,6 +198,30 @@ class AuthenticationControllerIntegrationTest {
     }
 
     @Test
+    void signupShouldNotWriteVerificationCodeToOperationalOutput(CapturedOutput output) throws Exception {
+        String signupBody = """
+                {
+                  "username": "nologcodeuser",
+                  "password": "password123",
+                  "email": "nologcode@chatapp.com"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signupBody))
+                .andExpect(status().isOk());
+
+        String generatedCode = userRepository.findByUsername("nologcodeuser")
+                .orElseThrow()
+                .getEmailVerificationCode();
+
+        org.junit.jupiter.api.Assertions.assertNotNull(generatedCode);
+        org.junit.jupiter.api.Assertions.assertFalse(output.getOut().contains(generatedCode));
+        org.junit.jupiter.api.Assertions.assertFalse(output.getErr().contains(generatedCode));
+    }
+
+    @Test
     void publicEmailVerificationShouldLockoutAfterThreeFailures() throws Exception {
         String signupBody = """
                 {
@@ -320,5 +348,20 @@ class AuthenticationControllerIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Email is not verified. Please verify your email first."));
     }
-}
 
+    @Test
+    void systemAccountShouldNotAcceptPreviousHardcodedPassword() throws Exception {
+        String loginBody = """
+                {
+                  "username": "system",
+                  "password": "system_pass_secured_12345"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Invalid username or password"));
+    }
+}

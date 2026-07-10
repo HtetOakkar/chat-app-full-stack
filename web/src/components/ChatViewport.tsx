@@ -11,6 +11,7 @@ import { apiFetch } from "@/lib/api";
 import type { ActiveChat } from "./Sidebar";
 import EmojiPicker, { Theme, EmojiStyle } from "emoji-picker-react";
 import { useCall } from "@/context/CallContext";
+import { useTranslations } from "@/lib/i18n";
 
 const formatDateHeader = (timestampString: string) => {
   const date = new Date(timestampString);
@@ -63,6 +64,7 @@ export default function ChatViewport({
   onBackToList,
   onViewUserProfile,
 }: ChatViewportProps) {
+  const t = useTranslations();
   const { connected } = useConnection();
   const {
     publicMessages,
@@ -87,11 +89,7 @@ export default function ChatViewport({
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
 
   const handleDeleteChat = async (contactUserId: number) => {
-    if (
-      !confirm(
-        "Are you sure you want to delete this chat? This will clear the conversation history for you. The other user will not be notified."
-      )
-    ) {
+    if (!confirm(t.deleteConversationConfirm)) {
       return;
     }
     try {
@@ -299,11 +297,12 @@ export default function ChatViewport({
 
         const outcomeLabels: Record<string, string> = {
           completed: "Call Ended",
-          missed: "Missed Call",
-          rejected: "Call Declined",
-          cancelled: "Call Cancelled",
+          missed: t.missedCall,
+          rejected: t.callDeclined,
+          cancelled: t.callCancelled,
         };
-        const label = outcomeLabels[outcome] || "Call";
+        outcomeLabels.completed = t.callEnded;
+        const label = outcomeLabels[outcome] || t.call;
 
         const formatCallDuration = (secs: number) => {
           if (secs <= 0) return "";
@@ -435,7 +434,7 @@ export default function ChatViewport({
         </div>
       );
     },
-    [userId, activeChat, currentMessages, activeMenuMessageId]
+    [userId, activeChat, currentMessages, activeMenuMessageId, t]
   );
 
   const getPartnerStatus = () => {
@@ -458,11 +457,10 @@ export default function ChatViewport({
           </span>
         </div>
         <h2 className="text-xl font-headline font-black text-on-surface mb-2">
-          Registry Focus Workspace
+          {t.conversationReady}
         </h2>
         <p className="text-xs text-outline max-w-[300px] leading-relaxed">
-          Select a public system channel or a private curator connection from
-          the sidebar to load messaging history.
+          {t.conversationReadyBody}
         </p>
       </div>
     );
@@ -535,9 +533,11 @@ export default function ChatViewport({
               </h3>
               <p className="text-[9px] text-outline font-bold uppercase tracking-widest">
                 {activeChat.isPublic ? (
-                  <span className="text-primary">Curators Room</span>
+                  <span className="text-primary">{t.publicRoom}</span>
                 ) : (
-                  <span>Status: {getPartnerStatus()}</span>
+                  <span>
+                    {t.status}: {getPartnerStatus()}
+                  </span>
                 )}
               </p>
             </div>
@@ -556,7 +556,7 @@ export default function ChatViewport({
                 connected ? "bg-primary animate-pulse" : "bg-error"
               }`}
             />
-            {connected ? "Connected" : "Offline"}
+            {connected ? t.connected : t.offline}
           </span>
 
           {!activeChat.isPublic &&
@@ -573,7 +573,7 @@ export default function ChatViewport({
                     )
                   }
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors"
-                  title="Audio Call"
+                  title={t.audioCall}
                 >
                   <span className="material-symbols-outlined text-lg">
                     call
@@ -589,7 +589,7 @@ export default function ChatViewport({
                     )
                   }
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors"
-                  title="Video Call"
+                  title={t.videoCall}
                 >
                   <span className="material-symbols-outlined text-lg">
                     videocam
@@ -607,7 +607,7 @@ export default function ChatViewport({
                   setShowHeaderMenu(!showHeaderMenu);
                 }}
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors"
-                title="Conversation Settings"
+                title={t.conversationSettings}
               >
                 <span className="material-symbols-outlined text-lg">
                   more_vert
@@ -626,7 +626,7 @@ export default function ChatViewport({
                     <span className="material-symbols-outlined text-base text-error">
                       delete
                     </span>
-                    Delete Chat
+                    {t.deleteConversation}
                   </button>
                 </div>
               )}
@@ -644,7 +644,7 @@ export default function ChatViewport({
             </span>
             <span className="text-xs font-bold text-on-surface">
               <span className="text-secondary">{activeChat.username}</span>{" "}
-              wants to connect
+              {t.wantsToConnect}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -654,7 +654,7 @@ export default function ChatViewport({
               onClick={() => handleBannerAction("accept")}
               className="px-3 py-1.5 bg-primary text-white text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-primary-container transition-all disabled:opacity-50 scale-98-active"
             >
-              {bannerLoading === "accept" ? "..." : "Accept"}
+              {bannerLoading === "accept" ? "..." : t.accept}
             </button>
             <button
               type="button"
@@ -662,7 +662,7 @@ export default function ChatViewport({
               onClick={() => handleBannerAction("neglect")}
               className="px-3 py-1.5 border border-outline-variant/40 text-on-surface text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-surface-container transition-all disabled:opacity-50 scale-98-active"
             >
-              {bannerLoading === "neglect" ? "..." : "Ignore"}
+              {bannerLoading === "neglect" ? "..." : t.ignore}
             </button>
             <button
               type="button"
@@ -670,7 +670,7 @@ export default function ChatViewport({
               onClick={() => handleBannerAction("block")}
               className="px-3 py-1.5 text-error text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-error-container/20 transition-all disabled:opacity-50 scale-98-active"
             >
-              {bannerLoading === "block" ? "..." : "Block"}
+              {bannerLoading === "block" ? "..." : t.block}
             </button>
           </div>
         </div>
@@ -683,7 +683,7 @@ export default function ChatViewport({
             forum
           </span>
           <p className="text-xs text-outline font-medium">
-            No previous records found. Write a prompt to begin.
+            {t.startConversation}
           </p>
         </div>
       ) : (
@@ -705,7 +705,7 @@ export default function ChatViewport({
               return (
                 <div className="text-center py-2 shrink-0">
                   <span className="text-[9px] uppercase tracking-widest text-outline bg-surface-container-low px-3 py-1 rounded-full">
-                    Scroll up to load historical ledger
+                    {t.loadOlderMessages}
                   </span>
                 </div>
               );
@@ -718,7 +718,7 @@ export default function ChatViewport({
         <div className="flex items-center gap-2 self-start mb-2 text-outline animate-[pulse_1.5s_ease-in-out_infinite] px-6 py-2 shrink-0">
           <span className="material-symbols-outlined text-sm">more_horiz</span>
           <span className="text-[10px] font-bold uppercase tracking-wider">
-            {activeChat.username} is typing...
+            {activeChat.username} {t.isTyping}
           </span>
         </div>
       )}
@@ -741,16 +741,19 @@ export default function ChatViewport({
           className="p-4 border-t border-outline-variant/10 bg-surface-container-lowest shrink-0"
         >
           {isPendingOrNeglected && (
-            <div className="mb-3 px-3 py-2 bg-secondary/5 border border-secondary/10 rounded-lg flex items-center gap-2 text-[10px] text-on-surface font-semibold select-none animate-[fadeIn_0.2s_ease-out]">
+            <div
+              data-request-warning="automatically accept"
+              className="mb-3 px-3 py-2 bg-secondary/5 border border-secondary/10 rounded-lg flex items-center gap-2 text-[10px] text-on-surface font-semibold select-none animate-[fadeIn_0.2s_ease-out]"
+            >
               <span className="material-symbols-outlined text-secondary text-xs">
                 warning
               </span>
               <span>
-                Replying will automatically accept this request and save{" "}
+                {t.replyAcceptsRequest}{" "}
                 <span className="text-secondary font-bold">
                   {activeChat.username}
                 </span>{" "}
-                to your contacts.
+                {t.toYourContacts}
               </span>
             </div>
           )}
@@ -764,7 +767,7 @@ export default function ChatViewport({
                 }
               }}
               className="flex-1 bg-transparent border-none outline-none focus:ring-0 text-xs px-3 py-2 text-on-surface placeholder:text-outline"
-              placeholder={`Compose message for ${activeChat.username}...`}
+              placeholder={`${t.composeMessageFor} ${activeChat.username}...`}
               type="text"
             />
             <button

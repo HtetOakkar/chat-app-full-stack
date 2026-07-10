@@ -1,6 +1,8 @@
 package com.example.chatapp.email.service;
 
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -24,23 +26,14 @@ public class ResendTemplateInitializer implements ApplicationRunner {
 
     private final RestTemplate restTemplate;
 
+    @Setter
     @Value("${resend.api.key}")
     private String resendApiKey;
 
+    @Getter
+    @Setter
     @Value("${resend.template.verification.id:}")
     private String templateId;
-
-    public void setResendApiKey(String resendApiKey) {
-        this.resendApiKey = resendApiKey;
-    }
-
-    public void setTemplateId(String templateId) {
-        this.templateId = templateId;
-    }
-
-    public String getTemplateId() {
-        return templateId;
-    }
 
     @Override
     public void run(ApplicationArguments args) throws Exception {

@@ -1,6 +1,10 @@
 package com.example.chatapp.user.controller;
 
 import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.user.model.entity.Contact;
+import com.example.chatapp.user.model.entity.ContactStatus;
+import com.example.chatapp.user.model.entity.User;
+import com.example.chatapp.user.repository.ContactRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +49,9 @@ class UserControllerIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private ContactRepository contactRepository;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     private String userToken;
@@ -64,6 +71,7 @@ class UserControllerIntegrationTest {
 
     @BeforeEach
     void setup() throws Exception {
+        contactRepository.deleteAll();
         userRepository.deleteAll();
 
         String signupBody = """
@@ -89,9 +97,9 @@ class UserControllerIntegrationTest {
                         .header("Authorization", userToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("testuser"))
-                .andExpect(jsonPath("$.fullName").value((Object) null))
-                .andExpect(jsonPath("$.birthDate").value((Object) null))
-                .andExpect(jsonPath("$.email").value((Object) null))
+                .andExpect(jsonPath("$.fullName").doesNotExist())
+                .andExpect(jsonPath("$.birthDate").doesNotExist())
+                .andExpect(jsonPath("$.email").doesNotExist())
                 .andExpect(jsonPath("$.emailVerified").value(false));
     }
 
@@ -336,31 +344,112 @@ class UserControllerIntegrationTest {
     }
 
     @Test
-    void getUserProfileByIdShouldReturnProfile() throws Exception {
-        String signupBob = """
-                {
-                  "username": "bobprofile",
-                  "password": "password123"
-                }
-                """;
-        mockMvc.perform(post("/api/v1/auth/signup")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(signupBob))
-                .andExpect(status().isOk());
+    void searchUsersShouldRespectLimitAndExcludeCurrentUser() throws Exception {
+        User currentUser = userRepository.findByUsername("testuser").orElseThrow();
+        currentUser.setFullName("Bounded Search Match");
+        userRepository.saveAndFlush(currentUser);
 
-        com.example.chatapp.user.model.entity.User bob = userRepository.findByUsername("bobprofile").orElseThrow();
-        bob.setFullName("Bob Profile");
-        bob.setBirthDate(java.time.LocalDate.of(1995, 5, 15));
-        bob.setEmail("bob@example.com");
-        userRepository.saveAndFlush(bob);
+        for (int i = 1; i <= 5; i++) {
+            mockMvc.perform(post("/api/v1/auth/signup")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "username": "bounded%s",
+                                      "password": "password123"
+                                    }
+                                    """.formatted(i)))
+                    .andExpect(status().isOk());
+        }
+
+        mockMvc.perform(get("/api/v1/users/search")
+                        .header("Authorization", userToken)
+                        .param("keyword", "bounded")
+                        .param("limit", "3"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[?(@.username == 'testuser')]").doesNotExist());
+    }
+
+    @Test
+    void getUserProfileByIdShouldReturnPublicProfileForOtherUsers() throws Exception {
+        User bob = createProfileUser("bobprofile", "Bob Profile", "bob@example.com");
 
         mockMvc.perform(get("/api/v1/users/" + bob.getId() + "/profile")
                         .header("Authorization", userToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("bobprofile"))
                 .andExpect(jsonPath("$.fullName").value("Bob Profile"))
-                .andExpect(jsonPath("$.email").value("bob@example.com"))
-                .andExpect(jsonPath("$.birthDate").value("1995-05-15"));
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.birthDate").doesNotExist())
+                .andExpect(jsonPath("$.emailVerified").doesNotExist());
+    }
+
+    @Test
+    void getUserProfileByIdShouldReturnPrivateProfileForOwner() throws Exception {
+        User currentUser = userRepository.findByUsername("testuser").orElseThrow();
+        currentUser.setFullName("Test User");
+        currentUser.setBirthDate(java.time.LocalDate.of(1990, 1, 1));
+        currentUser.setEmail("test@example.com");
+        currentUser.setEmailVerified(true);
+        userRepository.saveAndFlush(currentUser);
+
+        mockMvc.perform(get("/api/v1/users/" + currentUser.getId() + "/profile")
+                        .header("Authorization", userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("testuser"))
+                .andExpect(jsonPath("$.fullName").value("Test User"))
+                .andExpect(jsonPath("$.email").value("test@example.com"))
+                .andExpect(jsonPath("$.birthDate").value("1990-01-01"))
+                .andExpect(jsonPath("$.emailVerified").value(true));
+    }
+
+    @Test
+    void getUserProfileByIdShouldHidePrivateFieldsFromOtherUsers() throws Exception {
+        User bob = createProfileUser("bobprivate", "Bob Private", "bob.private@example.com");
+
+        mockMvc.perform(get("/api/v1/users/" + bob.getId() + "/profile")
+                        .header("Authorization", userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("bobprivate"))
+                .andExpect(jsonPath("$.fullName").value("Bob Private"))
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.birthDate").doesNotExist())
+                .andExpect(jsonPath("$.emailVerified").doesNotExist());
+    }
+
+    @Test
+    void getUserProfileByIdShouldHidePrivateFieldsAcrossRelationshipStates() throws Exception {
+        User currentUser = userRepository.findByUsername("testuser").orElseThrow();
+        User contact = createProfileUser("acceptedprofile", "Accepted Profile", "accepted@example.com");
+        User pending = createProfileUser("pendingprofile", "Pending Profile", "pending@example.com");
+        User neglected = createProfileUser("neglectedprofile", "Neglected Profile", "neglected@example.com");
+        User blocked = createProfileUser("blockedprofile", "Blocked Profile", "blocked@example.com");
+
+        contactRepository.save(Contact.builder()
+                .owner(currentUser)
+                .contactUser(contact)
+                .status(ContactStatus.ACCEPTED)
+                .build());
+        contactRepository.save(Contact.builder()
+                .owner(currentUser)
+                .contactUser(pending)
+                .status(ContactStatus.PENDING_REQUEST)
+                .build());
+        contactRepository.save(Contact.builder()
+                .owner(currentUser)
+                .contactUser(neglected)
+                .status(ContactStatus.NEGLECTED)
+                .build());
+        contactRepository.save(Contact.builder()
+                .owner(currentUser)
+                .contactUser(blocked)
+                .status(ContactStatus.BLOCKED)
+                .build());
+
+        assertPublicProfileOnly(contact);
+        assertPublicProfileOnly(pending);
+        assertPublicProfileOnly(neglected);
+        assertPublicProfileOnly(blocked);
     }
 
     @Test
@@ -394,9 +483,37 @@ class UserControllerIntegrationTest {
                 .andExpect(jsonPath("$[0].username").value("onlineuser"))
                 .andExpect(jsonPath("$[0].status").value("ONLINE"));
     }
+
+    private User createProfileUser(String username, String fullName, String email) throws Exception {
+        String signupBody = """
+                {
+                  "username": "%s",
+                  "password": "password123"
+                }
+                """.formatted(username);
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signupBody))
+                .andExpect(status().isOk());
+
+        User user = userRepository.findByUsername(username).orElseThrow();
+        user.setFullName(fullName);
+        user.setBirthDate(java.time.LocalDate.of(1995, 5, 15));
+        user.setEmail(email);
+        user.setEmailVerified(true);
+        return userRepository.saveAndFlush(user);
+    }
+
+    private void assertPublicProfileOnly(User viewedUser) throws Exception {
+        mockMvc.perform(get("/api/v1/users/" + viewedUser.getId() + "/profile")
+                        .header("Authorization", userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value(viewedUser.getUsername()))
+                .andExpect(jsonPath("$.fullName").value(viewedUser.getFullName()))
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.birthDate").doesNotExist())
+                .andExpect(jsonPath("$.emailVerified").doesNotExist());
+    }
 }
-
-
-
 
 

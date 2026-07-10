@@ -2,8 +2,10 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useCall } from "@/context/CallContext";
+import { useTranslations } from "@/lib/i18n";
 
 export default function ActiveCallOverlay() {
+  const t = useTranslations();
   const {
     status,
     callerInfo,
@@ -148,8 +150,8 @@ export default function ActiveCallOverlay() {
           {partnerName}
         </span>
         <span className="text-white/60 text-xs drop-shadow-md">
-          {status === "dialing" && "Calling..."}
-          {status === "connecting" && "Connecting..."}
+          {status === "dialing" && t.calling}
+          {status === "connecting" && t.connecting}
           {status === "active" && formatDuration(duration)}
         </span>
       </div>
@@ -189,7 +191,7 @@ export default function ActiveCallOverlay() {
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">
-                  Camera Off
+                  {t.cameraOff}
                 </div>
               )}
             </div>
@@ -202,7 +204,7 @@ export default function ActiveCallOverlay() {
             </div>
             <h4 className="text-white text-lg font-bold mb-1">{partnerName}</h4>
             <p className="text-white/40 text-xs uppercase tracking-widest font-semibold">
-              {status === "dialing" ? "Dialing..." : "Audio Call Active"}
+              {status === "dialing" ? t.dialing : t.audioCallActive}
             </p>
           </div>
         )}
@@ -219,7 +221,7 @@ export default function ActiveCallOverlay() {
               ? "bg-error text-white hover:bg-error/90"
               : "bg-white/10 text-white hover:bg-white/25"
           }`}
-          title={isMuted ? "Unmute Microphone" : "Mute Microphone"}
+          title={isMuted ? t.unmuteMicrophone : t.muteMicrophone}
         >
           <span className="material-symbols-outlined text-lg">
             {isMuted ? "mic_off" : "mic"}
@@ -237,8 +239,8 @@ export default function ActiveCallOverlay() {
           }`}
           title={
             isCameraOff || callType === "AUDIO"
-              ? "Turn Camera On"
-              : "Turn Camera Off"
+              ? t.turnCameraOn
+              : t.turnCameraOff
           }
         >
           <span className="material-symbols-outlined text-lg">
@@ -253,7 +255,7 @@ export default function ActiveCallOverlay() {
               type="button"
               onClick={() => setShowAudioMenu(!showAudioMenu)}
               className="w-11 h-11 rounded-full bg-white/10 text-white hover:bg-white/25 flex items-center justify-center transition-colors"
-              title="Switch Audio Source"
+              title={t.switchAudioSource}
             >
               <span className="material-symbols-outlined text-lg">
                 volume_up
@@ -263,7 +265,7 @@ export default function ActiveCallOverlay() {
             {showAudioMenu && (
               <div className="absolute bottom-14 left-1/2 transform -translate-x-1/2 bg-zinc-900 border border-white/10 rounded-xl py-2 px-1 shadow-2xl min-w-[180px] z-50 flex flex-col gap-1">
                 <div className="text-[10px] text-white/40 uppercase tracking-wider px-3 py-1 font-semibold border-b border-white/10 mb-1">
-                  Audio Output
+                  {t.audioOutput}
                 </div>
                 {audioOutputDevices.map((device) => {
                   const isSelected = selectedAudioOutputId === device.deviceId;
@@ -302,7 +304,7 @@ export default function ActiveCallOverlay() {
           type="button"
           onClick={() => setIsFullscreen(!isFullscreen)}
           className="w-11 h-11 rounded-full bg-white/10 text-white hover:bg-white/25 flex items-center justify-center transition-colors"
-          title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+          title={isFullscreen ? t.exitFullscreen : t.enterFullscreen}
         >
           <span className="material-symbols-outlined text-lg">
             {isFullscreen ? "fullscreen_exit" : "fullscreen"}
@@ -314,7 +316,7 @@ export default function ActiveCallOverlay() {
           type="button"
           onClick={status === "dialing" ? cancelCall : hangupCall}
           className="w-12 h-12 rounded-full bg-error text-white hover:bg-error/90 flex items-center justify-center transition-colors shadow-lg"
-          title="End Call"
+          title={t.endCall}
         >
           <span className="material-symbols-outlined text-xl">call_end</span>
         </button>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { useTranslations } from "@/lib/i18n";
 
 interface MyProfileCardProps {
   onBack: () => void;
@@ -16,6 +17,7 @@ interface ProfileData {
 }
 
 export default function MyProfileCard({ onBack }: MyProfileCardProps) {
+  const t = useTranslations();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [fullName, setFullName] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -52,7 +54,7 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
         setSharePresence(settingsData.sharePresence);
       }
     } catch (err: unknown) {
-      setError("Failed to load profile details.");
+      setError(t.failedLoadProfile);
     } finally {
       setLoading(false);
     }
@@ -99,7 +101,7 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
           body: JSON.stringify({ sharePresence }),
         });
 
-        setSuccess("Profile and settings updated successfully.");
+        setSuccess(t.profileUpdated);
         // If email was changed, trigger refresh to update verification state
         if (data.email !== profile?.email) {
           setVerificationError("");
@@ -107,9 +109,7 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
         }
       }
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Failed to update profile."
-      );
+      setError(err instanceof Error ? err.message : t.failedUpdateProfile);
     } finally {
       setSaving(false);
     }
@@ -118,7 +118,7 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
   const handleVerifyEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!verificationCode || verificationCode.length !== 6) {
-      setVerificationError("Code must be 6 digits.");
+      setVerificationError(t.codeMustBeSixDigits);
       return;
     }
     setVerifyLoading(true);
@@ -129,12 +129,12 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
         method: "POST",
         body: JSON.stringify({ code: verificationCode }),
       });
-      setVerificationSuccess("Email verified successfully!");
+      setVerificationSuccess(t.emailVerified);
       setVerificationCode("");
       fetchProfile();
     } catch (err: unknown) {
       setVerificationError(
-        err instanceof Error ? err.message : "Failed to verify email."
+        err instanceof Error ? err.message : t.failedVerifyEmail
       );
     } finally {
       setVerifyLoading(false);
@@ -150,11 +150,11 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
       await apiFetch("/api/v1/users/profile/resend-code", {
         method: "POST",
       });
-      setVerificationSuccess("Verification code sent to your email!");
+      setVerificationSuccess(t.verificationSent);
       setResendCooldown(60);
     } catch (err: unknown) {
       setVerificationError(
-        err instanceof Error ? err.message : "Failed to resend code."
+        err instanceof Error ? err.message : t.failedResendCode
       );
     } finally {
       setResendLoading(false);
@@ -170,7 +170,7 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
           className="flex items-center gap-2 text-outline hover:text-on-surface mb-6 transition-colors"
         >
           <span className="material-symbols-outlined text-lg">arrow_back</span>
-          <span className="text-sm font-medium">Back to Chat</span>
+          <span className="text-sm font-medium">{t.backToChat}</span>
         </button>
 
         {loading && !profile ? (
@@ -179,7 +179,7 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
               rotate_right
             </span>
             <span className="text-sm text-outline font-bold uppercase tracking-wider">
-              Loading Profile...
+              {t.loadingProfile}
             </span>
           </div>
         ) : (
@@ -237,7 +237,7 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
                       htmlFor="profile-fullname"
                       className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5"
                     >
-                      Full Name
+                      {t.fullName}
                     </label>
                     <input
                       id="profile-fullname"
@@ -253,7 +253,7 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
                       htmlFor="profile-birthdate"
                       className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5"
                     >
-                      Date of Birth
+                      {t.birthDate}
                     </label>
                     <input
                       id="profile-birthdate"
@@ -270,7 +270,7 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
                     htmlFor="profile-email"
                     className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5"
                   >
-                    Email Address
+                    {t.emailAddress}
                   </label>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <input
@@ -294,7 +294,7 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
                             ? "verified"
                             : "pending_actions"}
                         </span>
-                        {profile.emailVerified ? "Verified" : "Unverified"}
+                        {profile.emailVerified ? t.verified : t.unverified}
                       </span>
                     )}
                   </div>
@@ -305,15 +305,15 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
                     <span className="material-symbols-outlined text-base">
                       security
                     </span>
-                    Privacy Settings
+                    {t.privacySettings}
                   </h3>
                   <div className="flex items-center justify-between bg-surface-container-low border border-transparent rounded-lg py-3 px-4 transition-all">
                     <div>
                       <div className="text-sm font-semibold text-on-surface">
-                        Share Online Status
+                        {t.sharePresence}
                       </div>
                       <div className="text-xs text-outline mt-0.5">
-                        Allow others to see when you are online and typing.
+                        {t.sharePresenceDescription}
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
@@ -343,7 +343,7 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
                         save
                       </span>
                     )}
-                    {saving ? "Saving Changes..." : "Save Changes"}
+                    {saving ? t.savingChanges : t.saveChanges}
                   </button>
                 </div>
               </form>
@@ -357,12 +357,10 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
                     </span>
                     <div>
                       <span className="font-bold text-error text-sm block mb-1">
-                        Email Verification Required
+                        {t.verificationRequired}
                       </span>
                       <span className="text-xs text-on-surface-variant leading-relaxed block">
-                        Verify your email to enable security logins with your
-                        email key. Enter the 6-digit code logged in the curator
-                        console.
+                        {t.profileVerificationBody}
                       </span>
                     </div>
                   </div>
@@ -403,7 +401,7 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
                       disabled={verifyLoading || verificationCode.length !== 6}
                       className="flex-1 py-3 px-6 bg-primary text-white text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-primary-container transition-all disabled:opacity-50"
                     >
-                      {verifyLoading ? "Verifying..." : "Verify Code"}
+                      {verifyLoading ? t.verifying : t.verifyCode}
                     </button>
                     <button
                       type="button"
@@ -412,10 +410,10 @@ export default function MyProfileCard({ onBack }: MyProfileCardProps) {
                       className="px-6 py-3 border border-outline-variant/30 text-on-surface text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-surface-container transition-all disabled:opacity-50 shrink-0"
                     >
                       {resendLoading
-                        ? "Sending..."
+                        ? t.sending
                         : resendCooldown > 0
                           ? `Resend (${resendCooldown}s)`
-                          : "Resend"}
+                          : t.resend}
                     </button>
                   </form>
                 </div>
