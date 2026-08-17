@@ -59,6 +59,9 @@ public class ChatAppE2eTest {
     private RoleRepository roleRepository;
 
     @Autowired
+    private com.example.chatapp.chat.service.CallRegistry callRegistry;
+
+    @Autowired
     private RedisMessageRepository redisMessageRepository;
 
     @Autowired
@@ -93,6 +96,9 @@ public class ChatAppE2eTest {
         messageRepository.deleteAll();
         userRepository.deleteAll();
         redisMessageRepository.clear();
+        if (callRegistry != null) {
+            callRegistry.clear();
+        }
 
         Set<String> keys = redisTemplate.keys("user:presence:*");
         if (keys != null && !keys.isEmpty()) {
@@ -649,7 +655,12 @@ public class ChatAppE2eTest {
         String tA = signupAndVerify("pr_a_1", "pra1@example.com", "password123");
         User user = userRepository.findByUsername("pr_a_1").orElseThrow();
         StompTestSession sA = connectWebSocket(tA);
-        Thread.sleep(500);
+        for (int i = 0; i < 30; i++) {
+            if ("Online".equals(redisTemplate.opsForValue().get("user:presence:" + user.getId()))) {
+                break;
+            }
+            Thread.sleep(100);
+        }
         assertEquals("Online", redisTemplate.opsForValue().get("user:presence:" + user.getId()));
         sA.disconnect();
     }
@@ -659,9 +670,20 @@ public class ChatAppE2eTest {
         String tA = signupAndVerify("pr_a_2", "pra2@example.com", "password123");
         User user = userRepository.findByUsername("pr_a_2").orElseThrow();
         StompTestSession sA = connectWebSocket(tA);
-        Thread.sleep(300);
+        for (int i = 0; i < 30; i++) {
+            if ("Online".equals(redisTemplate.opsForValue().get("user:presence:" + user.getId()))) {
+                break;
+            }
+            Thread.sleep(100);
+        }
         sA.disconnect();
-        Thread.sleep(500);
+        for (int i = 0; i < 30; i++) {
+            Object val = redisTemplate.opsForValue().get("user:presence:" + user.getId());
+            if (val != null && !"Online".equals(val)) {
+                break;
+            }
+            Thread.sleep(100);
+        }
         Object val = redisTemplate.opsForValue().get("user:presence:" + user.getId());
         assertNotEquals("Online", val);
         assertNotNull(val);
@@ -871,6 +893,41 @@ public class ChatAppE2eTest {
         assertEquals(HttpStatus.NOT_FOUND, res.getStatusCode());
     }
 
+    @Test
+    public void test_TC_MD_06_batchWriterPreservesIsDeleted() throws Exception {
+        String tA = signupAndVerify("md_a_6", "mda6@example.com", "password123");
+        String tB = signupAndVerify("md_b_6", "mdb6@example.com", "password123");
+        User userA = userRepository.findByUsername("md_a_6").orElseThrow();
+        User userB = userRepository.findByUsername("md_b_6").orElseThrow();
+
+        addContact(tA, "md_b_6");
+        acceptContact(tB, userA.getId());
+
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+        sendPrivateWSMessage(sA, userB.getId(), "Message MD6 to be deleted");
+        MessageDto sent = sB.messages.poll(5, TimeUnit.SECONDS);
+        assertNotNull(sent);
+        sA.disconnect();
+        sB.disconnect();
+
+        deleteMessage(tA, sent.getId(), null);
+
+        runBatchJob();
+
+        List<Message> dbMessages = messageRepository.findAll();
+        assertFalse(dbMessages.isEmpty());
+        Message msgDb = dbMessages.stream()
+                .filter(m -> "Deleted message".equals(m.getContent()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Soft-deleted message not found in DB after batch run"));
+        assertTrue(msgDb.getIsDeleted());
+        assertEquals("Deleted message", msgDb.getContent());
+
+        MessagePage history = getPrivateHistory(tA, userB.getId());
+        assertTrue(history.messages().stream().anyMatch(m -> m.getIsDeleted() && "Deleted message".equals(m.getContent())));
+    }
+
     // Feature 9: Conversation Deletion
     @Test
     public void test_TC_CD_01() {
@@ -907,8 +964,13 @@ public class ChatAppE2eTest {
 
         clearPrivateChat(tA, userB.getId());
         ResponseEntity<ContactDto[]> res = get("/api/v1/contacts", tA, ContactDto[].class);
-        // Cleaned up from active list if cleared and no new messages
-        assertFalse(Arrays.stream(res.getBody()).anyMatch(c -> c.getContactUserId().equals(userB.getId())));
+        // Contact remains in address book even when conversation history is cleared
+        ContactDto contactB = Arrays.stream(res.getBody())
+                .filter(c -> c.getContactUserId().equals(userB.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertNotNull(contactB.getClearedAt());
+        assertNull(contactB.getLastMessageTimestamp());
     }
 
     @Test
@@ -1306,9 +1368,19 @@ public class ChatAppE2eTest {
         String tA = signupAndVerify("pr_b_b1", "prb1_b@example.com", "password123");
         User user = userRepository.findByUsername("pr_b_b1").orElseThrow();
         StompTestSession sA = connectWebSocket(tA);
-        Thread.sleep(500);
+        for (int i = 0; i < 30; i++) {
+            if ("Online".equals(redisTemplate.opsForValue().get("user:presence:" + user.getId()))) {
+                break;
+            }
+            Thread.sleep(100);
+        }
         sA.session.disconnect(); // Abrupt disconnect simulation
-        Thread.sleep(500);
+        for (int i = 0; i < 30; i++) {
+            if (redisTemplate.opsForValue().get("user:presence:" + user.getId()) != null) {
+                break;
+            }
+            Thread.sleep(100);
+        }
         assertNotNull(redisTemplate.opsForValue().get("user:presence:" + user.getId()));
     }
 
@@ -1319,7 +1391,12 @@ public class ChatAppE2eTest {
         StompTestSession sA = connectWebSocket(tA);
         sA.disconnect();
         sA = connectWebSocket(tA);
-        Thread.sleep(500);
+        for (int i = 0; i < 30; i++) {
+            if ("Online".equals(redisTemplate.opsForValue().get("user:presence:" + user.getId()))) {
+                break;
+            }
+            Thread.sleep(100);
+        }
         assertEquals("Online", redisTemplate.opsForValue().get("user:presence:" + user.getId()));
         sA.disconnect();
     }
@@ -1340,8 +1417,19 @@ public class ChatAppE2eTest {
         User user = userRepository.findByUsername("pr_b_b5").orElseThrow();
         StompTestSession sA1 = connectWebSocket(tA);
         StompTestSession sA2 = connectWebSocket(tA);
+        for (int i = 0; i < 30; i++) {
+            if ("Online".equals(redisTemplate.opsForValue().get("user:presence:" + user.getId()))) {
+                break;
+            }
+            Thread.sleep(100);
+        }
         sA1.disconnect();
-        Thread.sleep(500);
+        for (int i = 0; i < 30; i++) {
+            if (redisTemplate.opsForValue().get("user:presence:" + user.getId()) != null) {
+                break;
+            }
+            Thread.sleep(100);
+        }
         // Remains online because second connection is still active (actually, websocket event listener changes status to offline timestamp, but presence is maintained online based on connection manager)
         assertNotNull(redisTemplate.opsForValue().get("user:presence:" + user.getId()));
         sA2.disconnect();
@@ -1887,16 +1975,22 @@ public class ChatAppE2eTest {
 
         for (int i = 0; i < 50; i++) {
             sendPrivateWSMessage(sA, userB.getId(), "Message " + i);
+            assertNotNull(sB.messages.poll(5, TimeUnit.SECONDS));
         }
-        Thread.sleep(1000);
 
         clearPrivateChat(tA, userB.getId());
-        // Verify sidebar removes conversation for A
+        // Contacts address book still returns the contact with clearedAt set and no last message timestamp
         ResponseEntity<ContactDto[]> contactsRes = get("/api/v1/contacts", tA, ContactDto[].class);
-        assertFalse(Arrays.stream(contactsRes.getBody()).anyMatch(c -> c.getContactUserId().equals(userB.getId())));
+        ContactDto contactB = Arrays.stream(contactsRes.getBody())
+                .filter(c -> c.getContactUserId().equals(userB.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertNotNull(contactB.getClearedAt());
+        assertNull(contactB.getLastMessageTimestamp());
 
+        Thread.sleep(200);
         sendPrivateWSMessage(sB, userA.getId(), "New Message 51");
-        Thread.sleep(500);
+        assertNotNull(sA.messages.poll(5, TimeUnit.SECONDS));
 
         MessagePage historyA = getPrivateHistory(tA, userB.getId());
         assertEquals(1, historyA.messages().size()); // A sees only new message
@@ -2190,9 +2284,8 @@ public class ChatAppE2eTest {
 
         // A hangs up
         sendCallSignal(sA, userB.getId(), "hangup", "VIDEO", null);
-
-        // Allow server to handle hangup
-        Thread.sleep(500);
+        assertNotNull(sB.call.poll(5, TimeUnit.SECONDS));
+        assertNotNull(sA.messages.poll(5, TimeUnit.SECONDS));
 
         runBatchJob();
 
@@ -2229,7 +2322,8 @@ public class ChatAppE2eTest {
 
         // A cancels
         sendCallSignal(sA, userB.getId(), "cancel", "AUDIO", null);
-        Thread.sleep(500);
+        assertNotNull(sB.call.poll(5, TimeUnit.SECONDS));
+        assertNotNull(sA.messages.poll(5, TimeUnit.SECONDS));
 
         runBatchJob();
 
@@ -2264,7 +2358,8 @@ public class ChatAppE2eTest {
 
         // B rejects
         sendCallSignal(sB, userA.getId(), "reject", "AUDIO", null);
-        Thread.sleep(500);
+        assertNotNull(sA.call.poll(5, TimeUnit.SECONDS));
+        assertNotNull(sA.messages.poll(5, TimeUnit.SECONDS));
 
         runBatchJob();
 
@@ -2304,7 +2399,7 @@ public class ChatAppE2eTest {
                 .callType("AUDIO")
                 .build();
         sA.session.send("/app/call.cancel", cancelDto);
-        Thread.sleep(500);
+        assertNotNull(sA.messages.poll(5, TimeUnit.SECONDS));
 
         runBatchJob();
 
@@ -2318,5 +2413,129 @@ public class ChatAppE2eTest {
 
         sA.disconnect();
         sB.disconnect();
+    }
+
+    @Test
+    public void test_callDisconnect_callerDisconnectsDuringDialing_cleansRegistryAndSignalsPeer() throws Exception {
+        String tA = signupAndVerify("call_dc_dial_a", "calldcdiala@example.com", "password123");
+        String tB = signupAndVerify("call_dc_dial_b", "calldcdialb@example.com", "password123");
+        User userA = userRepository.findByUsername("call_dc_dial_a").orElseThrow();
+        User userB = userRepository.findByUsername("call_dc_dial_b").orElseThrow();
+
+        addContact(tA, "call_dc_dial_b");
+        acceptContact(tB, userA.getId());
+
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+
+        // A offers to B (dialing)
+        sendCallSignal(sA, userB.getId(), "offer", "AUDIO", "dialing-sdp-audio");
+        CallSignalDto offerReceived = sB.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(offerReceived);
+
+        assertTrue(callRegistry.isBusy(userA.getId()));
+        assertTrue(callRegistry.isBusy(userB.getId()));
+
+        // Caller A disconnects abruptly
+        sA.disconnect();
+
+        // B should receive cancel signal
+        CallSignalDto cancelSignal = sB.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(cancelSignal);
+        assertEquals("cancel", cancelSignal.getType());
+        assertEquals(userA.getId(), cancelSignal.getSenderId());
+
+        assertNotNull(sB.messages.poll(5, TimeUnit.SECONDS));
+
+        // Registry should be immediately cleared
+        assertFalse(callRegistry.isBusy(userA.getId()));
+        assertFalse(callRegistry.isBusy(userB.getId()));
+
+        runBatchJob();
+
+        // Call record with cancelled outcome should be saved
+        MessagePage history = getPrivateHistory(tB, userA.getId());
+        assertFalse(history.messages().isEmpty());
+        MessageDto record = history.messages().get(0);
+        assertEquals(MessageType.AUDIO, record.getMessageType());
+        assertEquals("cancelled", record.getCallOutcome());
+        assertEquals(0, record.getCallDuration());
+        assertEquals("Call Cancelled", record.getContent());
+
+        // Reconnect A and verify subsequent call works without "busy" error
+        StompTestSession sA2 = connectWebSocket(tA);
+        sendCallSignal(sA2, userB.getId(), "offer", "VIDEO", "new-offer-video");
+        CallSignalDto newOffer = sB.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(newOffer);
+        assertEquals("VIDEO", newOffer.getCallType());
+
+        sA2.disconnect();
+        sB.disconnect();
+    }
+
+    @Test
+    public void test_callDisconnect_duringActiveCall_cleansRegistryAndSignalsPeer() throws Exception {
+        String tA = signupAndVerify("call_dc_act_a", "calldcacta@example.com", "password123");
+        String tB = signupAndVerify("call_dc_act_b", "calldcactb@example.com", "password123");
+        User userA = userRepository.findByUsername("call_dc_act_a").orElseThrow();
+        User userB = userRepository.findByUsername("call_dc_act_b").orElseThrow();
+
+        addContact(tA, "call_dc_act_b");
+        acceptContact(tB, userA.getId());
+
+        StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
+
+        // A offers
+        sendCallSignal(sA, userB.getId(), "offer", "VIDEO", "active-offer-video");
+        assertNotNull(sB.call.poll(5, TimeUnit.SECONDS));
+
+        // B answers
+        sendCallSignal(sB, userA.getId(), "answer", "VIDEO", "active-answer-video");
+        assertNotNull(sA.call.poll(5, TimeUnit.SECONDS));
+
+        assertTrue(callRegistry.isBusy(userA.getId()));
+        assertTrue(callRegistry.isBusy(userB.getId()));
+        assertEquals("active", callRegistry.getActiveCall(userA.getId()).get().getStatus());
+
+        // Active for a moment
+        Thread.sleep(1200);
+
+        // B disconnects abruptly
+        sB.disconnect();
+
+        // A should receive hangup signal
+        CallSignalDto hangupSignal = sA.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(hangupSignal);
+        assertEquals("hangup", hangupSignal.getType());
+        assertEquals(userB.getId(), hangupSignal.getSenderId());
+
+        assertNotNull(sA.messages.poll(5, TimeUnit.SECONDS));
+
+        // Registry should be immediately cleared
+        assertFalse(callRegistry.isBusy(userA.getId()));
+        assertFalse(callRegistry.isBusy(userB.getId()));
+
+        runBatchJob();
+
+        // Call record with completed outcome should be saved
+        MessagePage history = getPrivateHistory(tA, userB.getId());
+        assertFalse(history.messages().isEmpty());
+        MessageDto record = history.messages().get(0);
+        assertEquals(MessageType.VIDEO, record.getMessageType());
+        assertEquals("completed", record.getCallOutcome());
+        assertTrue(record.getCallDuration() >= 1);
+        assertEquals("Call Ended", record.getContent());
+        assertTrue(record.getVideoUsed());
+
+        // Reconnect B and verify subsequent call works without "busy" error
+        StompTestSession sB2 = connectWebSocket(tB);
+        sendCallSignal(sB2, userA.getId(), "offer", "AUDIO", "new-offer-audio-after-dc");
+        CallSignalDto newOffer = sA.call.poll(5, TimeUnit.SECONDS);
+        assertNotNull(newOffer);
+        assertEquals("AUDIO", newOffer.getCallType());
+
+        sA.disconnect();
+        sB2.disconnect();
     }
 }

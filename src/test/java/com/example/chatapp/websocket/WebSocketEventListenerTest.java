@@ -1,5 +1,6 @@
 package com.example.chatapp.websocket;
 
+import com.example.chatapp.chat.service.CallService;
 import com.example.chatapp.jwt.UserPrincipal;
 import com.example.chatapp.user.service.PresenceModule;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,9 @@ class WebSocketEventListenerTest {
 
     @MockBean
     private SessionRegistry sessionRegistry;
+
+    @MockBean
+    private CallService callService;
 
     @Test
     void connectEventShouldUpdateSessionRegistryAndSetUserOnline() {
@@ -73,5 +77,6 @@ class WebSocketEventListenerTest {
         // Assert
         verify(sessionRegistry).unregister(eq(42L));
         verify(presenceModule).setUserOffline(eq(42L));
+        verify(callService).handleUserDisconnect(eq(42L));
     }
 }

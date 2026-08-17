@@ -335,4 +335,40 @@ class ContactControllerIntegrationTest {
                 .andExpect(jsonPath("$[0].contactUsername").value("bob"))
                 .andExpect(jsonPath("$[0].lastMessageContent").value("Missed Call"));
     }
+
+    @Test
+    void getContactsShouldReturnContactsEvenWhenConversationHistoryIsCleared() throws Exception {
+        // 1. Establish Bob and Alice as mutually accepted contacts
+        Contact contactAlice = Contact.builder()
+                .owner(aliceUser)
+                .contactUser(bobUser)
+                .status(ContactStatus.ACCEPTED)
+                .clearedAt(Instant.now())
+                .build();
+        contactRepository.save(contactAlice);
+
+        // 2. Save an older message before clearedAt
+        Message oldMessage = Message.builder()
+                .sender(bobUser)
+                .recipient(aliceUser)
+                .content("Old message")
+                .isRead(true)
+                .isDelivered(true)
+                .messageType(MessageType.TEXT)
+                .sentAt(Instant.now().minusSeconds(60))
+                .build();
+        messageRepository.save(oldMessage);
+
+        // 3. Alice fetches contacts - bob should still be returned in the address book even though conversation is cleared
+        mockMvc.perform(get("/api/v1/contacts")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].contactUsername").value("bob"))
+                .andExpect(jsonPath("$[0].status").value("ACCEPTED"))
+                .andExpect(jsonPath("$[0].clearedAt").exists())
+                .andExpect(jsonPath("$[0].lastMessageContent").doesNotExist())
+                .andExpect(jsonPath("$[0].lastMessageTimestamp").doesNotExist())
+                .andExpect(jsonPath("$[0].unreadCount").value(0));
+    }
 }

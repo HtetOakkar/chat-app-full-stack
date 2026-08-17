@@ -1,5 +1,6 @@
 package com.example.chatapp.websocket;
 
+import com.example.chatapp.chat.service.CallService;
 import com.example.chatapp.jwt.UserPrincipal;
 import com.example.chatapp.user.service.PresenceModule;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ public class WebSocketEventListener {
 
     private final PresenceModule presenceModule;
     private final SessionRegistry sessionRegistry;
+    private final CallService callService;
 
     @EventListener
     public void handleWebSocketConnectListener(org.springframework.web.socket.messaging.SessionConnectedEvent event) {
@@ -47,10 +49,20 @@ public class WebSocketEventListener {
             
             try {
                 sessionRegistry.unregister(userPrincipal.getId());
+            } catch (Exception e) {
+                log.warn("Error unregistering session on disconnect: {}", e.getMessage());
+            }
 
+            try {
                 presenceModule.setUserOffline(userPrincipal.getId());
             } catch (Exception e) {
-                log.warn("Error handling WebSocket disconnect: {}", e.getMessage());
+                log.warn("Error setting user offline on disconnect: {}", e.getMessage());
+            }
+
+            try {
+                callService.handleUserDisconnect(userPrincipal.getId());
+            } catch (Exception e) {
+                log.warn("Error handling call cleanup on disconnect: {}", e.getMessage());
             }
         } else {
             log.debug("Non-authenticated or non-UserPrincipal session disconnected.");

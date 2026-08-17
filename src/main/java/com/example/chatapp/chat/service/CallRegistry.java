@@ -56,5 +56,9 @@ public class CallRegistry {
             session.setCallType(newCallType);
         }
     }
+
+    public synchronized void clear() {
+        activeCalls.clear();
+    }
 }
 

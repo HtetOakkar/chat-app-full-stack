@@ -86,9 +86,7 @@ public class ContactModuleImpl implements ContactModule {
     @Override
     @Transactional(readOnly = true)
     public List<ContactDto> getContacts(Long ownerId) {
-        return enrichContacts(contactRepository.findContactsNative(ownerId), ownerId).stream()
-                .filter(dto -> dto.getClearedAt() == null || dto.getLastMessageTimestamp() != null)
-                .collect(Collectors.toList());
+        return enrichContacts(contactRepository.findContactsNative(ownerId), ownerId);
     }
 
     @Override

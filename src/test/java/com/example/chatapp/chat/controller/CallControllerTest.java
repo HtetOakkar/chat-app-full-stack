@@ -1,11 +1,10 @@
 package com.example.chatapp.chat.controller;
 
 import com.example.chatapp.chat.service.CallRegistry;
+import com.example.chatapp.chat.service.CallService;
 import com.example.chatapp.jwt.UserPrincipal;
 import com.example.chatapp.message.model.dto.CallSignalDto;
-import com.example.chatapp.message.service.MessageService;
 import com.example.chatapp.user.repository.ContactRepository;
-import com.example.chatapp.user.repository.UserRepository;
 import com.example.chatapp.websocket.MessageBroker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,21 +21,20 @@ import static org.mockito.ArgumentMatchers.eq;
 class CallControllerTest {
 
     private MessageBroker messageBroker;
-    private MessageService messageService;
+    private CallService callService;
     private CallRegistry callRegistry;
     private CallController callController;
 
     @BeforeEach
     void setUp() {
         messageBroker = mock(MessageBroker.class);
-        messageService = mock(MessageService.class);
+        callService = mock(CallService.class);
         callRegistry = new CallRegistry();
         callController = new CallController(
                 messageBroker,
                 callRegistry,
                 mock(ContactRepository.class),
-                mock(UserRepository.class),
-                messageService
+                callService
         );
     }
 
@@ -52,7 +50,7 @@ class CallControllerTest {
         sendFollowUp("hangup", thirdUser, 2L);
 
         verify(messageBroker, never()).publishToUser(eq("2"), eq("/queue/call"), any());
-        verify(messageService, never()).saveMessage(any());
+        verify(callService, never()).saveCallRecord(any(), any(), org.mockito.ArgumentMatchers.anyLong());
     }
 
     @Test

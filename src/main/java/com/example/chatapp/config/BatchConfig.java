@@ -43,7 +43,8 @@ public class BatchConfig {
     private final PlatformTransactionManager transactionManager;
 
     @Bean
-    public ItemReader<MessageDto> redisItemReader() {
+    @org.springframework.batch.core.configuration.annotation.StepScope
+    public RedisItemReader redisItemReader() {
         return new RedisItemReader(redisMessageRepository);
     }
 
@@ -62,19 +63,7 @@ public class BatchConfig {
                         .orElseThrow(() -> new NotFoundException("System user not found."));
             }
 
-            Instant sentAt = messageDto.getTimestamp() == null ? Instant.now() : messageDto.getTimestamp();
-            boolean isDelivered = messageDto.getIsDelivered() != null ? messageDto.getIsDelivered() : false;
-
-            return Message.builder()
-                    .sender(sender)
-                    .recipient(recipient)
-                    .content(messageDto.getContent())
-                    .isRead(messageDto.getIsRead() != null ? messageDto.getIsRead() : false)
-                    .isDelivered(isDelivered)
-                    .messageType(messageDto.getMessageType() == null ? MessageType.TEXT : messageDto.getMessageType())
-                    .sentAt(sentAt)
-                    .deliveredAt(sentAt)
-                    .build();
+            return mapToMessageEntity(messageDto, sender, recipient);
         };
     }
 
@@ -114,40 +103,47 @@ public class BatchConfig {
             for (MessageDto dto : messageDtos) {
                 User sender = userMap.get(dto.getSenderId());
                 if (sender == null) {
-                    throw new NotFoundException("User not found with ID: " + dto.getSenderId());
+                    log.warn("Batch writer skipped message from non-existent user ID: {}", dto.getSenderId());
+                    continue;
                 }
 
                 User recipient = null;
                 if (dto.getRecipientId() != null) {
                     recipient = userMap.get(dto.getRecipientId());
                     if (recipient == null) {
-                        throw new NotFoundException("User not found with ID: " + dto.getRecipientId());
+                        log.warn("Batch writer skipped message to non-existent user ID: {}", dto.getRecipientId());
+                        continue;
                     }
                 } else {
                     recipient = systemUser;
                 }
 
-                Instant sentAt = dto.getTimestamp() == null ? Instant.now() : dto.getTimestamp();
-                boolean isDelivered = dto.getIsDelivered() != null ? dto.getIsDelivered() : false;
-
-                messages.add(Message.builder()
-                        .sender(sender)
-                        .recipient(recipient)
-                        .content(dto.getContent())
-                        .isRead(dto.getIsRead() != null ? dto.getIsRead() : false)
-                        .isDelivered(isDelivered)
-                        .messageType(dto.getMessageType() == null ? MessageType.TEXT : dto.getMessageType())
-                        .sentAt(sentAt)
-                        .deliveredAt(sentAt)
-                        .callOutcome(dto.getCallOutcome())
-                        .callDuration(dto.getCallDuration())
-                        .videoUsed(dto.getVideoUsed())
-                        .build());
+                messages.add(mapToMessageEntity(dto, sender, recipient));
             }
 
             // 4. Save all messages in bulk
             messageRepository.saveAll(messages);
         };
+    }
+
+    private Message mapToMessageEntity(MessageDto dto, User sender, User recipient) {
+        Instant sentAt = dto.getTimestamp() == null ? Instant.now() : dto.getTimestamp();
+        boolean isDelivered = dto.getIsDelivered() != null ? dto.getIsDelivered() : false;
+
+        return Message.builder()
+                .sender(sender)
+                .recipient(recipient)
+                .content(dto.getContent())
+                .isRead(dto.getIsRead() != null ? dto.getIsRead() : false)
+                .isDeleted(dto.getIsDeleted() != null ? dto.getIsDeleted() : false)
+                .isDelivered(isDelivered)
+                .messageType(dto.getMessageType() == null ? MessageType.TEXT : dto.getMessageType())
+                .sentAt(sentAt)
+                .deliveredAt(sentAt)
+                .callOutcome(dto.getCallOutcome())
+                .callDuration(dto.getCallDuration())
+                .videoUsed(dto.getVideoUsed())
+                .build();
     }
 
     @Bean

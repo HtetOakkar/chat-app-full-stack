@@ -2,16 +2,13 @@ package com.example.chatapp.chat.controller;
 
 import com.example.chatapp.chat.model.CallSession;
 import com.example.chatapp.chat.service.CallRegistry;
+import com.example.chatapp.chat.service.CallService;
 import com.example.chatapp.exception.BadRequestException;
 import com.example.chatapp.jwt.UserPrincipal;
 import com.example.chatapp.message.model.dto.CallSignalDto;
-import com.example.chatapp.message.model.dto.MessageDto;
-import com.example.chatapp.message.model.entity.MessageType;
-import com.example.chatapp.message.service.MessageService;
 import com.example.chatapp.user.model.entity.Contact;
 import com.example.chatapp.user.model.entity.ContactStatus;
 import com.example.chatapp.user.repository.ContactRepository;
-import com.example.chatapp.user.repository.UserRepository;
 import com.example.chatapp.websocket.MessageBroker;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,8 +29,7 @@ public class CallController {
     private final MessageBroker messageBroker;
     private final CallRegistry callRegistry;
     private final ContactRepository contactRepository;
-    private final UserRepository userRepository;
-    private final MessageService messageService;
+    private final CallService callService;
 
     @MessageMapping("/call.offer")
     public void processOffer(@Valid @Payload CallSignalDto signalDto, Principal principal) {
@@ -149,7 +145,7 @@ public class CallController {
         CallSession session = sessionOpt.get();
         callRegistry.unregisterCall(session);
         String outcome = "missed".equalsIgnoreCase(signalDto.getType()) ? "missed" : "cancelled";
-        saveCallRecord(session, outcome, 0);
+        callService.saveCallRecord(session, outcome, 0);
 
         if (signalDto.getType() == null) {
             signalDto.setType("cancel");
@@ -173,7 +169,7 @@ public class CallController {
 
         CallSession session = sessionOpt.get();
         callRegistry.unregisterCall(session);
-        saveCallRecord(session, "rejected", 0);
+        callService.saveCallRecord(session, "rejected", 0);
 
         signalDto.setType("reject");
         enrichSenderInfo(signalDto, authenticatedUser);
@@ -203,7 +199,7 @@ public class CallController {
         } else {
             outcome = "cancelled";
         }
-        saveCallRecord(session, outcome, duration);
+        callService.saveCallRecord(session, outcome, duration);
 
         signalDto.setType("hangup");
         enrichSenderInfo(signalDto, authenticatedUser);
@@ -228,39 +224,6 @@ public class CallController {
         return Optional.of(session);
     }
 
-    private void saveCallRecord(CallSession session, String outcome, long duration) {
-        com.example.chatapp.user.model.entity.User caller = userRepository.findById(session.getCallerId()).orElse(null);
-        com.example.chatapp.user.model.entity.User callee = userRepository.findById(session.getCalleeId()).orElse(null);
-        if (caller == null || callee == null) return;
-
-        boolean isVideo = "VIDEO".equalsIgnoreCase(session.getCallType());
-        MessageType messageType = isVideo ? MessageType.VIDEO : MessageType.AUDIO;
-
-        String content = formatCallLabel(outcome);
-
-        MessageDto messageDto = MessageDto.builder()
-                .content(content)
-                .senderId(session.getCallerId())
-                .senderUsername(caller.getUsername())
-                .senderFullName(caller.getFullName())
-                .recipientId(session.getCalleeId())
-                .messageType(messageType)
-                .timestamp(Instant.now())
-                .isRead(false)
-                .isDeleted(false)
-                .isDelivered(true)
-                .callOutcome(outcome)
-                .callDuration((int) duration)
-                .videoUsed(isVideo)
-                .build();
-
-        messageService.saveMessage(messageDto);
-
-        // Notify both parties of the new call record message
-        messageBroker.publishToUser(session.getCallerId().toString(), "/queue/messages", messageDto);
-        messageBroker.publishToUser(session.getCalleeId().toString(), "/queue/messages", messageDto);
-    }
-
     private UserPrincipal getAuthenticatedUser(Principal principal) {
         if (!(principal instanceof UserPrincipal userPrincipal)) {
             throw new BadRequestException("Authenticated user not found");
@@ -272,17 +235,5 @@ public class CallController {
         signalDto.setSenderId(user.getId());
         signalDto.setSenderUsername(user.getUsername());
         signalDto.setSenderFullName(user.getFullName());
-    }
-
-
-    private String formatCallLabel(String outcome) {
-        if (outcome == null) return "Call";
-        return switch (outcome.toLowerCase()) {
-            case "completed" -> "Call Ended";
-            case "missed" -> "Missed Call";
-            case "rejected" -> "Call Declined";
-            case "cancelled" -> "Call Cancelled";
-            default -> "Call";
-        };
     }
 }
