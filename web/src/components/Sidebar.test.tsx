@@ -50,7 +50,7 @@ describe("Sidebar", () => {
     });
   });
 
-  it("renders only CONTACT status contacts in the Contacts tab", async () => {
+  it("renders both CONTACT and ACCEPTED status contacts in the All Contacts tab", async () => {
     (apiFetch as jest.Mock).mockImplementation((url) => {
       if (url === "/api/v1/contacts") {
         return Promise.resolve([
@@ -100,10 +100,10 @@ describe("Sidebar", () => {
     expect(screen.getByText("All Contacts")).toBeInTheDocument();
     expect(screen.getByText("Blocked")).toBeInTheDocument();
 
-    // Only user1 and user3 should be rendered, not user2
+    // user1, user2 (ACCEPTED), and user3 should all be rendered
     expect(screen.getByText("user1")).toBeInTheDocument();
+    expect(screen.getByText("user2")).toBeInTheDocument();
     expect(screen.getByText("user3")).toBeInTheDocument();
-    expect(screen.queryByText("user2")).not.toBeInTheDocument();
   });
 
   it("renders BLOCKED status contacts when Blocked filter is clicked", async () => {
@@ -157,7 +157,78 @@ describe("Sidebar", () => {
     expect(screen.queryByText("user1")).not.toBeInTheDocument();
   });
 
-  it("filters contacts locally and opens the selected contact profile", async () => {
+  it("switches between All Contacts and Blocked filters correctly without omitting accepted contacts", async () => {
+    (apiFetch as jest.Mock).mockImplementation((url) => {
+      if (url === "/api/v1/contacts") {
+        return Promise.resolve([
+          {
+            id: 1,
+            contactUserId: 101,
+            contactUsername: "contact_user",
+            status: "CONTACT",
+            createdAt: "2023-01-01",
+          },
+          {
+            id: 2,
+            contactUserId: 102,
+            contactUsername: "accepted_user",
+            status: "ACCEPTED",
+            createdAt: "2023-01-01",
+          },
+        ]);
+      }
+      if (url === "/api/v1/contacts/blocked") {
+        return Promise.resolve([
+          {
+            id: 3,
+            contactUserId: 103,
+            contactUsername: "blocked_user",
+            status: "BLOCKED",
+            createdAt: "2023-01-01",
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(
+      <Sidebar
+        activeChat={null}
+        onSelectChat={jest.fn()}
+        onSelectProfileUser={jest.fn()}
+        refreshTrigger={0}
+      />
+    );
+
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalled();
+    });
+
+    // Switch to Contacts tab
+    fireEvent.click(screen.getByRole("button", { name: /contacts/i }));
+
+    const allContactsButton = screen.getByText("All Contacts");
+    const blockedButton = screen.getByText("Blocked");
+
+    // In All Contacts: contact_user and accepted_user are visible; blocked_user is not
+    expect(screen.getByText("contact_user")).toBeInTheDocument();
+    expect(screen.getByText("accepted_user")).toBeInTheDocument();
+    expect(screen.queryByText("blocked_user")).not.toBeInTheDocument();
+
+    // Switch to Blocked
+    fireEvent.click(blockedButton);
+    expect(screen.getByText("blocked_user")).toBeInTheDocument();
+    expect(screen.queryByText("contact_user")).not.toBeInTheDocument();
+    expect(screen.queryByText("accepted_user")).not.toBeInTheDocument();
+
+    // Switch back to All Contacts
+    fireEvent.click(allContactsButton);
+    expect(screen.getByText("contact_user")).toBeInTheDocument();
+    expect(screen.getByText("accepted_user")).toBeInTheDocument();
+    expect(screen.queryByText("blocked_user")).not.toBeInTheDocument();
+  });
+
+  it("searches within contacts tab consistently across both ACCEPTED and CONTACT users", async () => {
     const mockOnSelectProfileUser = jest.fn();
     (apiFetch as jest.Mock).mockImplementation((url) => {
       if (url === "/api/v1/contacts") {
@@ -165,15 +236,17 @@ describe("Sidebar", () => {
           {
             id: 1,
             contactUserId: 101,
-            contactUsername: "alice",
+            contactUsername: "alice_contact",
+            contactFullName: "Alice Smith",
             status: "CONTACT",
             createdAt: "2023-01-01",
           },
           {
             id: 2,
             contactUserId: 102,
-            contactUsername: "bob",
-            status: "CONTACT",
+            contactUsername: "bob_accepted",
+            contactFullName: "Bob Jones",
+            status: "ACCEPTED",
             createdAt: "2023-01-01",
           },
         ]);
@@ -191,27 +264,36 @@ describe("Sidebar", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("alice")).toBeInTheDocument();
+      expect(apiFetch).toHaveBeenCalled();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /contacts/i }));
-    fireEvent.change(screen.getByPlaceholderText("Search contacts..."), {
-      target: { value: "ali" },
+
+    const searchInput = screen.getByPlaceholderText("Search contacts...");
+
+    // Search for accepted user by username
+    fireEvent.change(searchInput, {
+      target: { value: "bob" },
     });
 
-    expect(screen.getByText("alice")).toBeInTheDocument();
-    expect(screen.queryByText("bob")).not.toBeInTheDocument();
-    expect(apiFetch).not.toHaveBeenCalledWith(
-      expect.stringContaining("/api/v1/users/search")
-    );
+    expect(screen.getByText("Bob Jones")).toBeInTheDocument();
+    expect(screen.queryByText("Alice Smith")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("alice"));
-
+    // Click on the accepted contact
+    fireEvent.click(screen.getByText("Bob Jones"));
     expect(mockOnSelectProfileUser).toHaveBeenCalledWith({
-      id: 101,
-      username: "alice",
-      status: "CONTACT",
+      id: 102,
+      username: "bob_accepted",
+      status: "ACCEPTED",
     });
+
+    // Search for contact user by full name
+    fireEvent.change(searchInput, {
+      target: { value: "smith" },
+    });
+
+    expect(screen.getByText("Alice Smith")).toBeInTheDocument();
+    expect(screen.queryByText("Bob Jones")).not.toBeInTheDocument();
   });
 
   it("hides sidebar on mobile when viewMode is profile and activeChat is null", () => {
@@ -263,5 +345,88 @@ describe("Sidebar", () => {
 
     expect(screen.getByText("Call Ended")).toBeInTheDocument();
     expect(screen.queryByText(/outcome/)).not.toBeInTheDocument();
+  });
+
+  it("does not render cleared conversation with no new messages in Chats tab, but renders it in Contacts tab", async () => {
+    (apiFetch as jest.Mock).mockImplementation((url: string) => {
+      if (url === "/api/v1/contacts") {
+        return Promise.resolve([
+          {
+            id: 1,
+            contactUserId: 101,
+            contactUsername: "cleared_user",
+            contactFullName: "Cleared User",
+            status: "CONTACT",
+            clearedAt: "2026-08-17T10:00:00Z",
+            lastMessageContent: null,
+            lastMessageTimestamp: null,
+            createdAt: "2026-08-17T09:00:00Z",
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(
+      <Sidebar
+        activeChat={null}
+        onSelectChat={jest.fn()}
+        onSelectProfileUser={jest.fn()}
+        refreshTrigger={0}
+      />
+    );
+
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalled();
+    });
+
+    // In Chats tab (default): cleared_user should NOT be in active chats list
+    expect(screen.queryByText("Cleared User")).not.toBeInTheDocument();
+    expect(screen.queryByText("cleared_user")).not.toBeInTheDocument();
+
+    // Switch to Contacts tab
+    fireEvent.click(screen.getByRole("button", { name: /contacts/i }));
+
+    // In Contacts tab: cleared_user SHOULD be rendered in the address book
+    expect(screen.getByText("Cleared User")).toBeInTheDocument();
+  });
+
+  it("renders cleared contact in Chats tab if a new message has arrived after clearing", async () => {
+    (apiFetch as jest.Mock).mockImplementation((url: string) => {
+      if (url === "/api/v1/contacts") {
+        return Promise.resolve([
+          {
+            id: 1,
+            contactUserId: 101,
+            contactUsername: "active_user",
+            contactFullName: "Active User",
+            status: "CONTACT",
+            clearedAt: "2026-08-17T10:00:00Z",
+            lastMessageContent: "New message after clear",
+            lastMessageTimestamp: "2026-08-17T10:05:00Z",
+            lastMessageSenderId: 101,
+            createdAt: "2026-08-17T09:00:00Z",
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(
+      <Sidebar
+        activeChat={null}
+        onSelectChat={jest.fn()}
+        onSelectProfileUser={jest.fn()}
+        refreshTrigger={0}
+      />
+    );
+
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalled();
+    });
+
+    // In Chats tab: active_user should be rendered because a new message exists
+    expect(screen.getByText("Active User")).toBeInTheDocument();
+    expect(screen.getByText("New message after clear")).toBeInTheDocument();
   });
 });

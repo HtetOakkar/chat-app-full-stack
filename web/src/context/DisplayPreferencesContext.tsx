@@ -6,6 +6,11 @@ export type AppearancePreference = "system" | "light" | "dark";
 export type EffectiveAppearance = "light" | "dark";
 export type InterfaceLanguage = "en" | "my";
 
+export type DisplayPreferences = {
+  appearance: AppearancePreference;
+  language: InterfaceLanguage;
+};
+
 type DisplayPreferencesContextValue = {
   appearance: AppearancePreference;
   effectiveAppearance: EffectiveAppearance;
@@ -16,9 +21,9 @@ type DisplayPreferencesContextValue = {
 
 const STORAGE_KEY = "meow.displayPreferences";
 
-const defaultPreferences = {
-  appearance: "system" as AppearancePreference,
-  language: "en" as InterfaceLanguage,
+const defaultPreferences: DisplayPreferences = {
+  appearance: "system",
+  language: "en",
 };
 
 const noop = () => {};
@@ -32,7 +37,7 @@ const DisplayPreferencesContext = createContext<DisplayPreferencesContextValue>(
   }
 );
 
-const readStoredPreferences = () => {
+const readStoredPreferences = (): DisplayPreferences => {
   if (typeof window === "undefined") return defaultPreferences;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -70,15 +75,20 @@ export function DisplayPreferencesProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [appearance, setAppearance] = useState<AppearancePreference>(
-    () => readStoredPreferences().appearance
-  );
-  const [language, setLanguage] = useState<InterfaceLanguage>(
-    () => readStoredPreferences().language
+  const [preferences, setPreferences] = useState<DisplayPreferences>(() =>
+    readStoredPreferences()
   );
   const [systemAppearance, setSystemAppearance] = useState<EffectiveAppearance>(
     () => getSystemAppearance()
   );
+
+  const { appearance, language } = preferences;
+
+  const setAppearance = (newAppearance: AppearancePreference) =>
+    setPreferences((prev) => ({ ...prev, appearance: newAppearance }));
+
+  const setLanguage = (newLanguage: InterfaceLanguage) =>
+    setPreferences((prev) => ({ ...prev, language: newLanguage }));
 
   const effectiveAppearance =
     appearance === "system" ? systemAppearance : appearance;
@@ -91,7 +101,6 @@ export function DisplayPreferencesProvider({
       event: MediaQueryListEvent | MediaQueryList
     ) => setSystemAppearance(event.matches ? "dark" : "light");
 
-    syncSystemAppearance(mediaQuery);
     mediaQuery.addEventListener?.("change", syncSystemAppearance);
     return () =>
       mediaQuery.removeEventListener?.("change", syncSystemAppearance);

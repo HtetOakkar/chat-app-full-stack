@@ -768,13 +768,19 @@ export default function Sidebar({
               </div>
             ) : (
               (() => {
-                const filteredContacts = contacts.filter(
-                  (c) =>
-                    c.status === contactsFilter &&
-                    c.contactUsername
-                      .toLowerCase()
-                      .includes(contactsSearchQuery.toLowerCase())
-                );
+                const query = contactsSearchQuery.toLowerCase();
+                const filteredContacts = contacts.filter((c) => {
+                  const matchesFilter =
+                    contactsFilter === "BLOCKED"
+                      ? c.status === "BLOCKED"
+                      : c.status === "CONTACT" || c.status === "ACCEPTED";
+                  const matchesSearch =
+                    c.contactUsername.toLowerCase().includes(query) ||
+                    (c.contactFullName
+                      ? c.contactFullName.toLowerCase().includes(query)
+                      : false);
+                  return matchesFilter && matchesSearch;
+                });
                 return (
                   <Virtuoso
                     className="flex-grow custom-scrollbar"
