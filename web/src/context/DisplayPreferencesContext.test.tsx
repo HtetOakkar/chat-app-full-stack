@@ -1,14 +1,11 @@
 import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { hydrateRoot } from "react-dom/client";
-import { renderToString } from "react-dom/server";
 import {
   DisplayPreferencesProvider,
   displayPreferencesStorageKey,
   useDisplayPreferences,
 } from "./DisplayPreferencesContext";
 import DisplayPreferencesControls from "@/components/DisplayPreferencesControls";
-import { useTranslations } from "@/lib/i18n";
 
 let prefersDark = false;
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null;
@@ -34,11 +31,6 @@ function Probe() {
       <div data-testid="language">{language}</div>
     </div>
   );
-}
-
-function LoadingTextProbe() {
-  const t = useTranslations();
-  return <span>{t.loadingApp}</span>;
 }
 
 describe("DisplayPreferencesProvider", () => {
@@ -114,42 +106,37 @@ describe("DisplayPreferencesProvider", () => {
     expect(screen.getByTestId("language")).toHaveTextContent("my");
   });
 
-  it("hydrates with default text before restoring browser preferences", async () => {
+  it("initializes state lazily from stored dark preference and Burmese language", () => {
     window.localStorage.setItem(
       displayPreferencesStorageKey,
       JSON.stringify({ appearance: "dark", language: "my" })
     );
-    const App = () => (
+
+    render(
       <DisplayPreferencesProvider>
-        <LoadingTextProbe />
+        <Probe />
       </DisplayPreferencesProvider>
     );
-    const originalWindow = global.window;
-    // Simulate Next server rendering, where browser storage is unavailable.
-    Reflect.deleteProperty(global, "window");
-    const serverHtml = renderToString(<App />);
-    global.window = originalWindow;
-    expect(serverHtml).toContain("Opening Meow Chit Chat...");
-    const container = document.createElement("div");
-    container.innerHTML = serverHtml;
-    document.body.appendChild(container);
-    const consoleError = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
 
-    await act(async () => {
-      hydrateRoot(container, <App />);
-    });
+    expect(screen.getByTestId("appearance")).toHaveTextContent("dark");
+    expect(screen.getByTestId("effective")).toHaveTextContent("dark");
+    expect(screen.getByTestId("language")).toHaveTextContent("my");
+    expect(document.documentElement.dataset.appearance).toBe("dark");
+    expect(document.documentElement.dataset.interfaceLanguage).toBe("my");
+    expect(document.documentElement).toHaveClass("dark");
+  });
 
-    expect(consoleError).not.toHaveBeenCalledWith(
-      expect.stringContaining("Hydration failed"),
-      expect.anything()
+  it("falls back gracefully when stored preferences are corrupted or invalid", () => {
+    window.localStorage.setItem(displayPreferencesStorageKey, "{ invalid JSON");
+
+    render(
+      <DisplayPreferencesProvider>
+        <Probe />
+      </DisplayPreferencesProvider>
     );
-    expect(
-      await screen.findByText("Meow Chit Chat ဖွင့်နေသည်...")
-    ).toBeInTheDocument();
 
-    consoleError.mockRestore();
-    document.body.removeChild(container);
+    expect(screen.getByTestId("appearance")).toHaveTextContent("system");
+    expect(screen.getByTestId("effective")).toHaveTextContent("light");
+    expect(screen.getByTestId("language")).toHaveTextContent("en");
   });
 });

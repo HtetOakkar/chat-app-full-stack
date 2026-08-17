@@ -71,25 +71,19 @@ export function DisplayPreferencesProvider({
   children: React.ReactNode;
 }) {
   const [appearance, setAppearance] = useState<AppearancePreference>(
-    defaultPreferences.appearance
+    () => readStoredPreferences().appearance
   );
   const [language, setLanguage] = useState<InterfaceLanguage>(
-    defaultPreferences.language
+    () => readStoredPreferences().language
   );
-  const [systemAppearance, setSystemAppearance] =
-    useState<EffectiveAppearance>("light");
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [systemAppearance, setSystemAppearance] = useState<EffectiveAppearance>(
+    () => getSystemAppearance()
+  );
 
   const effectiveAppearance =
     appearance === "system" ? systemAppearance : appearance;
 
   useEffect(() => {
-    const storedPreferences = readStoredPreferences();
-    setAppearance(storedPreferences.appearance);
-    setLanguage(storedPreferences.language);
-    setSystemAppearance(getSystemAppearance());
-    setPreferencesLoaded(true);
-
     const mediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
     if (!mediaQuery) return;
 
@@ -104,12 +98,16 @@ export function DisplayPreferencesProvider({
   }, []);
 
   useEffect(() => {
-    if (!preferencesLoaded) return;
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ appearance, language })
-    );
-  }, [appearance, language, preferencesLoaded]);
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ appearance, language })
+      );
+    } catch {
+      // Ignore storage errors in restricted environments
+    }
+  }, [appearance, language]);
 
   useEffect(() => {
     const root = document.documentElement;
