@@ -15,6 +15,7 @@ type Contact = {
   contactFullName?: string | null;
   status: string;
   createdAt: string;
+  clearedAt?: string | null;
   lastMessageContent?: string | null;
   lastMessageTimestamp?: string | null;
   lastMessageSenderId?: number | null;
@@ -509,7 +510,11 @@ export default function Sidebar({
           ) : (
             (() => {
               const sortedContacts = [...contacts]
-                .filter((c) => c.status !== "BLOCKED")
+                .filter(
+                  (c) =>
+                    c.status !== "BLOCKED" &&
+                    (!c.clearedAt || c.lastMessageTimestamp)
+                )
                 .sort((a, b) => {
                   const timeA = a.lastMessageTimestamp
                     ? new Date(a.lastMessageTimestamp).getTime()

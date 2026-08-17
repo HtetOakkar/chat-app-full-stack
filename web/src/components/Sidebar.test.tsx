@@ -354,6 +354,16 @@ describe("Sidebar", () => {
           {
             id: 1,
             contactUserId: 101,
+            contactUsername: "active_user",
+            contactFullName: "Active User",
+            status: "CONTACT",
+            lastMessageContent: "Hello there",
+            lastMessageTimestamp: "2026-08-17T10:00:00Z",
+            createdAt: "2026-08-17T09:00:00Z",
+          },
+          {
+            id: 2,
+            contactUserId: 102,
             contactUsername: "cleared_user",
             contactFullName: "Cleared User",
             status: "CONTACT",
@@ -376,8 +386,9 @@ describe("Sidebar", () => {
       />
     );
 
+    // Wait for the active contact to render in the Chats tab
     await waitFor(() => {
-      expect(apiFetch).toHaveBeenCalled();
+      expect(screen.getByText("Active User")).toBeInTheDocument();
     });
 
     // In Chats tab (default): cleared_user should NOT be in active chats list
@@ -387,7 +398,8 @@ describe("Sidebar", () => {
     // Switch to Contacts tab
     fireEvent.click(screen.getByRole("button", { name: /contacts/i }));
 
-    // In Contacts tab: cleared_user SHOULD be rendered in the address book
+    // In Contacts tab: BOTH active_user and cleared_user SHOULD be rendered in the address book
+    expect(screen.getByText("Active User")).toBeInTheDocument();
     expect(screen.getByText("Cleared User")).toBeInTheDocument();
   });
 
@@ -422,11 +434,10 @@ describe("Sidebar", () => {
     );
 
     await waitFor(() => {
-      expect(apiFetch).toHaveBeenCalled();
+      expect(screen.getByText("Active User")).toBeInTheDocument();
     });
 
     // In Chats tab: active_user should be rendered because a new message exists
-    expect(screen.getByText("Active User")).toBeInTheDocument();
     expect(screen.getByText("New message after clear")).toBeInTheDocument();
   });
 });
