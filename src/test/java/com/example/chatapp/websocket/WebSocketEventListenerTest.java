@@ -6,7 +6,7 @@ import com.example.chatapp.user.service.PresenceModule;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
@@ -26,13 +26,13 @@ class WebSocketEventListenerTest {
     @Autowired
     private ApplicationEventPublisher eventPublisher;
 
-    @MockBean
+    @MockitoBean
     private PresenceModule presenceModule;
 
-    @MockBean
+    @MockitoBean
     private SessionRegistry sessionRegistry;
 
-    @MockBean
+    @MockitoBean
     private CallService callService;
 
     @Test

@@ -15,7 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.example.chatapp.email.service.EmailService;
 import org.mockito.Mockito;
 import org.mockito.ArgumentMatchers;
@@ -56,16 +56,16 @@ class UserControllerIntegrationTest {
 
     private String userToken;
 
-    @MockBean
+    @MockitoBean
     private EmailService emailService;
 
-    @MockBean
+    @MockitoBean
     private PresenceModule presenceModule;
 
-    @MockBean
+    @MockitoBean
     private org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
 
-    @MockBean
+    @MockitoBean
     private com.example.chatapp.websocket.SessionRegistry sessionRegistry;
 
 
