@@ -13,7 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.mockito.Mockito;
 import org.mockito.ArgumentMatchers;
 import com.example.chatapp.email.service.EmailService;
@@ -36,7 +36,7 @@ class AuthenticationControllerIntegrationTest {
     @Autowired
     private com.example.chatapp.user.repository.ContactRepository contactRepository;
 
-    @MockBean
+    @MockitoBean
     private EmailService emailService;
 
     @BeforeEach

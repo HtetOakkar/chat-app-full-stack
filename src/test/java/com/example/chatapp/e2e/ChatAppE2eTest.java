@@ -979,13 +979,18 @@ public class ChatAppE2eTest {
         String tB = signupAndVerify("cd_b_4", "cdb4@example.com", "password123");
         User userA = userRepository.findByUsername("cd_a_4").orElseThrow();
         User userB = userRepository.findByUsername("cd_b_4").orElseThrow();
+        addContact(tA, "cd_b_4");
+        acceptContact(tB, userA.getId());
+
         StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
         sendPrivateWSMessage(sA, userB.getId(), "A's message");
-        Thread.sleep(500);
+        assertNotNull(sB.messages.poll(5, TimeUnit.SECONDS));
         clearPrivateChat(tA, userB.getId());
         MessagePage pageB = getPrivateHistory(tB, userA.getId());
         assertFalse(pageB.messages().isEmpty());
         sA.disconnect();
+        sB.disconnect();
     }
 
     @Test
@@ -994,14 +999,18 @@ public class ChatAppE2eTest {
         String tB = signupAndVerify("cd_b_5", "cdb5@example.com", "password123");
         User userA = userRepository.findByUsername("cd_a_5").orElseThrow();
         User userB = userRepository.findByUsername("cd_b_5").orElseThrow();
+        addContact(tA, "cd_b_5");
+        acceptContact(tB, userA.getId());
+
         StompTestSession sA = connectWebSocket(tA);
+        StompTestSession sB = connectWebSocket(tB);
         sendPrivateWSMessage(sA, userB.getId(), "Pre-clear");
-        Thread.sleep(500);
+        assertNotNull(sB.messages.poll(5, TimeUnit.SECONDS));
         clearPrivateChat(tA, userB.getId());
 
-        StompTestSession sB = connectWebSocket(tB);
+        Thread.sleep(100);
         sendPrivateWSMessage(sB, userA.getId(), "Post-clear");
-        Thread.sleep(500);
+        assertNotNull(sA.messages.poll(5, TimeUnit.SECONDS));
 
         MessagePage page = getPrivateHistory(tA, userB.getId());
         assertEquals(1, page.messages().size());
@@ -1970,12 +1979,15 @@ public class ChatAppE2eTest {
         User userA = userRepository.findByUsername("sc_u_5a").orElseThrow();
         User userB = userRepository.findByUsername("sc_u_5b").orElseThrow();
 
+        addContact(tA, "sc_u_5b");
+        acceptContact(tB, userA.getId());
+
         StompTestSession sA = connectWebSocket(tA);
         StompTestSession sB = connectWebSocket(tB);
 
         for (int i = 0; i < 50; i++) {
             sendPrivateWSMessage(sA, userB.getId(), "Message " + i);
-            assertNotNull(sB.messages.poll(5, TimeUnit.SECONDS));
+            assertNotNull(sB.messages.poll(10, TimeUnit.SECONDS));
         }
 
         clearPrivateChat(tA, userB.getId());
