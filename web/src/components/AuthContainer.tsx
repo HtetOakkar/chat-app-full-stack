@@ -7,6 +7,8 @@ import { apiEndpoint } from "@/lib/apiBase";
 import DisplayPreferencesControls from "./DisplayPreferencesControls";
 import { useTranslations } from "@/lib/i18n";
 
+import { saveAuthRedirect, consumeAuthRedirect } from "@/lib/authRedirect";
+
 type FormMode = "login" | "signup";
 const productName = "Meow Chit Chat";
 
@@ -37,22 +39,21 @@ export default function AuthContainer() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const redirectParam = params.get("redirect");
-      if (redirectParam && redirectParam.startsWith("/")) {
-        sessionStorage.setItem("auth_redirect", redirectParam);
+      if (redirectParam) {
+        saveAuthRedirect(redirectParam);
+      }
+      const modeParam = params.get("mode");
+      if (modeParam === "signup") {
+        setFormMode("signup");
       }
     }
   }, []);
 
   const handleAuthSuccess = (token: string) => {
     login(token);
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const redirectUrl =
-        params.get("redirect") || sessionStorage.getItem("auth_redirect");
-      if (redirectUrl && redirectUrl.startsWith("/")) {
-        sessionStorage.removeItem("auth_redirect");
-        router.push(redirectUrl);
-      }
+    const redirectUrl = consumeAuthRedirect();
+    if (redirectUrl) {
+      router.push(redirectUrl);
     }
   };
 

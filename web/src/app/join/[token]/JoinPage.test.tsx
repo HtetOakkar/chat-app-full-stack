@@ -33,6 +33,7 @@ describe("JoinPage", () => {
     (useRouter as jest.Mock).mockReturnValue({ push: mockPush });
     (useWorkspace as jest.Mock).mockReturnValue({
       acceptInvite: mockAcceptInvite,
+      acceptInvitation: mockAcceptInvite,
     });
     sessionStorage.clear();
   });
@@ -116,7 +117,7 @@ describe("JoinPage", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("prompts unauthenticated user to sign in with redirect destination preserved", async () => {
+  it("prompts unauthenticated user to sign in or create account with redirect destination preserved", async () => {
     (useAuth as jest.Mock).mockReturnValue({ isAuthenticated: false });
     (apiFetch as jest.Mock).mockResolvedValue({
       id: 1,
@@ -136,13 +137,19 @@ describe("JoinPage", () => {
     const signInBtn = screen.getByRole("button", {
       name: /sign in to accept/i,
     });
+    const signUpBtn = screen.getByRole("button", {
+      name: /create account to join/i,
+    });
     expect(signInBtn).toBeInTheDocument();
+    expect(signUpBtn).toBeInTheDocument();
 
-    fireEvent.click(signInBtn);
+    fireEvent.click(signUpBtn);
 
     expect(sessionStorage.getItem("auth_redirect")).toBe(
       "/join/test-token-123"
     );
-    expect(mockPush).toHaveBeenCalledWith("/?redirect=/join/test-token-123");
+    expect(mockPush).toHaveBeenCalledWith(
+      "/?redirect=/join/test-token-123&mode=signup"
+    );
   });
 });

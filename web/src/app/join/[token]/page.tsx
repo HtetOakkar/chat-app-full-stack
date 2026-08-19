@@ -5,6 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useWorkspace, type InvitationDto } from "@/context/WorkspaceContext";
 import { apiFetch } from "@/lib/api";
+import {
+  saveAuthRedirect,
+  AUTH_REDIRECT_STORAGE_KEY,
+} from "@/lib/authRedirect";
 
 export default function JoinPage() {
   const params = useParams();
@@ -12,7 +16,7 @@ export default function JoinPage() {
   const token = params?.token as string;
 
   const { isAuthenticated } = useAuth();
-  const { acceptInvite } = useWorkspace();
+  const { acceptInvitation } = useWorkspace();
 
   const [invitation, setInvitation] = useState<InvitationDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,9 +25,8 @@ export default function JoinPage() {
 
   useEffect(() => {
     if (!token) return;
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("auth_redirect", `/join/${token}`);
-    }
+    saveAuthRedirect(`/join/${token}`);
+
     const fetchInvite = async () => {
       try {
         const data: InvitationDto = await apiFetch(`/api/invitations/${token}`);
@@ -42,22 +45,24 @@ export default function JoinPage() {
     setJoining(true);
     setError(null);
     try {
-      const ws = await acceptInvite(token);
+      const joinedWorkspace = await acceptInvitation(token);
       if (typeof window !== "undefined") {
-        sessionStorage.removeItem("auth_redirect");
+        sessionStorage.removeItem(AUTH_REDIRECT_STORAGE_KEY);
       }
-      router.push(`/w/${ws.slug}`);
+      router.push(`/w/${joinedWorkspace.slug}`);
     } catch (err: any) {
       setError(err?.message || "Failed to join workspace.");
       setJoining(false);
     }
   };
 
-  const handleSignIn = () => {
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("auth_redirect", `/join/${token}`);
-    }
-    router.push(`/?redirect=/join/${token}`);
+  const handleNavigateAuth = (mode: "login" | "signup" = "login") => {
+    saveAuthRedirect(`/join/${token}`);
+    const query =
+      mode === "signup"
+        ? `/?redirect=/join/${token}&mode=signup`
+        : `/?redirect=/join/${token}`;
+    router.push(query);
   };
 
   if (loading) {
@@ -130,13 +135,20 @@ export default function JoinPage() {
               <div className="w-full space-y-3">
                 <button
                   type="button"
-                  onClick={handleSignIn}
+                  onClick={() => handleNavigateAuth("login")}
                   className="w-full py-3 px-4 bg-primary text-white font-bold text-sm rounded-2xl hover:bg-primary/90 transition-all shadow-md shadow-primary/20"
                 >
                   Sign In to Accept
                 </button>
+                <button
+                  type="button"
+                  onClick={() => handleNavigateAuth("signup")}
+                  className="w-full py-3 px-4 bg-surface-container hover:bg-surface-container-high text-on-surface font-bold text-sm rounded-2xl transition-all border border-outline-variant/30"
+                >
+                  Create Account to Join
+                </button>
                 <p className="text-[11px] text-outline">
-                  Don&apos;t have an account? Sign in or sign up to join.
+                  Sign in or create a new account to accept this invitation.
                 </p>
               </div>
             )}

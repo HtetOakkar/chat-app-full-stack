@@ -98,11 +98,16 @@ interface WorkspaceContextType {
     email: string,
     role?: "MEMBER" | "ADMIN"
   ) => Promise<InvitationDto>;
+  createEmailInvitation: (
+    email: string,
+    role?: "MEMBER" | "ADMIN"
+  ) => Promise<InvitationDto>;
   createJoinLink: (
     maxUses?: number,
     expiresInHours?: number
   ) => Promise<InvitationDto>;
   acceptInvite: (token: string) => Promise<WorkspaceDto>;
+  acceptInvitation: (token: string) => Promise<WorkspaceDto>;
   refreshWorkspaces: () => Promise<void>;
   refreshChannels: () => Promise<void>;
   refreshDirectMessages: () => Promise<void>;
@@ -553,8 +558,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         switchDirectMessage,
         addChannelMember,
         createEmailInvite,
+        createEmailInvitation: createEmailInvite,
         createJoinLink,
         acceptInvite,
+        acceptInvitation: acceptInvite,
         refreshWorkspaces,
         refreshChannels,
         refreshDirectMessages,
