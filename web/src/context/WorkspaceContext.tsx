@@ -57,6 +57,19 @@ export interface DirectMessageDto {
   createdAt: string;
 }
 
+export interface BatchInvitationItemResult {
+  email: string;
+  status: "sent" | "already_member" | "already_invited" | "invalid_email";
+  invitationId?: number;
+  message?: string;
+}
+
+export interface BatchInvitationResponse {
+  results: BatchInvitationItemResult[];
+  sentCount: number;
+  failedCount: number;
+}
+
 export interface InvitationDto {
   id: number;
   workspaceId: number;
@@ -66,10 +79,16 @@ export interface InvitationDto {
   type: "EMAIL" | "SHAREABLE_LINK";
   email?: string;
   role: "OWNER" | "ADMIN" | "MEMBER";
-  status: "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";
+  status: "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED" | "INACTIVE";
   expiresAt: string;
   maxUses?: number;
   usesCount: number;
+  inviterName?: string;
+  customMessage?: string;
+  initialChannelIds?: number[];
+  initialChannels?: ChannelDto[];
+  isActive?: boolean;
+  createdAt?: string;
 }
 
 interface WorkspaceContextType {
@@ -102,10 +121,22 @@ interface WorkspaceContextType {
     email: string,
     role?: "MEMBER" | "ADMIN"
   ) => Promise<InvitationDto>;
+  createBatchInvites: (
+    emails: string[],
+    role?: "MEMBER" | "ADMIN",
+    customMessage?: string,
+    initialChannelIds?: number[]
+  ) => Promise<BatchInvitationResponse>;
   createJoinLink: (
     maxUses?: number,
     expiresInHours?: number
   ) => Promise<InvitationDto>;
+  getShareableJoinLink: () => Promise<InvitationDto>;
+  toggleShareableJoinLink: () => Promise<InvitationDto>;
+  resetShareableJoinLink: () => Promise<InvitationDto>;
+  getPendingInvitations: () => Promise<InvitationDto[]>;
+  resendInvitation: (id: number) => Promise<InvitationDto>;
+  revokeInvitation: (id: number) => Promise<void>;
   acceptInvite: (token: string) => Promise<WorkspaceDto>;
   acceptInvitation: (token: string) => Promise<WorkspaceDto>;
   refreshWorkspaces: () => Promise<void>;
@@ -522,6 +553,71 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     );
   };
 
+  const createBatchInvites = async (
+    emails: string[],
+    role: "MEMBER" | "ADMIN" = "MEMBER",
+    customMessage?: string,
+    initialChannelIds?: number[]
+  ): Promise<BatchInvitationResponse> => {
+    if (!currentWorkspace) throw new Error("No active workspace");
+    return await apiFetch(
+      `/api/workspaces/${currentWorkspace.id}/invitations/batch`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          emails,
+          role,
+          customMessage,
+          initialChannelIds,
+        }),
+      }
+    );
+  };
+
+  const getShareableJoinLink = async (): Promise<InvitationDto> => {
+    if (!currentWorkspace) throw new Error("No active workspace");
+    return await apiFetch(`/api/workspaces/${currentWorkspace.id}/join-link`);
+  };
+
+  const toggleShareableJoinLink = async (): Promise<InvitationDto> => {
+    if (!currentWorkspace) throw new Error("No active workspace");
+    return await apiFetch(
+      `/api/workspaces/${currentWorkspace.id}/join-link/toggle`,
+      {
+        method: "POST",
+      }
+    );
+  };
+
+  const resetShareableJoinLink = async (): Promise<InvitationDto> => {
+    if (!currentWorkspace) throw new Error("No active workspace");
+    return await apiFetch(
+      `/api/workspaces/${currentWorkspace.id}/join-link/reset`,
+      {
+        method: "POST",
+      }
+    );
+  };
+
+  const getPendingInvitations = async (): Promise<InvitationDto[]> => {
+    if (!currentWorkspace) throw new Error("No active workspace");
+    return await apiFetch(
+      `/api/workspaces/${currentWorkspace.id}/invitations/pending`
+    );
+  };
+
+  const resendInvitation = async (id: number): Promise<InvitationDto> => {
+    return await apiFetch(`/api/invitations/${id}/resend`, {
+      method: "POST",
+    });
+  };
+
+  const revokeInvitation = async (id: number): Promise<void> => {
+    await apiFetch(`/api/invitations/${id}`, {
+      method: "DELETE",
+    });
+  };
+
   const createJoinLink = async (
     maxUses?: number,
     expiresInHours?: number
@@ -567,7 +663,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         addChannelMember,
         createEmailInvite,
         createEmailInvitation: createEmailInvite,
+        createBatchInvites,
         createJoinLink,
+        getShareableJoinLink,
+        toggleShareableJoinLink,
+        resetShareableJoinLink,
+        getPendingInvitations,
+        resendInvitation,
+        revokeInvitation,
         acceptInvite,
         acceptInvitation: acceptInvite,
         refreshWorkspaces,

@@ -106,16 +106,60 @@ export default function JoinPage() {
             <h1 className="text-xl font-black text-on-surface mb-1">
               Join {invitation?.workspaceName || "Workspace"}
             </h1>
-            <p className="text-xs text-outline mb-6">
-              You have been invited to join this workspace as a{" "}
+            <p className="text-xs text-outline mb-4">
+              {invitation?.inviterName ? (
+                <>
+                  <strong className="text-on-surface">
+                    @{invitation.inviterName}
+                  </strong>{" "}
+                  invited you to collaborate as a{" "}
+                </>
+              ) : (
+                "You have been invited to join this workspace as a "
+              )}
               <strong className="text-on-surface capitalize">
                 {invitation?.role.toLowerCase() || "member"}
               </strong>
               .
             </p>
 
+            {/* Custom Welcome Message */}
+            {invitation?.customMessage && (
+              <div className="w-full mb-4 p-3.5 rounded-2xl bg-surface-container-low border border-outline-variant/15 text-left">
+                <span className="text-[10px] font-bold text-outline uppercase tracking-wider block mb-1">
+                  Note from @{invitation.inviterName || "Inviter"}
+                </span>
+                <p className="text-xs text-on-surface italic leading-relaxed">
+                  &ldquo;{invitation.customMessage}&rdquo;
+                </p>
+              </div>
+            )}
+
+            {/* Initial Assigned Channels */}
+            {invitation?.initialChannels &&
+              invitation.initialChannels.length > 0 && (
+                <div className="w-full mb-5 p-3 rounded-2xl bg-surface-container/50 border border-outline-variant/15 text-left">
+                  <span className="text-[10px] font-bold text-outline uppercase tracking-wider block mb-1.5">
+                    Channels You&apos;ll Join
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {invitation.initialChannels.map((ch) => (
+                      <span
+                        key={ch.id}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-surface-container-high text-[11px] font-semibold text-on-surface"
+                      >
+                        <span className="text-outline">
+                          {ch.type === "PRIVATE" ? "🔒" : "#"}
+                        </span>
+                        {ch.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             {error && (
-              <div className="w-full mb-6 p-3 rounded-2xl bg-error-container/20 border border-error/20 text-error text-xs font-medium">
+              <div className="w-full mb-4 p-3 rounded-2xl bg-error-container/20 border border-error/20 text-error text-xs font-medium">
                 {error}
               </div>
             )}

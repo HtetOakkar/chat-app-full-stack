@@ -164,6 +164,27 @@ public class EmailServiceImplTest {
     }
 
     @Test
+    void sendWorkspaceInvitation_withCustomMessage_ShouldIncludePersonalizedNoteInHtmlAndText() {
+        // Arrange
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(ResponseEntity.ok("success"));
+
+        // Act
+        emailService.sendWorkspaceInvitation("bob@example.com", "Acme Workspace", "Alice", "tok12345", "Welcome to the engineering squad!");
+
+        // Assert
+        ArgumentCaptor<HttpEntity<Map<String, Object>>> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForEntity(eq("https://api.resend.com/emails"), entityCaptor.capture(), eq(String.class));
+
+        Map<String, Object> payload = entityCaptor.getValue().getBody();
+        String html = (String) payload.get("html");
+        String text = (String) payload.get("text");
+
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("Welcome to the engineering squad!"));
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("Welcome to the engineering squad!"));
+    }
+
+    @Test
     void sendWorkspaceInvitation_whenHttpFails_ShouldCatchAndNotThrowException() {
         // Arrange
         when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(String.class)))

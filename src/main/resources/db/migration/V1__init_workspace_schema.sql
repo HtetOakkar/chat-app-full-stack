@@ -161,6 +161,8 @@ CREATE TABLE IF NOT EXISTS workspace_invitations (
     uses_count INT NOT NULL DEFAULT 0,
     status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
     expires_at TIMESTAMP NOT NULL,
+    custom_message VARCHAR(1000) NULL,
+    initial_channel_ids VARCHAR(1000) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_invitation_token UNIQUE (token),

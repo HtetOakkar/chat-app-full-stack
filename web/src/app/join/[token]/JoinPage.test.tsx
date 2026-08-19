@@ -47,6 +47,12 @@ describe("JoinPage", () => {
       token: "test-token-123",
       role: "MEMBER",
       status: "PENDING",
+      inviterName: "alice_admin",
+      customMessage: "Welcome to our engineering team!",
+      initialChannels: [
+        { id: 10, name: "general", type: "PUBLIC" },
+        { id: 11, name: "backend-squad", type: "PRIVATE" },
+      ],
     });
 
     render(<JoinPage />);
@@ -55,10 +61,12 @@ describe("JoinPage", () => {
       expect(screen.getByText("Join Acme Workspace")).toBeInTheDocument();
     });
 
+    expect(screen.getByText("@alice_admin")).toBeInTheDocument();
     expect(
-      screen.getByText(/You have been invited to join this workspace as a/i)
+      screen.getByText(/Welcome to our engineering team!/i)
     ).toBeInTheDocument();
-    expect(screen.getByText("member")).toBeInTheDocument();
+    expect(screen.getByText("general")).toBeInTheDocument();
+    expect(screen.getByText("backend-squad")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /accept & join acme workspace/i })
     ).toBeInTheDocument();
@@ -109,6 +117,25 @@ describe("JoinPage", () => {
     await waitFor(() => {
       expect(
         screen.getByText("This invitation has expired")
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole("button", { name: /accept & join/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("displays error feedback when shareable link is deactivated", async () => {
+    (useAuth as jest.Mock).mockReturnValue({ isAuthenticated: true });
+    (apiFetch as jest.Mock).mockRejectedValue(
+      new Error("This shareable join link has been deactivated")
+    );
+
+    render(<JoinPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("This shareable join link has been deactivated")
       ).toBeInTheDocument();
     });
 

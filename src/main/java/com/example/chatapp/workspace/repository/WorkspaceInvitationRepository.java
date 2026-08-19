@@ -17,4 +17,12 @@ public interface WorkspaceInvitationRepository extends JpaRepository<WorkspaceIn
     List<WorkspaceInvitation> findByWorkspaceIdAndStatus(Long workspaceId, InvitationStatus status);
     
     Optional<WorkspaceInvitation> findByWorkspaceIdAndEmailAndStatus(Long workspaceId, String email, InvitationStatus status);
+
+    List<WorkspaceInvitation> findByWorkspaceIdAndType(Long workspaceId, com.example.chatapp.workspace.model.entity.InvitationType type);
+
+    List<WorkspaceInvitation> findByWorkspaceIdAndTypeAndStatus(Long workspaceId, com.example.chatapp.workspace.model.entity.InvitationType type, InvitationStatus status);
+
+    List<WorkspaceInvitation> findByWorkspaceIdAndTypeOrderByCreatedAtDesc(Long workspaceId, com.example.chatapp.workspace.model.entity.InvitationType type);
+
+    List<WorkspaceInvitation> findByWorkspaceIdAndTypeAndStatusOrderByCreatedAtDesc(Long workspaceId, com.example.chatapp.workspace.model.entity.InvitationType type, InvitationStatus status);
 }

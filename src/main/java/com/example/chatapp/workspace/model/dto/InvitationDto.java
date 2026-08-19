@@ -27,5 +27,10 @@ public class InvitationDto {
     private Instant expiresAt;
     private Integer maxUses;
     private Integer usesCount;
+    private String inviterName;
+    private String customMessage;
+    private java.util.List<Long> initialChannelIds;
+    private java.util.List<ChannelDto> initialChannels;
+    private Boolean isActive;
     private Instant createdAt;
 }

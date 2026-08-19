@@ -64,6 +64,12 @@ public class WorkspaceInvitation {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @Column(name = "custom_message", length = 1000)
+    private String customMessage;
+
+    @Column(name = "initial_channel_ids", length = 1000)
+    private String initialChannelIds;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

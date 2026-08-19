@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import WorkspaceRail from "./WorkspaceRail";
 import CreateChannelModal from "./CreateChannelModal";
 import InviteMembersModal from "./InviteMembersModal";
+import MemberDirectoryModal from "./MemberDirectoryModal";
 import WorkspaceOnboardingModal from "./WorkspaceOnboardingModal";
 import WorkspaceDMViewport from "./WorkspaceDMViewport";
 import WorkspaceChannelViewport from "./WorkspaceChannelViewport";
@@ -370,5 +371,190 @@ describe("Workspace Components", () => {
     });
 
     expect(screen.getByText("Live message from Alice")).toBeInTheDocument();
+  });
+
+  it("InviteMembersModal batch-invites multiple recipients with initial channels and custom message", async () => {
+    (apiFetch as jest.Mock).mockImplementation(
+      (url: string, options?: RequestInit) => {
+        if (url.includes("/api/workspaces/me")) {
+          return Promise.resolve(mockWorkspaces);
+        }
+        if (url.includes("/channels")) {
+          return Promise.resolve([
+            {
+              id: 1,
+              name: "general",
+              slug: "general",
+              type: "PUBLIC",
+              isMember: true,
+            },
+            {
+              id: 2,
+              name: "backend",
+              slug: "backend",
+              type: "PUBLIC",
+              isMember: true,
+            },
+          ]);
+        }
+        if (url.includes("/invitations/batch") && options?.method === "POST") {
+          const body = JSON.parse(options.body as string);
+          return Promise.resolve({
+            sentCount: 1,
+            failedCount: 1,
+            results: [
+              {
+                email: "colleague1@example.com",
+                status: "sent",
+                invitationId: 10,
+              },
+              {
+                email: "colleague2@example.com",
+                status: "already_member",
+                message: "Already member",
+              },
+            ],
+          });
+        }
+        return Promise.resolve([]);
+      }
+    );
+
+    const onClose = jest.fn();
+
+    await act(async () => {
+      render(
+        <WorkspaceProvider>
+          <InviteMembersModal isOpen={true} onClose={onClose} />
+        </WorkspaceProvider>
+      );
+    });
+
+    // Wait for workspace to load
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByText("Invite colleagues to Acme Corp")
+    ).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText(
+      /Enter emails separated by comma or space/i
+    );
+    fireEvent.change(input, {
+      target: { value: "colleague1@example.com, colleague2@example.com" },
+    });
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+
+    const noteInput = screen.getByPlaceholderText(
+      /Hey team, welcome to our workspace/i
+    );
+    fireEvent.change(noteInput, { target: { value: "Welcome to Acme Corp!" } });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: /Send Invitations/i })
+      );
+    });
+
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/api/workspaces/1/invitations/batch",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          emails: ["colleague1@example.com", "colleague2@example.com"],
+          role: "MEMBER",
+          customMessage: "Welcome to Acme Corp!",
+          initialChannelIds: [1],
+        }),
+      })
+    );
+
+    expect(screen.getByText("Sent")).toBeInTheDocument();
+    expect(screen.getByText("Already a Member")).toBeInTheDocument();
+  });
+
+  it("MemberDirectoryModal lists pending invitations and allows resending and revoking", async () => {
+    (apiFetch as jest.Mock).mockImplementation(
+      (url: string, options?: RequestInit) => {
+        if (url.includes("/api/workspaces/me")) {
+          return Promise.resolve(mockWorkspaces);
+        }
+        if (url.includes("/invitations/pending")) {
+          return Promise.resolve([
+            {
+              id: 88,
+              workspaceId: 1,
+              email: "pending@example.com",
+              inviterName: "alice",
+              role: "MEMBER",
+              status: "PENDING",
+              createdAt: "2026-08-19T00:00:00Z",
+            },
+          ]);
+        }
+        if (
+          url.includes("/api/invitations/88/resend") &&
+          options?.method === "POST"
+        ) {
+          return Promise.resolve({ id: 88, status: "PENDING" });
+        }
+        if (
+          url.includes("/api/invitations/88") &&
+          options?.method === "DELETE"
+        ) {
+          return Promise.resolve({});
+        }
+        return Promise.resolve([]);
+      }
+    );
+
+    const onClose = jest.fn();
+
+    await act(async () => {
+      render(
+        <WorkspaceProvider>
+          <MemberDirectoryModal isOpen={true} onClose={onClose} />
+        </WorkspaceProvider>
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Switch to Pending Invitations tab
+    const pendingTab = screen.getByRole("button", {
+      name: /Pending Invitations/i,
+    });
+    expect(pendingTab).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(pendingTab);
+    });
+
+    expect(screen.getByText("pending@example.com")).toBeInTheDocument();
+    expect(screen.getByText(/Invited by @alice/i)).toBeInTheDocument();
+
+    // Click Resend
+    const resendBtn = screen.getByRole("button", { name: /Resend/i });
+    await act(async () => {
+      fireEvent.click(resendBtn);
+    });
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/api/invitations/88/resend",
+      expect.objectContaining({ method: "POST" })
+    );
+
+    // Click Revoke
+    const revokeBtn = screen.getByRole("button", { name: /Revoke/i });
+    await act(async () => {
+      fireEvent.click(revokeBtn);
+    });
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/api/invitations/88",
+      expect.objectContaining({ method: "DELETE" })
+    );
   });
 });

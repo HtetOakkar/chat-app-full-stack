@@ -65,16 +65,23 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendWorkspaceInvitation(String to, String workspaceName, String token) {
-        sendWorkspaceInvitation(to, workspaceName, null, token);
+        sendWorkspaceInvitation(to, workspaceName, null, token, null);
     }
 
     @Override
     public void sendWorkspaceInvitation(String to, String workspaceName, String inviterName, String token) {
+        sendWorkspaceInvitation(to, workspaceName, inviterName, token, null);
+    }
+
+    @Override
+    public void sendWorkspaceInvitation(String to, String workspaceName, String inviterName, String token, String customMessage) {
         try {
             String baseUrl = frontendUrl != null ? frontendUrl.replaceAll("/+$", "") : "http://localhost:3000";
             String joinUrl = baseUrl + "/join/" + token;
 
             boolean hasInviter = inviterName != null && !inviterName.trim().isEmpty();
+            boolean hasCustomMessage = customMessage != null && !customMessage.trim().isEmpty();
+
             String subject = hasInviter
                     ? inviterName + " invited you to join " + workspaceName
                     : "You have been invited to join " + workspaceName;
@@ -86,6 +93,14 @@ public class EmailServiceImpl implements EmailService {
             String inviterText = hasInviter
                     ? inviterName + " has invited you to collaborate in " + workspaceName + " on Meow Chit Chat."
                     : "You have been invited to collaborate in " + workspaceName + " on Meow Chit Chat.";
+
+            String customMessageHtml = hasCustomMessage
+                    ? "<div style=\"background-color: #f8fafc; border-left: 4px solid #007bff; padding: 14px 18px; margin: 20px 0; border-radius: 4px; text-align: left; font-style: italic; color: #475569;\">&ldquo;" + escapeHtml(customMessage.trim()) + "&rdquo;</div>"
+                    : "";
+
+            String customMessageText = hasCustomMessage
+                    ? "\n\nNote from " + (hasInviter ? inviterName : "Inviter") + ":\n\"" + customMessage.trim() + "\"\n"
+                    : "";
 
             String htmlBody = "<!DOCTYPE html>\n" +
                     "<html lang=\"en\">\n" +
@@ -99,9 +114,10 @@ public class EmailServiceImpl implements EmailService {
                     "        <h1 style=\"color: #1a1a1a; margin-bottom: 8px; font-size: 24px; font-weight: 700;\">Meow Chit Chat</h1>\n" +
                     "        <div style=\"width: 48px; height: 3px; background-color: #007bff; margin: 12px auto 24px; border-radius: 2px;\"></div>\n" +
                     "        <h2 style=\"color: #333333; margin-bottom: 16px; font-size: 20px; font-weight: 600;\">You're invited to join <span style=\"color: #007bff;\">" + escapeHtml(workspaceName) + "</span></h2>\n" +
-                    "        <p style=\"color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 28px;\">\n" +
+                    "        <p style=\"color: #555555; font-size: 16px; line-height: 1.6; margin-bottom: 20px;\">\n" +
                     "            " + inviterHtml + "\n" +
                     "        </p>\n" +
+                    customMessageHtml +
                     "        <div style=\"margin: 32px 0;\">\n" +
                     "            <a href=\"" + joinUrl + "\" style=\"display: inline-block; background-color: #007bff; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 2px 6px rgba(0,123,255,0.3);\">Accept Invitation &amp; Join " + escapeHtml(workspaceName) + "</a>\n" +
                     "        </div>\n" +
@@ -120,7 +136,7 @@ public class EmailServiceImpl implements EmailService {
                     "</body>\n" +
                     "</html>";
 
-            String textBody = inviterText + "\n\n" +
+            String textBody = inviterText + customMessageText + "\n\n" +
                     "Accept the invitation and join by visiting the link below:\n" +
                     joinUrl + "\n\n" +
                     "If you did not expect this invitation, you can safely ignore this email.";
