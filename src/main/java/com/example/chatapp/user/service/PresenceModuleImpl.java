@@ -8,6 +8,8 @@ import com.example.chatapp.user.repository.PresenceRepository;
 import com.example.chatapp.user.repository.UserRepository;
 import com.example.chatapp.websocket.MessageBroker;
 import com.example.chatapp.websocket.SessionRegistry;
+import com.example.chatapp.workspace.model.entity.WorkspaceMember;
+import com.example.chatapp.workspace.repository.WorkspaceMemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.Cursor;
@@ -32,6 +34,7 @@ public class PresenceModuleImpl implements PresenceModule {
     private final PresenceRepository presenceRepository;
     private final SessionRegistry sessionRegistry;
     private final MessageBroker messageBroker;
+    private final WorkspaceMemberRepository workspaceMemberRepository;
 
     private static final String PRESENCE_KEY_PREFIX = "user:presence:";
     private static final String OFFLINE_SYNC_QUEUE = "user:presence:offline_sync";
@@ -57,6 +60,19 @@ public class PresenceModuleImpl implements PresenceModule {
             messageBroker.publishToUser(receiverId.toString(), "/queue/online", map);
         }
         messageBroker.publishToUser(userId.toString(), "/queue/online", map);
+
+        if (workspaceMemberRepository != null) {
+            try {
+                List<WorkspaceMember> memberships = workspaceMemberRepository.findByUserId(userId);
+                for (WorkspaceMember wm : memberships) {
+                    if (wm.getWorkspace() != null) {
+                        messageBroker.publishToTopic("/topic/workspace." + wm.getWorkspace().getId() + ".presence", map);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Error broadcasting online presence to workspace topics: {}", e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -80,6 +96,19 @@ public class PresenceModuleImpl implements PresenceModule {
             messageBroker.publishToUser(receiverId.toString(), "/queue/online", map);
         }
         messageBroker.publishToUser(userId.toString(), "/queue/online", map);
+
+        if (workspaceMemberRepository != null) {
+            try {
+                List<WorkspaceMember> memberships = workspaceMemberRepository.findByUserId(userId);
+                for (WorkspaceMember wm : memberships) {
+                    if (wm.getWorkspace() != null) {
+                        messageBroker.publishToTopic("/topic/workspace." + wm.getWorkspace().getId() + ".presence", map);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Error broadcasting offline presence to workspace topics: {}", e.getMessage());
+            }
+        }
     }
 
     @Override

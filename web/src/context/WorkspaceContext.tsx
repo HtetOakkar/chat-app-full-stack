@@ -173,6 +173,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         `/api/workspaces/${currentWorkspace.id}/dm`
       );
       setDirectMessages(data || []);
+      if (Array.isArray(data)) {
+        setPresenceMap((prev) => {
+          const next = { ...prev };
+          data.forEach((dm) => {
+            if (dm.targetMember?.userId && dm.targetMember?.presenceStatus) {
+              next[dm.targetMember.userId] = dm.targetMember.presenceStatus;
+            }
+          });
+          return next;
+        });
+      }
     } catch (err) {
       console.warn("Failed to fetch direct messages:", err);
     }
@@ -185,6 +196,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         `/api/workspaces/${currentWorkspace.id}/members`
       );
       setMembers(data || []);
+      if (Array.isArray(data)) {
+        setPresenceMap((prev) => {
+          const next = { ...prev };
+          data.forEach((m) => {
+            if (m.userId && m.presenceStatus) {
+              next[m.userId] = m.presenceStatus;
+            }
+          });
+          return next;
+        });
+      }
     } catch (err) {
       console.warn("Failed to fetch members:", err);
     }
@@ -224,7 +246,33 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const wId = currentWorkspace.id;
 
-    // 1. Presence Topic
+    // Fetch initially online users from REST API to hydrate presence immediately
+    apiFetch("/api/v1/users/online")
+      .then((onlineList: unknown) => {
+        if (Array.isArray(onlineList)) {
+          setPresenceMap((prev) => {
+            const next = { ...prev };
+            (
+              onlineList as {
+                userId: string | number;
+                status: string;
+              }[]
+            ).forEach((u) => {
+              if (u.userId) {
+                const numId = Number(u.userId);
+                next[numId] =
+                  u.status?.toUpperCase() === "ONLINE" ? "ONLINE" : "OFFLINE";
+              }
+            });
+            return next;
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch online users for workspace:", err);
+      });
+
+    // 1. Workspace Presence Topic
     const unsubPresence = subscribe(
       `/topic/workspace.${wId}.presence`,
       (frame) => {
@@ -233,14 +281,31 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
           if (payload.userId && payload.status) {
             setPresenceMap((prev) => ({
               ...prev,
-              [payload.userId]: payload.status as "ONLINE" | "OFFLINE",
+              [Number(payload.userId)]:
+                payload.status?.toUpperCase() === "ONLINE"
+                  ? "ONLINE"
+                  : "OFFLINE",
             }));
           }
         } catch {}
       }
     );
 
-    // 2. Workspace Events (e.g. member joined)
+    // 2. Personal User Online Queue (for real-time connect/disconnect events)
+    const unsubUserOnline = subscribe("/user/queue/online", (frame) => {
+      try {
+        const payload = JSON.parse(frame.body);
+        if (payload.userId && payload.status) {
+          setPresenceMap((prev) => ({
+            ...prev,
+            [Number(payload.userId)]:
+              payload.status?.toUpperCase() === "ONLINE" ? "ONLINE" : "OFFLINE",
+          }));
+        }
+      } catch {}
+    });
+
+    // 3. Workspace Events (e.g. member joined)
     const unsubEvents = subscribe(`/topic/workspace.${wId}.events`, (frame) => {
       try {
         const payload = JSON.parse(frame.body);
@@ -251,7 +316,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       } catch {}
     });
 
-    // 3. User DMs Queue
+    // 4. User DMs Queue
     const unsubDMs = subscribe(
       `/user/queue/workspace.${wId}.messages`,
       (frame) => {
@@ -267,7 +332,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     );
 
-    // 4. Inbound DM Typing
+    // 5. Inbound DM Typing
     const unsubDMTyping = subscribe(
       `/user/queue/workspace.${wId}.typing`,
       (frame) => {
@@ -298,10 +363,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         destination: `/app/workspace.${wId}.presence`,
         body: JSON.stringify({ status: "ONLINE" }),
       });
+      stompClientRef.current.publish({
+        destination: "/app/noti.status",
+        body: JSON.stringify({ status: "ONLINE" }),
+      });
     }
 
     return () => {
       unsubPresence();
+      unsubUserOnline();
       unsubEvents();
       unsubDMs();
       unsubDMTyping();

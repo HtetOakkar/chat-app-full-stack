@@ -12,7 +12,7 @@ import WorkspaceOnboardingModal from "./WorkspaceOnboardingModal";
 import CreateChannelModal from "./CreateChannelModal";
 import InviteMembersModal from "./InviteMembersModal";
 import MemberDirectoryModal from "./MemberDirectoryModal";
-import Sidebar, { type ActiveChat } from "./Sidebar";
+import type { ActiveChat } from "./Sidebar";
 import ChatViewport from "./ChatViewport";
 import MyProfileCard from "./MyProfileCard";
 import UserProfileCard from "./UserProfileCard";
@@ -63,13 +63,6 @@ export default function ChatDashboard() {
     };
     fetchProfile();
   }, []);
-
-  // Prompt onboarding if user has 0 workspaces
-  useEffect(() => {
-    if (!workspaceLoading && workspaces.length === 0) {
-      setShowWorkspaceModal(true);
-    }
-  }, [workspaceLoading, workspaces.length]);
 
   const handleSelectChat = useCallback((chat: ActiveChat | null) => {
     setActiveChat(chat);
@@ -175,59 +168,92 @@ export default function ChatDashboard() {
           onOpenCreateWorkspace={() => setShowWorkspaceModal(true)}
         />
 
-        {/* Tier 2: Workspace Sidebar */}
-        <div
-          className={
-            viewMode === "profile" || viewMode === "settings"
-              ? "hidden md:flex"
-              : "flex"
-          }
-        >
-          <WorkspaceSidebar
-            onOpenCreateChannel={() => setShowCreateChannel(true)}
-            onOpenInvite={() => setShowInvite(true)}
-            onOpenMemberDirectory={() => setShowDirectory(true)}
-            onOpenSettings={() => setViewMode("settings")}
-            onOpenProfile={() => setViewMode("profile")}
-          />
-        </div>
-
-        {/* Tier 3: Main Viewport Content */}
-        <div
-          className={`flex-1 flex flex-col min-w-0 ${
-            activeChat === null && viewMode === "chat"
-              ? "hidden md:flex"
-              : "flex"
-          }`}
-        >
+        {/* View content based on viewMode and workspace membership */}
+        {viewMode === "profile" ? (
           <div className="flex-1 flex min-h-0">
-            {viewMode === "profile" ? (
-              <MyProfileCard onBack={() => setViewMode("chat")} />
-            ) : viewMode === "settings" ? (
-              <SettingsPage onBack={() => setViewMode("chat")} />
-            ) : viewMode === "user-profile" && selectedProfileUser ? (
-              <UserProfileCard
-                userId={selectedProfileUser.id}
-                fallbackUsername={selectedProfileUser.username}
-                currentUserId={userId}
-                userStatus={selectedProfileUser.status}
-                onBack={() => setViewMode("chat")}
-                onSelectChat={handleSelectChat}
-              />
-            ) : currentDirectMessage ? (
-              <WorkspaceDMViewport dm={currentDirectMessage} />
-            ) : currentChannel ? (
-              <WorkspaceChannelViewport channel={currentChannel} />
-            ) : (
-              <ChatViewport
-                activeChat={activeChat}
-                onBannerAction={handleBannerAction}
-                onBackToList={() => handleSelectChat(null)}
-                onViewUserProfile={handleViewUserProfile}
-              />
-            )}
+            <MyProfileCard onBack={() => setViewMode("chat")} />
           </div>
-        </div>
+        ) : viewMode === "settings" ? (
+          <div className="flex-1 flex min-h-0">
+            <SettingsPage onBack={() => setViewMode("chat")} />
+          </div>
+        ) : viewMode === "user-profile" && selectedProfileUser ? (
+          <div className="flex-1 flex min-h-0">
+            <UserProfileCard
+              userId={selectedProfileUser.id}
+              fallbackUsername={selectedProfileUser.username}
+              currentUserId={userId}
+              userStatus={selectedProfileUser.status}
+              onBack={() => setViewMode("chat")}
+              onSelectChat={handleSelectChat}
+            />
+          </div>
+        ) : workspaces.length === 0 ? (
+          /* Zero-Workspace Centered Empty State Canvas */
+          <main
+            aria-label="Dashboard Empty State"
+            className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none bg-background"
+          >
+            <div className="max-w-md w-full flex flex-col items-center">
+              <div className="w-16 h-16 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-5 shadow-sm">
+                <span className="material-symbols-outlined text-3xl">
+                  workspaces
+                </span>
+              </div>
+              <h2 className="text-xl font-bold text-on-surface mb-2">
+                No Workspaces Yet
+              </h2>
+              <p className="text-xs md:text-sm text-outline mb-6 leading-relaxed max-w-sm">
+                You are not a member of any workspaces yet. Create a workspace
+                to start collaborating in channels and direct messages.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowWorkspaceModal(true)}
+                className="flex items-center gap-2 px-5 py-3 text-xs md:text-sm font-bold bg-primary text-white rounded-2xl hover:bg-primary/90 transition-all shadow-md shadow-primary/25 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <span className="material-symbols-outlined text-lg">add</span>
+                Create Workspace
+              </button>
+            </div>
+          </main>
+        ) : (
+          /* Workspaces Active: Tier 2 Sidebar & Tier 3 Content */
+          <>
+            <div className="flex">
+              <WorkspaceSidebar
+                onOpenCreateChannel={() => setShowCreateChannel(true)}
+                onOpenInvite={() => setShowInvite(true)}
+                onOpenMemberDirectory={() => setShowDirectory(true)}
+                onOpenSettings={() => setViewMode("settings")}
+                onOpenProfile={() => setViewMode("profile")}
+              />
+            </div>
+
+            <div
+              className={`flex-1 flex flex-col min-w-0 ${
+                activeChat === null && viewMode === "chat"
+                  ? "hidden md:flex"
+                  : "flex"
+              }`}
+            >
+              <div className="flex-1 flex min-h-0">
+                {currentDirectMessage ? (
+                  <WorkspaceDMViewport dm={currentDirectMessage} />
+                ) : currentChannel ? (
+                  <WorkspaceChannelViewport channel={currentChannel} />
+                ) : (
+                  <ChatViewport
+                    activeChat={activeChat}
+                    onBannerAction={handleBannerAction}
+                    onBackToList={() => handleSelectChat(null)}
+                    onViewUserProfile={handleViewUserProfile}
+                  />
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Modals */}

@@ -96,7 +96,7 @@ export default function WorkspaceRail({
           {/* Tooltip */}
           <div className="absolute left-full ml-3.5 hidden group-hover:flex items-center z-50 pointer-events-none">
             <div className="bg-inverse-surface text-inverse-on-surface text-xs font-semibold px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-lg">
-              Create or Join Workspace
+              Create Workspace
             </div>
           </div>
         </div>

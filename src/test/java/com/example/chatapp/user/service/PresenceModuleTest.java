@@ -6,6 +6,7 @@ import com.example.chatapp.user.repository.PresenceRepository;
 import com.example.chatapp.user.repository.UserRepository;
 import com.example.chatapp.websocket.MessageBroker;
 import com.example.chatapp.websocket.SessionRegistry;
+import com.example.chatapp.workspace.repository.WorkspaceMemberRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -42,6 +43,9 @@ class PresenceModuleTest {
     private MessageBroker messageBroker;
 
     @Mock
+    private WorkspaceMemberRepository workspaceMemberRepository;
+
+    @Mock
     private ValueOperations<String, Object> valueOperations;
 
     @Mock
@@ -55,11 +59,14 @@ class PresenceModuleTest {
         // Arrange
         Long userId = 1L;
         User user = User.builder().id(userId).username("testuser").build();
+        com.example.chatapp.workspace.model.entity.Workspace ws = com.example.chatapp.workspace.model.entity.Workspace.builder().id(100L).build();
+        com.example.chatapp.workspace.model.entity.WorkspaceMember wm = com.example.chatapp.workspace.model.entity.WorkspaceMember.builder().workspace(ws).user(user).build();
+
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(redisTemplate.opsForSet()).thenReturn(setOperations);
-        
         when(presenceRepository.findEligiblePresenceReceivers(userId)).thenReturn(Collections.emptySet());
+        when(workspaceMemberRepository.findByUserId(userId)).thenReturn(List.of(wm));
 
         // Act
         presenceModule.setUserOnline(userId);
@@ -68,6 +75,7 @@ class PresenceModuleTest {
         verify(valueOperations).set("user:presence:1", "Online");
         verify(setOperations).remove("user:presence:offline_sync", "1");
         verify(messageBroker).publishToUser(eq("1"), eq("/queue/online"), any(Map.class));
+        verify(messageBroker).publishToTopic(eq("/topic/workspace.100.presence"), any(Map.class));
     }
 
     @Test
@@ -75,10 +83,14 @@ class PresenceModuleTest {
         // Arrange
         Long userId = 1L;
         User user = User.builder().id(userId).username("testuser").build();
+        com.example.chatapp.workspace.model.entity.Workspace ws = com.example.chatapp.workspace.model.entity.Workspace.builder().id(100L).build();
+        com.example.chatapp.workspace.model.entity.WorkspaceMember wm = com.example.chatapp.workspace.model.entity.WorkspaceMember.builder().workspace(ws).user(user).build();
+
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(redisTemplate.opsForSet()).thenReturn(setOperations);
         when(presenceRepository.findEligiblePresenceReceivers(userId)).thenReturn(Collections.emptySet());
+        when(workspaceMemberRepository.findByUserId(userId)).thenReturn(List.of(wm));
 
         // Act
         presenceModule.setUserOffline(userId);
@@ -87,6 +99,7 @@ class PresenceModuleTest {
         verify(valueOperations).set(eq("user:presence:1"), any(String.class));
         verify(setOperations).add("user:presence:offline_sync", "1");
         verify(messageBroker).publishToUser(eq("1"), eq("/queue/online"), any(Map.class));
+        verify(messageBroker).publishToTopic(eq("/topic/workspace.100.presence"), any(Map.class));
     }
 
     @Test

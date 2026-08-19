@@ -10,6 +10,7 @@ import com.example.chatapp.workspace.model.dto.WorkspaceMemberDto;
 import com.example.chatapp.workspace.model.entity.*;
 import com.example.chatapp.workspace.model.request.CreateWorkspaceRequest;
 import com.example.chatapp.workspace.repository.*;
+import com.example.chatapp.websocket.SessionRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     private final ChannelRepository channelRepository;
     private final ConversationRepository conversationRepository;
     private final UserRepository userRepository;
+    private final SessionRegistry sessionRegistry;
 
     @Override
     @Transactional
@@ -184,6 +186,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
     private WorkspaceMemberDto toWorkspaceMemberDto(WorkspaceMember member) {
         User user = member.getUser();
+        boolean isOnline = sessionRegistry != null && sessionRegistry.isOnline(user.getId());
         return WorkspaceMemberDto.builder()
                 .id(member.getId())
                 .workspaceId(member.getWorkspace().getId())
@@ -192,6 +195,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
                 .fullName(user.getFullName())
                 .role(member.getRole())
                 .joinedAt(member.getJoinedAt())
+                .presenceStatus(isOnline ? "ONLINE" : "OFFLINE")
                 .build();
     }
 }

@@ -15,16 +15,36 @@ import EmojiPicker, { Theme, EmojiStyle } from "emoji-picker-react";
 interface DMMessage {
   id: number;
   content: string;
-  senderMemberId: number;
-  senderUserId: number;
+  senderMemberId?: number;
+  senderUserId?: number;
+  senderId?: number;
+  recipientId?: number;
   senderUsername: string;
   senderFullName?: string;
-  sentAt: string;
+  timestamp?: string;
+  sentAt?: string;
   messageType?: string;
   callOutcome?: string;
   callDuration?: number;
   isDeleted?: boolean;
 }
+
+const formatDMTime = (dateStr?: string): string => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const getDMTime = (msg: DMMessage): number => {
+  const ts = msg.timestamp || msg.sentAt;
+  if (!ts) return 0;
+  const time = new Date(ts).getTime();
+  return isNaN(time) ? 0 : time;
+};
 
 export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
   const { currentWorkspace, presenceMap, typingMap } = useWorkspace();
@@ -67,9 +87,7 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
         const existingIds = new Set(prev.map((m) => m.id));
         const newUnique = fetched.filter((m) => !existingIds.has(m.id));
         const combined = [...newUnique, ...prev];
-        combined.sort(
-          (a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()
-        );
+        combined.sort((a, b) => getDMTime(a) - getDMTime(b));
         return combined;
       });
     } catch (err) {
@@ -90,12 +108,16 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
   useEffect(() => {
     const handleDMReceived = (e: Event) => {
       const custom = e as CustomEvent;
-      const msg = custom.detail;
+      const msg: DMMessage = custom.detail;
+      if (!msg) return;
+
+      const senderId = msg.senderId ?? msg.senderUserId;
+      const recipientId = msg.recipientId;
+
       if (
-        msg &&
-        (msg.senderUserId === target.userId ||
-          msg.senderId === target.userId ||
-          msg.senderUserId === userId)
+        senderId === target.userId ||
+        recipientId === target.userId ||
+        senderId === userId
       ) {
         setMessages((prev) => {
           if (prev.some((m) => m.id === msg.id)) return prev;
@@ -206,9 +228,11 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
           startReached={loadDMHistory}
           followOutput={(isAtBottom) => (isAtBottom ? "smooth" : false)}
           itemContent={(index, msg) => {
-            const isOwn = msg.senderUserId === userId;
+            const senderId = msg.senderId ?? msg.senderUserId;
+            const isOwn = senderId === userId;
             const isCall =
               msg.messageType === "AUDIO" || msg.messageType === "VIDEO";
+            const timeStr = formatDMTime(msg.timestamp || msg.sentAt);
 
             if (isCall) {
               return (
@@ -220,12 +244,11 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
                     <span className="font-semibold">
                       {msg.callOutcome || "Call Ended"}
                     </span>
-                    <span className="text-[10px] text-outline ml-1">
-                      {new Date(msg.sentAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
+                    {timeStr && (
+                      <span className="text-[10px] text-outline ml-1">
+                        {timeStr}
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -244,16 +267,15 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
                   }`}
                 >
                   <p>{msg.content}</p>
-                  <span
-                    className={`text-[8px] font-bold mt-1.5 block tracking-tighter uppercase ${
-                      isOwn ? "text-white/60 text-right" : "text-outline"
-                    }`}
-                  >
-                    {new Date(msg.sentAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
+                  {timeStr && (
+                    <span
+                      className={`text-[8px] font-bold mt-1.5 block tracking-tighter uppercase ${
+                        isOwn ? "text-white/60 text-right" : "text-outline"
+                      }`}
+                    >
+                      {timeStr}
+                    </span>
+                  )}
                 </div>
               </div>
             );

@@ -13,6 +13,7 @@ import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.message.repository.RedisMessageRepository;
 import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.websocket.MessageBroker;
+import com.example.chatapp.websocket.SessionRegistry;
 import com.example.chatapp.workspace.model.dto.ChannelDto;
 import com.example.chatapp.workspace.model.dto.WorkspaceMemberDto;
 import com.example.chatapp.workspace.model.entity.*;
@@ -45,6 +46,7 @@ public class ChannelServiceImpl implements ChannelService {
     private final MessageMapper messageMapper;
     private final RedisMessageRepository redisMessageRepository;
     private final MessageBroker messageBroker;
+    private final SessionRegistry sessionRegistry;
 
     @Override
     @Transactional
@@ -337,6 +339,7 @@ public class ChannelServiceImpl implements ChannelService {
 
     private WorkspaceMemberDto toWorkspaceMemberDto(WorkspaceMember member) {
         User user = member.getUser();
+        boolean isOnline = sessionRegistry != null && sessionRegistry.isOnline(user.getId());
         return WorkspaceMemberDto.builder()
                 .id(member.getId())
                 .workspaceId(member.getWorkspace().getId())
@@ -345,6 +348,7 @@ public class ChannelServiceImpl implements ChannelService {
                 .fullName(user.getFullName())
                 .role(member.getRole())
                 .joinedAt(member.getJoinedAt())
+                .presenceStatus(isOnline ? "ONLINE" : "OFFLINE")
                 .build();
     }
 }

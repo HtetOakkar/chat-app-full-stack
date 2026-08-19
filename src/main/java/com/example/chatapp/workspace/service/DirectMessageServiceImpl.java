@@ -12,6 +12,7 @@ import com.example.chatapp.message.model.entity.MessageType;
 import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.websocket.MessageBroker;
+import com.example.chatapp.websocket.SessionRegistry;
 import com.example.chatapp.workspace.model.dto.DirectMessageDto;
 import com.example.chatapp.workspace.model.dto.WorkspaceMemberDto;
 import com.example.chatapp.workspace.model.entity.*;
@@ -40,6 +41,7 @@ public class DirectMessageServiceImpl implements DirectMessageService {
     private final MessageRepository messageRepository;
     private final MessageMapper messageMapper;
     private final MessageBroker messageBroker;
+    private final SessionRegistry sessionRegistry;
 
     @Override
     @Transactional
@@ -213,6 +215,7 @@ public class DirectMessageServiceImpl implements DirectMessageService {
 
     private WorkspaceMemberDto toWorkspaceMemberDto(WorkspaceMember member) {
         User user = member.getUser();
+        boolean isOnline = sessionRegistry != null && sessionRegistry.isOnline(user.getId());
         return WorkspaceMemberDto.builder()
                 .id(member.getId())
                 .workspaceId(member.getWorkspace().getId())
@@ -221,6 +224,7 @@ public class DirectMessageServiceImpl implements DirectMessageService {
                 .fullName(user.getFullName())
                 .role(member.getRole())
                 .joinedAt(member.getJoinedAt())
+                .presenceStatus(isOnline ? "ONLINE" : "OFFLINE")
                 .build();
     }
 }

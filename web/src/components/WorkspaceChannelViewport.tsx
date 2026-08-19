@@ -11,13 +11,32 @@ import EmojiPicker, { Theme, EmojiStyle } from "emoji-picker-react";
 interface ChannelMessage {
   id: number;
   content: string;
-  senderMemberId: number;
-  senderUserId: number;
+  senderMemberId?: number;
+  senderUserId?: number;
+  senderId?: number;
   senderUsername: string;
   senderFullName?: string;
-  sentAt: string;
+  timestamp?: string;
+  sentAt?: string;
   isDeleted?: boolean;
 }
+
+const formatChannelTime = (dateStr?: string): string => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const getChannelTime = (msg: ChannelMessage): number => {
+  const ts = msg.timestamp || msg.sentAt;
+  if (!ts) return 0;
+  const time = new Date(ts).getTime();
+  return isNaN(time) ? 0 : time;
+};
 
 export default function WorkspaceChannelViewport({
   channel,
@@ -60,9 +79,7 @@ export default function WorkspaceChannelViewport({
         const existingIds = new Set(prev.map((m) => m.id));
         const newUnique = fetched.filter((m) => !existingIds.has(m.id));
         const combined = [...newUnique, ...prev];
-        combined.sort(
-          (a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()
-        );
+        combined.sort((a, b) => getChannelTime(a) - getChannelTime(b));
         return combined;
       });
     } catch (err) {
@@ -176,7 +193,10 @@ export default function WorkspaceChannelViewport({
           startReached={loadChannelHistory}
           followOutput={(isAtBottom) => (isAtBottom ? "smooth" : false)}
           itemContent={(index, msg) => {
-            const isOwn = msg.senderUserId === userId;
+            const senderId = msg.senderId ?? msg.senderUserId;
+            const isOwn = senderId === userId;
+            const timeStr = formatChannelTime(msg.timestamp || msg.sentAt);
+
             return (
               <div
                 key={msg.id}
@@ -195,16 +215,15 @@ export default function WorkspaceChannelViewport({
                   }`}
                 >
                   <p>{msg.content}</p>
-                  <span
-                    className={`text-[8px] font-bold mt-1.5 block tracking-tighter uppercase ${
-                      isOwn ? "text-white/60 text-right" : "text-outline"
-                    }`}
-                  >
-                    {new Date(msg.sentAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
+                  {timeStr && (
+                    <span
+                      className={`text-[8px] font-bold mt-1.5 block tracking-tighter uppercase ${
+                        isOwn ? "text-white/60 text-right" : "text-outline"
+                      }`}
+                    >
+                      {timeStr}
+                    </span>
+                  )}
                 </div>
               </div>
             );
