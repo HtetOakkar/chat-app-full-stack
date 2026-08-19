@@ -47,6 +47,8 @@ public class RoleDataInitiator implements CommandLineRunner {
         if (userRepository.findByUsername("system").isEmpty()) {
             User systemUser = User.builder()
                     .username("system")
+                    .email("system@chatapp.local")
+                    .emailVerified(true)
                     .password(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
                     .role(userRole)
                     .version(0L)
