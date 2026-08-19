@@ -1,27 +1,25 @@
 package com.example.chatapp.user.controller;
 
-import com.example.chatapp.user.repository.UserRepository;
-import com.example.chatapp.user.model.entity.Contact;
-import com.example.chatapp.user.model.entity.ContactStatus;
+import com.example.chatapp.email.service.EmailService;
+import com.example.chatapp.message.model.dto.OnlineStatusDto;
+import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.user.model.entity.User;
-import com.example.chatapp.user.repository.ContactRepository;
+import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.user.service.PresenceModule;
+import com.example.chatapp.workspace.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import com.example.chatapp.email.service.EmailService;
-import org.mockito.Mockito;
-import org.mockito.ArgumentMatchers;
-import com.example.chatapp.user.service.PresenceModule;
-import com.example.chatapp.message.model.dto.OnlineStatusDto;
-
 
 import java.util.Map;
 
@@ -30,7 +28,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -44,12 +41,32 @@ class UserControllerIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
-
     @Autowired
     private UserRepository userRepository;
 
     @Autowired
-    private ContactRepository contactRepository;
+    private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private WorkspaceMemberRepository workspaceMemberRepository;
+
+    @Autowired
+    private ChannelRepository channelRepository;
+
+    @Autowired
+    private ChannelMemberRepository channelMemberRepository;
+
+    @Autowired
+    private ConversationRepository conversationRepository;
+
+    @Autowired
+    private ConversationParticipantRepository conversationParticipantRepository;
+
+    @Autowired
+    private WorkspaceInvitationRepository workspaceInvitationRepository;
+
+    @Autowired
+    private MessageRepository messageRepository;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -68,10 +85,16 @@ class UserControllerIntegrationTest {
     @MockitoBean
     private com.example.chatapp.websocket.SessionRegistry sessionRegistry;
 
-
     @BeforeEach
     void setup() throws Exception {
-        contactRepository.deleteAll();
+        messageRepository.deleteAll();
+        workspaceInvitationRepository.deleteAll();
+        conversationParticipantRepository.deleteAll();
+        conversationRepository.deleteAll();
+        channelMemberRepository.deleteAll();
+        channelRepository.deleteAll();
+        workspaceMemberRepository.deleteAll();
+        workspaceRepository.deleteAll();
         userRepository.deleteAll();
 
         String signupBody = """
@@ -317,12 +340,10 @@ class UserControllerIntegrationTest {
 
     @Test
     void searchUsersShouldNotIncludeCurrentUser() throws Exception {
-        // testuser is the current user. Let's set their fullName to include "testuser" just in case.
         com.example.chatapp.user.model.entity.User currentUser = userRepository.findByUsername("testuser").orElseThrow();
         currentUser.setFullName("Test User Name");
         userRepository.saveAndFlush(currentUser);
 
-        // create another user matching "test"
         String signupOther = """
                 {
                   "username": "testother",
@@ -418,41 +439,6 @@ class UserControllerIntegrationTest {
     }
 
     @Test
-    void getUserProfileByIdShouldHidePrivateFieldsAcrossRelationshipStates() throws Exception {
-        User currentUser = userRepository.findByUsername("testuser").orElseThrow();
-        User contact = createProfileUser("acceptedprofile", "Accepted Profile", "accepted@example.com");
-        User pending = createProfileUser("pendingprofile", "Pending Profile", "pending@example.com");
-        User neglected = createProfileUser("neglectedprofile", "Neglected Profile", "neglected@example.com");
-        User blocked = createProfileUser("blockedprofile", "Blocked Profile", "blocked@example.com");
-
-        contactRepository.save(Contact.builder()
-                .owner(currentUser)
-                .contactUser(contact)
-                .status(ContactStatus.ACCEPTED)
-                .build());
-        contactRepository.save(Contact.builder()
-                .owner(currentUser)
-                .contactUser(pending)
-                .status(ContactStatus.PENDING_REQUEST)
-                .build());
-        contactRepository.save(Contact.builder()
-                .owner(currentUser)
-                .contactUser(neglected)
-                .status(ContactStatus.NEGLECTED)
-                .build());
-        contactRepository.save(Contact.builder()
-                .owner(currentUser)
-                .contactUser(blocked)
-                .status(ContactStatus.BLOCKED)
-                .build());
-
-        assertPublicProfileOnly(contact);
-        assertPublicProfileOnly(pending);
-        assertPublicProfileOnly(neglected);
-        assertPublicProfileOnly(blocked);
-    }
-
-    @Test
     void getOnlineUsersShouldReturnEmptyListWhenNoActiveSessions() throws Exception {
         Mockito.when(presenceModule.getOnlineUsers(ArgumentMatchers.anyLong()))
                .thenReturn(java.util.Collections.emptyList());
@@ -503,17 +489,4 @@ class UserControllerIntegrationTest {
         user.setEmailVerified(true);
         return userRepository.saveAndFlush(user);
     }
-
-    private void assertPublicProfileOnly(User viewedUser) throws Exception {
-        mockMvc.perform(get("/api/v1/users/" + viewedUser.getId() + "/profile")
-                        .header("Authorization", userToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.username").value(viewedUser.getUsername()))
-                .andExpect(jsonPath("$.fullName").value(viewedUser.getFullName()))
-                .andExpect(jsonPath("$.email").doesNotExist())
-                .andExpect(jsonPath("$.birthDate").doesNotExist())
-                .andExpect(jsonPath("$.emailVerified").doesNotExist());
-    }
 }
-
-

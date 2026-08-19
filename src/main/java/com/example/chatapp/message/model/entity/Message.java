@@ -1,21 +1,21 @@
 package com.example.chatapp.message.model.entity;
 
-import com.example.chatapp.user.model.entity.User;
+import com.example.chatapp.workspace.model.entity.Conversation;
+import com.example.chatapp.workspace.model.entity.WorkspaceMember;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 
 @Entity
 @Table(name = "messages", indexes = {
-        @Index(name = "idx_messages_public_recipient_sent_id", columnList = "recipient_id, sent_at, id"),
-        @Index(name = "idx_messages_private_sender_recipient_sent_id", columnList = "sender_id, recipient_id, sent_at, id"),
-        @Index(name = "idx_messages_private_recipient_sender_sent_id", columnList = "recipient_id, sender_id, sent_at, id"),
-        @Index(name = "idx_messages_unread_sender_recipient_read_sent", columnList = "sender_id, recipient_id, is_read, sent_at")
+        @Index(name = "idx_messages_conv_sent", columnList = "conversation_id, sent_at"),
+        @Index(name = "idx_messages_sender_id", columnList = "sender_member_id")
 })
 @Data
 @AllArgsConstructor
@@ -27,51 +27,50 @@ public class Message {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "conversation_id", nullable = false)
+    private Conversation conversation;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sender_member_id")
+    private WorkspaceMember senderMember;
+
+    @Column(nullable = false, length = 5000)
     private String content;
 
-    @Column(name = "is_read", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
-    private Boolean isRead;
-
+    @Enumerated(EnumType.STRING)
+    @Column(name = "message_type", nullable = false, length = 32)
     @Builder.Default
-    @Column(name = "is_deleted", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private MessageType messageType = MessageType.TEXT;
+
+    @Column(name = "is_deleted", nullable = false)
+    @Builder.Default
     private Boolean isDeleted = false;
 
-    @Column(name = "is_delivered", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
-    private Boolean isDelivered;
+    @Column(name = "is_read", nullable = false)
+    @Builder.Default
+    private Boolean isRead = false;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "message_type", nullable = false)
-    private MessageType messageType;
-
-    @Column(name = "sent_at", nullable = false, updatable = false)
-    private Instant sentAt;
-
-    @PrePersist
-    protected void onCreate() {
-        if (this.sentAt == null) {
-            this.sentAt = Instant.now();
-        }
-    }
-
-    @Column
-    private Instant deliveredAt;
-
-    @Column(name = "call_outcome")
+    @Column(name = "call_outcome", length = 32)
     private String callOutcome;
 
     @Column(name = "call_duration")
-    private Integer callDuration;
+    private Long callDuration;
 
     @Column(name = "video_used")
     private Boolean videoUsed;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sender_id", referencedColumnName = "id", nullable = false)
-    private User sender;
+    @Column(name = "sent_at", nullable = false, updatable = false)
+    private Instant sentAt;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "recipient_id", referencedColumnName = "id", nullable = false)
-    private User recipient;
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
+    @PrePersist
+    protected void onCreate() {
+        if (sentAt == null) {
+            sentAt = Instant.now();
+        }
+    }
 }

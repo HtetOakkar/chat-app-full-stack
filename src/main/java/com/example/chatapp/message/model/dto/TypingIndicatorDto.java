@@ -11,13 +11,15 @@ import jakarta.validation.constraints.NotNull;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TypingIndicatorDto {
-    @NotNull(message = "recipientId is required")
+    private Long workspaceId;
+    private Long channelId;
     private Long recipientId;
 
     @NotNull(message = "isTyping is required")
     private Boolean isTyping;
 
     private Long senderId;
+    private String senderUsername;
     
     public TypingIndicatorDto(Long recipientId, Boolean isTyping) {
         this.recipientId = recipientId;

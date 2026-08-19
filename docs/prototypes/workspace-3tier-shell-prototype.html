@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3-Tier Workspace UI Prototype</title>
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --rail-bg: #0b0f19;
+      --sidebar-bg: #1e293b;
+      --main-bg: #0f172a;
+      --panel-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --unread-badge: #ef4444;
+      --online: #10b981;
+      --font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-dark);
+      color: var(--text);
+      font-family: var(--font);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Prototype Header */
+    .proto-banner {
+      background: #182234;
+      border-bottom: 1px solid var(--border);
+      padding: 6px 16px;
+      font-size: 0.8rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text-muted);
+      z-index: 100;
+    }
+    .proto-badge {
+      background: var(--accent);
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 0.7rem;
+    }
+
+    /* Shell Layout Container */
+    #app-shell {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ------------------------------------------------------------- */
+    /* VARIANT A: Classic Slack 3-Tier                               */
+    /* ------------------------------------------------------------- */
+    .variant-a .left-rail {
+      width: 68px;
+      background: var(--rail-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 0;
+      gap: 12px;
+      z-index: 10;
+    }
+    .ws-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: #334155;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.1rem;
+      cursor: pointer;
+      position: relative;
+      transition: border-radius 0.15s ease, background 0.15s ease;
+      user-select: none;
+    }
+    .ws-icon:hover { border-radius: 10px; background: var(--accent); color: #fff; }
+    .ws-icon.active { border-radius: 10px; background: var(--accent); color: #fff; box-shadow: 0 0 0 2px #818cf8; }
+    .ws-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: var(--unread-badge);
+      color: #fff;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 10px;
+    }
+
+    .variant-a .sidebar {
+      width: 240px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-header {
+      padding: 14px 16px;
+      font-weight: 700;
+      font-size: 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .sidebar-section {
+      padding: 12px 8px 4px 12px;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .nav-item {
+      padding: 6px 12px;
+      border-radius: 6px;
+      margin: 2px 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.88rem;
+      color: #cbd5e1;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
+    .nav-item.active { background: rgba(99, 102, 241, 0.2); color: #818cf8; font-weight: 600; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--online); }
+
+    .main-stream {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--main-bg);
+      position: relative;
+    }
+    .chat-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--sidebar-bg);
+    }
+    .chat-messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .msg-card {
+      display: flex;
+      gap: 12px;
+    }
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: #475569;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .msg-body { flex: 1; }
+    .msg-author { font-weight: 600; font-size: 0.88rem; margin-bottom: 2px; }
+    .msg-time { font-size: 0.72rem; color: var(--text-muted); margin-left: 8px; }
+    .msg-text { font-size: 0.88rem; color: #cbd5e1; }
+
+    .composer-area {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--sidebar-bg);
+    }
+    .composer-box {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .composer-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    .right-drawer {
+      width: 280px;
+      background: var(--panel-bg);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+    }
+
+    /* ------------------------------------------------------------- */
+    /* VARIANT B: Compact Hub (Discord/Linear Style)                 */
+    /* ------------------------------------------------------------- */
+    .variant-b .left-rail {
+      width: 56px;
+      background: #090d16;
+      border-right: 1px solid #1e293b;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0;
+      gap: 8px;
+    }
+    .variant-b .sidebar {
+      width: 220px;
+      background: #111827;
+      border-right: 1px solid #1e293b;
+    }
+    .variant-b .sidebar-header {
+      background: #1f2937;
+      padding: 10px 14px;
+    }
+
+    /* ------------------------------------------------------------- */
+    /* VARIANT C: Wide Canvas (MS Teams Style)                       */
+    /* ------------------------------------------------------------- */
+    .variant-c .left-rail {
+      width: 60px;
+      background: #1e1b4b;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      gap: 18px;
+    }
+    .variant-c .sidebar {
+      width: 260px;
+      background: #1e293b;
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Floating Switcher Toolbar                                     */
+    /* ------------------------------------------------------------- */
+    .switcher-pill {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e1b4b;
+      border: 1px solid #6366f1;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      border-radius: 30px;
+      padding: 6px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      z-index: 1000;
+    }
+    .pill-btn {
+      background: #312e81;
+      color: #fff;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+    .pill-btn:hover { background: #4338ca; }
+    .pill-label {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #e0e7ff;
+    }
+  </style>
+</head>
+<body class="variant-a">
+
+  <div class="proto-banner">
+    <div>
+      <span class="proto-badge">UI Prototype</span>
+      <strong> 3-Tier Workspace Layout Shell</strong> &bull; Press <kbd style="background: #334155; padding: 2px 5px; border-radius: 4px;">&larr;</kbd> <kbd style="background: #334155; padding: 2px 5px; border-radius: 4px;">&rarr;</kbd> to switch variants
+    </div>
+    <div id="variant-indicator">Current: Variant A (Classic Slack)</div>
+  </div>
+
+  <div id="app-shell">
+    <!-- TIER 1: Left Rail (Workspaces) -->
+    <div class="left-rail">
+      <div class="ws-icon active" title="Acme Corp">AC</div>
+      <div class="ws-icon" title="Globex">GL <span class="ws-badge">3</span></div>
+      <div class="ws-icon" title="Starlight">ST</div>
+      <div class="ws-icon" style="background: transparent; border: 2px dashed #475569;" title="Create Workspace">+</div>
+    </div>
+
+    <!-- TIER 2: Sidebar (Active Workspace Channels & DMs) -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <span>Acme Corp</span>
+        <button style="background:transparent; border:none; color:var(--text-muted); cursor:pointer;">&#9662;</button>
+      </div>
+
+      <div style="flex:1; overflow-y:auto; padding: 8px 0;">
+        <div class="sidebar-section">
+          <span>Channels</span>
+          <span style="cursor:pointer;">+</span>
+        </div>
+        <div class="nav-item active">
+          <span>#</span> <span>general</span>
+        </div>
+        <div class="nav-item">
+          <span>#</span> <span>engineering</span>
+        </div>
+        <div class="nav-item">
+          <span>&#128274;</span> <span>leadership</span>
+        </div>
+
+        <div class="sidebar-section" style="margin-top: 14px;">
+          <span>Direct Messages</span>
+          <span style="cursor:pointer;">+</span>
+        </div>
+        <div class="nav-item">
+          <span class="status-dot"></span> <span>Bob Miller</span>
+        </div>
+        <div class="nav-item">
+          <span class="status-dot" style="background: #64748b;"></span> <span>Charlie Davis</span>
+        </div>
+        <div class="nav-item">
+          <span class="status-dot"></span> <span>Group (Alice, Bob, Eve)</span>
+        </div>
+      </div>
+
+      <!-- User footer in sidebar -->
+      <div style="padding: 10px 14px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px;">
+        <div class="avatar" style="width:30px; height:30px;">A</div>
+        <div style="flex:1; overflow:hidden;">
+          <div style="font-size:0.85rem; font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">Alice Owner</div>
+          <div style="font-size:0.72rem; color:var(--online);">&#9679; Online</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIER 3: Main Chat Viewport -->
+    <div class="main-stream">
+      <div class="chat-header">
+        <div>
+          <div style="font-weight:700; font-size:1.05rem;"># general</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">Company-wide announcements and team discussions &bull; 14 members</div>
+        </div>
+        <div style="display: flex; gap: 12px;">
+          <button style="background: #334155; border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">&#128222; 1:1 Call</button>
+          <button style="background: #334155; border: none; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;" onclick="toggleRightDrawer()">&#9432; Details</button>
+        </div>
+      </div>
+
+      <div class="chat-messages">
+        <div class="msg-card">
+          <div class="avatar">A</div>
+          <div class="msg-body">
+            <div class="msg-author">Alice <span class="msg-time">10:15 AM</span></div>
+            <div class="msg-text">Welcome to the new Acme Corp workspace! Please review the channels on the left.</div>
+          </div>
+        </div>
+
+        <div class="msg-card">
+          <div class="avatar" style="background:#0284c7;">B</div>
+          <div class="msg-body">
+            <div class="msg-author">Bob Miller <span class="msg-time">10:18 AM</span></div>
+            <div class="msg-text">Looks great! Direct messaging and channel isolation are working smoothly.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer-area">
+        <div class="composer-box">
+          <input type="text" class="composer-input" placeholder="Message #general..." />
+          <button style="background: var(--accent); border: none; color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.82rem;">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIER 4 (Collapsible): Right Panel (Details / Members / Threads) -->
+    <div id="right-drawer" class="right-drawer">
+      <div style="font-weight:700; margin-bottom:14px; display:flex; justify-content:space-between;">
+        <span>Channel Details</span>
+        <button style="background:transparent; border:none; color:var(--text-muted); cursor:pointer;" onclick="toggleRightDrawer()">&times;</button>
+      </div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;">
+        Topic: Official Acme workspace discussions.
+      </div>
+      <div style="font-size:0.8rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px;">Members (3)</div>
+      <div style="display:flex; flex-direction:column; gap:8px; font-size:0.85rem;">
+        <div style="display:flex; align-items:center; gap:8px;"><span class="status-dot"></span> Alice (Owner)</div>
+        <div style="display:flex; align-items:center; gap:8px;"><span class="status-dot"></span> Bob Miller</div>
+        <div style="display:flex; align-items:center; gap:8px;"><span class="status-dot" style="background:#64748b;"></span> Charlie Davis</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Switcher Toolbar -->
+  <div class="switcher-pill">
+    <button class="pill-btn" onclick="prevVariant()">&larr;</button>
+    <div id="pill-text" class="pill-label">Variant A: Classic Slack 3-Tier</div>
+    <button class="pill-btn" onclick="nextVariant()">&rarr;</button>
+  </div>
+
+  <script>
+    const variants = [
+      { id: 'variant-a', name: 'Variant A: Classic Slack 3-Tier' },
+      { id: 'variant-b', name: 'Variant B: Compact Hub (Discord Style)' },
+      { id: 'variant-c', name: 'Variant C: Wide Canvas (Teams Style)' }
+    ];
+    let currentIndex = 0;
+
+    function applyVariant(index) {
+      currentIndex = (index + variants.length) % variants.length;
+      const v = variants[currentIndex];
+      document.body.className = v.id;
+      document.getElementById('pill-text').innerText = v.name;
+      document.getElementById('variant-indicator').innerText = `Current: ${v.name}`;
+      
+      const url = new URL(window.location);
+      url.searchParams.set('variant', v.id.replace('variant-', ''));
+      window.history.replaceState({}, '', url);
+    }
+
+    function prevVariant() { applyVariant(currentIndex - 1); }
+    function nextVariant() { applyVariant(currentIndex + 1); }
+
+    function toggleRightDrawer() {
+      const el = document.getElementById('right-drawer');
+      el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if (e.key === 'ArrowLeft') prevVariant();
+      if (e.key === 'ArrowRight') nextVariant();
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const varParam = params.get('variant');
+    if (varParam === 'b') applyVariant(1);
+    else if (varParam === 'c') applyVariant(2);
+    else applyVariant(0);
+  </script>
+</body>
+</html>

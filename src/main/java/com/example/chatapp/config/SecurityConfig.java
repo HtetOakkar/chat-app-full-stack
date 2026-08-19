@@ -47,6 +47,8 @@ public class SecurityConfig {
             "/api/v1/auth/signup",
             "/api/v1/auth/verify-email",
             "/api/v1/auth/resend-code",
+            "/api/invitations/*",
+            "/api/v1/invitations/*",
             "/ws/**"
     };
 

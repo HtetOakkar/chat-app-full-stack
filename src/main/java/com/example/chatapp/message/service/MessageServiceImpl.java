@@ -15,24 +15,18 @@ import java.util.List;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.example.chatapp.exception.NotFoundException;
-import com.example.chatapp.exception.UnauthorizedException;
-import com.example.chatapp.user.repository.ContactRepository;
-import com.example.chatapp.user.model.entity.Contact;
 import java.time.Instant;
-import java.util.List;
+import com.example.chatapp.workspace.repository.WorkspaceMemberRepository;
+import com.example.chatapp.workspace.repository.ConversationParticipantRepository;
 
 @Service
 @RequiredArgsConstructor
 public class MessageServiceImpl implements MessageService {
     private final MessageRepository messageRepository;
-
     private final MessageMapper messageMapper;
-
     private final RedisMessageRepository redisMessageRepository;
-
-    private final ContactRepository contactRepository;
+    private final WorkspaceMemberRepository workspaceMemberRepository;
+    private final ConversationParticipantRepository conversationParticipantRepository;
 
     @Override
     public void saveMessage(MessageDto messageDto) {
@@ -57,16 +51,9 @@ public class MessageServiceImpl implements MessageService {
         Instant sentAt = cursor != null ? cursor.sentAt() : null;
         Long lastId = cursor != null ? cursor.id() : null;
 
-        Pageable pageable = PageRequest.of(0, limit);
-        List<MessageDto> dbMessages = messageRepository.findPublicMessages(sentAt, lastId, pageable).stream()
-                .map(messageMapper::toMessageDto)
-                .toList();
-
         List<MessageDto> redisMessages = redisMessageRepository.findPublicMessagesBefore(sentAt, lastId, limit);
 
-        List<MessageDto> combined = new java.util.ArrayList<>();
-        combined.addAll(redisMessages);
-        combined.addAll(dbMessages);
+        List<MessageDto> combined = new java.util.ArrayList<>(redisMessages);
         combined.sort((a, b) -> {
             int timeCompare = b.getTimestamp().compareTo(a.getTimestamp());
             if (timeCompare != 0) return timeCompare;
@@ -85,27 +72,16 @@ public class MessageServiceImpl implements MessageService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public MessagePage getPrivateMessages(Long currentUserId, Long contactUserId, String cursorStr, int limit) {
         CursorCodec.Cursor cursor = CursorCodec.decodeCursor(cursorStr);
         Instant sentAt = cursor != null ? cursor.sentAt() : null;
         Long lastId = cursor != null ? cursor.id() : null;
 
-        Instant clearedAt = contactRepository.findByOwnerIdAndContactUserId(currentUserId, contactUserId)
-                .map(Contact::getClearedAt)
-                .orElse(null);
-
-        Pageable pageable = PageRequest.of(0, limit);
-        List<MessageDto> dbMessages = messageRepository.findPrivateMessages(currentUserId, contactUserId, clearedAt, sentAt, lastId, pageable).stream()
-                .map(messageMapper::toMessageDto)
-                .toList();
-
         List<MessageDto> redisMessages = redisMessageRepository.findPrivateMessagesBefore(
-                currentUserId, contactUserId, clearedAt, sentAt, lastId, limit);
+                currentUserId, contactUserId, null, sentAt, lastId, limit);
 
-        List<MessageDto> combined = new java.util.ArrayList<>();
-        combined.addAll(redisMessages);
-        combined.addAll(dbMessages);
+        List<MessageDto> combined = new java.util.ArrayList<>(redisMessages);
         combined.sort((a, b) -> {
             int timeCompare = b.getTimestamp().compareTo(a.getTimestamp());
             if (timeCompare != 0) return timeCompare;
@@ -116,7 +92,7 @@ public class MessageServiceImpl implements MessageService {
         
         String nextCursor = null;
         if (!result.isEmpty()) {
-            MessageDto lastMsg = result.getLast();
+            MessageDto lastMsg = result.get(result.size() - 1);
             nextCursor = CursorCodec.encodeCursor(lastMsg.getTimestamp(), lastMsg.getId());
         }
         
@@ -124,14 +100,13 @@ public class MessageServiceImpl implements MessageService {
     }
 
     @Override
-    @Transactional
+    @org.springframework.transaction.annotation.Transactional
     public void markMessagesAsRead(Long senderId, Long recipientId) {
-        messageRepository.markMessagesAsRead(senderId, recipientId);
         redisMessageRepository.markMessagesAsRead(senderId, recipientId);
     }
 
     @Override
-    @Transactional
+    @org.springframework.transaction.annotation.Transactional
     public MessageDto deleteMessage(Long messageId, Instant timestamp, Long currentUserId) {
         // 1. Try to delete in Redis
         boolean deletedInRedis = redisMessageRepository.deleteMessage(messageId, timestamp, currentUserId);
@@ -141,17 +116,15 @@ public class MessageServiceImpl implements MessageService {
 
         // 2. Try to find in Database
         com.example.chatapp.message.model.entity.Message message = messageRepository.findById(messageId).orElse(null);
-        if (message == null && timestamp != null) {
-            message = messageRepository.findBySenderIdAndSentAt(currentUserId, timestamp).orElse(null);
-        }
 
         if (message == null) {
-            throw new NotFoundException("Message not found");
+            throw new com.example.chatapp.exception.NotFoundException("Message not found");
         }
 
         // 3. Ownership check
-        if (!message.getSender().getId().equals(currentUserId)) {
-            throw new UnauthorizedException("Not authorized to delete this message");
+        if (message.getSenderMember() != null && message.getSenderMember().getUser() != null &&
+                !message.getSenderMember().getUser().getId().equals(currentUserId)) {
+            throw new com.example.chatapp.exception.UnauthorizedException("Not authorized to delete this message");
         }
 
         // 4. Overwrite content and mark as deleted
@@ -163,14 +136,8 @@ public class MessageServiceImpl implements MessageService {
     }
 
     @Override
-    @Transactional
+    @org.springframework.transaction.annotation.Transactional
     public void clearPrivateChat(Long currentUserId, Long contactUserId) {
-        Contact contact = contactRepository.findByOwnerIdAndContactUserId(currentUserId, contactUserId)
-                .orElseThrow(() -> new NotFoundException("Contact relationship not found"));
-        contact.setClearedAt(Instant.now());
-        contactRepository.save(contact);
-
-        messageRepository.markMessagesAsRead(contactUserId, currentUserId);
         redisMessageRepository.markMessagesAsRead(contactUserId, currentUserId);
     }
 }

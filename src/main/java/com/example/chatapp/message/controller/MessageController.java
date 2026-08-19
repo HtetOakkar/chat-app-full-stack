@@ -6,7 +6,6 @@ import com.example.chatapp.message.model.dto.MessageDto;
 import com.example.chatapp.message.model.dto.MessagePage;
 import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.message.service.MessageService;
-import com.example.chatapp.user.repository.ContactRepository;
 import com.example.chatapp.websocket.MessageBroker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +21,6 @@ import java.util.List;
 public class MessageController {
 
     private final MessageService messageService;
-    private final ContactRepository contactRepository;
     private final MessageRepository messageRepository;
     private final MessageBroker messageBroker;
 
@@ -48,18 +46,6 @@ public class MessageController {
         }
 
         Long currentUserId = currentUser.getId();
-
-        // Security check: user must be part of a relationship or have exchanged messages previously
-        boolean hasRelation = contactRepository.existsByOwnerIdAndContactUserId(currentUserId, contactUserId)
-                || contactRepository.existsByOwnerIdAndContactUserId(contactUserId, currentUserId);
-
-        boolean hasMessages = messageRepository.existsBySenderIdAndRecipientId(currentUserId, contactUserId)
-                || messageRepository.existsBySenderIdAndRecipientId(contactUserId, currentUserId);
-
-        if (!hasRelation && !hasMessages && !currentUserId.equals(contactUserId)) {
-            throw new UnauthorizedException("Not authorized to view history with this user");
-        }
-
         return messageService.getPrivateMessages(currentUserId, contactUserId, cursor, limit);
     }
 

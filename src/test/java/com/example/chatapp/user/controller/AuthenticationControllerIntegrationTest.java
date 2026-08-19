@@ -1,25 +1,27 @@
 package com.example.chatapp.user.controller;
 
+import com.example.chatapp.email.service.EmailService;
+import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.workspace.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.mockito.Mockito;
-import org.mockito.ArgumentMatchers;
-import com.example.chatapp.email.service.EmailService;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -34,14 +36,42 @@ class AuthenticationControllerIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    private com.example.chatapp.user.repository.ContactRepository contactRepository;
+    private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private WorkspaceMemberRepository workspaceMemberRepository;
+
+    @Autowired
+    private ChannelRepository channelRepository;
+
+    @Autowired
+    private ChannelMemberRepository channelMemberRepository;
+
+    @Autowired
+    private ConversationRepository conversationRepository;
+
+    @Autowired
+    private ConversationParticipantRepository conversationParticipantRepository;
+
+    @Autowired
+    private WorkspaceInvitationRepository workspaceInvitationRepository;
+
+    @Autowired
+    private MessageRepository messageRepository;
 
     @MockitoBean
     private EmailService emailService;
 
     @BeforeEach
     void cleanUp() {
-        contactRepository.deleteAll();
+        messageRepository.deleteAll();
+        workspaceInvitationRepository.deleteAll();
+        conversationParticipantRepository.deleteAll();
+        conversationRepository.deleteAll();
+        channelMemberRepository.deleteAll();
+        channelRepository.deleteAll();
+        workspaceMemberRepository.deleteAll();
+        workspaceRepository.deleteAll();
         userRepository.deleteAll();
     }
 

@@ -1,10 +1,7 @@
 package com.example.chatapp.user.service;
 
-import com.example.chatapp.exception.NotFoundException;
 import com.example.chatapp.message.model.dto.OnlineStatusDto;
-import com.example.chatapp.user.model.dto.UserSettingsDto;
 import com.example.chatapp.user.model.entity.User;
-import com.example.chatapp.user.model.entity.UserSettings;
 import com.example.chatapp.user.repository.PresenceRepository;
 import com.example.chatapp.user.repository.UserRepository;
 import com.example.chatapp.websocket.MessageBroker;
@@ -14,7 +11,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.ValueOperations;
@@ -99,7 +95,6 @@ class PresenceModuleTest {
         Long currentUserId = 1L;
         User otherUser = User.builder().id(2L).username("other").build();
         
-        when(userRepository.findById(1L)).thenReturn(Optional.of(User.builder().id(1L).build()));
         when(presenceRepository.findEligiblePresenceUsers(currentUserId)).thenReturn(List.of(otherUser));
         when(sessionRegistry.getOnlineUserIds()).thenReturn(Set.of(2L));
 
@@ -119,7 +114,6 @@ class PresenceModuleTest {
         User onlineUser = User.builder().id(2L).username("online").build();
         User offlineUser = User.builder().id(3L).username("offline").build();
 
-        when(userRepository.findById(currentUserId)).thenReturn(Optional.of(User.builder().id(currentUserId).build()));
         when(presenceRepository.findEligiblePresenceUsers(currentUserId)).thenReturn(List.of(onlineUser, offlineUser));
         when(sessionRegistry.getOnlineUserIds()).thenReturn(Set.of(2L));
 
@@ -153,23 +147,6 @@ class PresenceModuleTest {
         verify(presenceRepository).updateLastSeenAt(2L, now2);
         verify(setOperations).remove("user:presence:offline_sync", "1");
         verify(setOperations).remove("user:presence:offline_sync", "2");
-    }
-
-    @Test
-    void togglePresenceSharing_ShouldUpdateSettingsAndSave() {
-        // Arrange
-        Long userId = 1L;
-        User user = User.builder().id(userId).username("test").build();
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-
-        // Act
-        UserSettingsDto result = presenceModule.togglePresenceSharing(userId, false);
-
-        // Assert
-        assertFalse(result.isSharePresence());
-        assertNotNull(user.getSettings());
-        assertFalse(user.getSettings().isSharePresence());
-        verify(userRepository).save(user);
     }
 
     @Test

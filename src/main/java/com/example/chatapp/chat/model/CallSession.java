@@ -11,6 +11,7 @@ import java.time.Instant;
 @AllArgsConstructor
 @NoArgsConstructor
 public class CallSession {
+    private Long workspaceId;
     private Long callerId;
     private Long calleeId;
     private String callType; // AUDIO or VIDEO

@@ -5,8 +5,13 @@ import com.example.chatapp.message.model.entity.Message;
 import com.example.chatapp.message.model.entity.MessageType;
 import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.message.repository.RedisMessageRepository;
+import com.example.chatapp.user.model.entity.Role;
+import com.example.chatapp.user.model.entity.RoleName;
 import com.example.chatapp.user.model.entity.User;
+import com.example.chatapp.user.repository.RoleRepository;
 import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.workspace.model.entity.*;
+import com.example.chatapp.workspace.repository.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,21 +40,51 @@ public class MessageServiceTest {
     private UserRepository userRepository;
 
     @Autowired
-    private com.example.chatapp.user.repository.RoleRepository roleRepository;
+    private RoleRepository roleRepository;
+
+    @Autowired
+    private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private WorkspaceMemberRepository workspaceMemberRepository;
+
+    @Autowired
+    private ChannelRepository channelRepository;
+
+    @Autowired
+    private ChannelMemberRepository channelMemberRepository;
+
+    @Autowired
+    private ConversationRepository conversationRepository;
+
+    @Autowired
+    private ConversationParticipantRepository conversationParticipantRepository;
+
+    @Autowired
+    private WorkspaceInvitationRepository workspaceInvitationRepository;
 
     @BeforeEach
     public void setUp() {
-        redisMessageRepository.clear();
-        messageRepository.deleteAll();
-        userRepository.deleteAll();
+        cleanAll();
     }
 
     @AfterEach
     public void tearDown() {
-        messageRepository.deleteAll();
-        userRepository.deleteAll();
+        cleanAll();
     }
 
+    private void cleanAll() {
+        redisMessageRepository.clear();
+        messageRepository.deleteAll();
+        workspaceInvitationRepository.deleteAll();
+        conversationParticipantRepository.deleteAll();
+        conversationRepository.deleteAll();
+        channelMemberRepository.deleteAll();
+        channelRepository.deleteAll();
+        workspaceMemberRepository.deleteAll();
+        workspaceRepository.deleteAll();
+        userRepository.deleteAll();
+    }
 
     @Test
     public void testSaveMessageGeneratesUniqueIdIfNull() {
@@ -70,35 +105,51 @@ public class MessageServiceTest {
 
     @Test
     public void testPersistPreservesSentAtIfSetAndGeneratesIfNull() {
-        // Fetch initialized user role
-        com.example.chatapp.user.model.entity.Role userRole = roleRepository.findByName(com.example.chatapp.user.model.entity.RoleName.ROLE_USER)
-                .orElseGet(() -> roleRepository.save(com.example.chatapp.user.model.entity.Role.builder().name(com.example.chatapp.user.model.entity.RoleName.ROLE_USER).build()));
+        Role userRole = roleRepository.findByName(RoleName.ROLE_USER)
+                .orElseGet(() -> roleRepository.save(Role.builder().name(RoleName.ROLE_USER).build()));
 
-        // Create users
-        User sender = User.builder()
+        User sender = userRepository.save(User.builder()
                 .username("sender_test")
                 .password("password")
                 .role(userRole)
+                .email("sender_test@chatapp.com")
+                .emailVerified(true)
                 .version(0L)
-                .build();
-        User recipient = User.builder()
-                .username("recipient_test")
-                .password("password")
-                .role(userRole)
-                .version(0L)
-                .build();
-        sender = userRepository.save(sender);
-        recipient = userRepository.save(recipient);
+                .build());
 
+        Workspace ws = workspaceRepository.save(Workspace.builder()
+                .name("Test WS")
+                .slug("test-ws")
+                .owner(sender)
+                .build());
+
+        WorkspaceMember member = workspaceMemberRepository.save(WorkspaceMember.builder()
+                .workspace(ws)
+                .user(sender)
+                .role(WorkspaceRole.OWNER)
+                .build());
+
+        Channel channel = channelRepository.save(Channel.builder()
+                .workspace(ws)
+                .name("general")
+                .slug("general")
+                .type(ChannelType.PUBLIC)
+                .createdByMember(member)
+                .build());
+
+        Conversation conv = conversationRepository.save(Conversation.builder()
+                .workspace(ws)
+                .type(ConversationType.CHANNEL)
+                .channel(channel)
+                .build());
 
         // 1. Test null sentAt -> should be populated
         Message msg1 = Message.builder()
+                .conversation(conv)
+                .senderMember(member)
                 .content("Null sentAt message")
                 .messageType(MessageType.TEXT)
                 .isRead(false)
-                .isDelivered(false)
-                .sender(sender)
-                .recipient(recipient)
                 .build();
 
         assertNull(msg1.getSentAt(), "Initially, sentAt should be null");
@@ -108,12 +159,11 @@ public class MessageServiceTest {
         // 2. Test pre-set sentAt -> should be preserved
         Instant customTimestamp = Instant.now().minusSeconds(3600); // 1 hour ago
         Message msg2 = Message.builder()
+                .conversation(conv)
+                .senderMember(member)
                 .content("Pre-set sentAt message")
                 .messageType(MessageType.TEXT)
                 .isRead(false)
-                .isDelivered(false)
-                .sender(sender)
-                .recipient(recipient)
                 .sentAt(customTimestamp)
                 .build();
 
@@ -122,5 +172,3 @@ public class MessageServiceTest {
         assertEquals(customTimestamp, msg2.getSentAt(), "After save, pre-set sentAt must be preserved and not overridden");
     }
 }
-
-

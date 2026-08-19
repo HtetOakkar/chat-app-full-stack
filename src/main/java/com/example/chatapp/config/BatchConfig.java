@@ -41,6 +41,8 @@ public class BatchConfig {
     private final UserRepository userRepository;
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
+    private final com.example.chatapp.workspace.repository.WorkspaceMemberRepository workspaceMemberRepository;
+    private final com.example.chatapp.workspace.repository.ConversationRepository conversationRepository;
 
     @Bean
     @org.springframework.batch.core.configuration.annotation.StepScope
@@ -50,21 +52,7 @@ public class BatchConfig {
 
     @Bean
     public ItemProcessor<MessageDto, Message> messageProcessor() {
-        return messageDto -> {
-            User sender = userRepository.findById(messageDto.getSenderId())
-                    .orElseThrow(() -> new NotFoundException("User not found with ID:" + messageDto.getSenderId()));
-
-            User recipient = null;
-            if (messageDto.getRecipientId() != null) {
-                recipient = userRepository.findById(messageDto.getRecipientId())
-                        .orElseThrow(() -> new NotFoundException("User not found with ID:" + messageDto.getRecipientId()));
-            } else {
-                recipient = userRepository.findByUsername("system")
-                        .orElseThrow(() -> new NotFoundException("System user not found."));
-            }
-
-            return mapToMessageEntity(messageDto, sender, recipient);
-        };
+        return messageDto -> mapToMessageEntity(messageDto);
     }
 
     @Bean
@@ -76,70 +64,45 @@ public class BatchConfig {
             }
 
             log.info("Processing batch of {} messages...", messageDtos.size());
-
-            // 1. Gather all unique user IDs
-            Set<Long> userIds = new HashSet<>();
-            for (MessageDto dto : messageDtos) {
-                if (dto.getSenderId() != null) {
-                    userIds.add(dto.getSenderId());
-                }
-                if (dto.getRecipientId() != null) {
-                    userIds.add(dto.getRecipientId());
-                }
-            }
-
-            // 2. Fetch all users in a single query
-            Map<Long, User> userMap = new HashMap<>();
-            if (!userIds.isEmpty()) {
-                userRepository.findAllById(userIds).forEach(user -> userMap.put(user.getId(), user));
-            }
-
-            // Fetch system user
-            User systemUser = userRepository.findByUsername("system")
-                    .orElseThrow(() -> new NotFoundException("System user not found."));
-
-            // 3. Map MessageDto to Message entity
             List<Message> messages = new ArrayList<>();
             for (MessageDto dto : messageDtos) {
-                User sender = userMap.get(dto.getSenderId());
-                if (sender == null) {
-                    log.warn("Batch writer skipped message from non-existent user ID: {}", dto.getSenderId());
-                    continue;
+                Message msg = mapToMessageEntity(dto);
+                if (msg != null) {
+                    messages.add(msg);
                 }
-
-                User recipient = null;
-                if (dto.getRecipientId() != null) {
-                    recipient = userMap.get(dto.getRecipientId());
-                    if (recipient == null) {
-                        log.warn("Batch writer skipped message to non-existent user ID: {}", dto.getRecipientId());
-                        continue;
-                    }
-                } else {
-                    recipient = systemUser;
-                }
-
-                messages.add(mapToMessageEntity(dto, sender, recipient));
             }
-
-            // 4. Save all messages in bulk
-            messageRepository.saveAll(messages);
+            if (!messages.isEmpty()) {
+                messageRepository.saveAll(messages);
+            }
         };
     }
 
-    private Message mapToMessageEntity(MessageDto dto, User sender, User recipient) {
+    private Message mapToMessageEntity(MessageDto dto) {
+        if (dto.getConversationId() == null) {
+            return null;
+        }
+        var conv = conversationRepository.findById(dto.getConversationId()).orElse(null);
+        if (conv == null) {
+            return null;
+        }
+
+        com.example.chatapp.workspace.model.entity.WorkspaceMember senderMember = null;
+        if (dto.getSenderMemberId() != null) {
+            senderMember = workspaceMemberRepository.findById(dto.getSenderMemberId()).orElse(null);
+        } else if (dto.getSenderId() != null && conv.getWorkspace() != null) {
+            senderMember = workspaceMemberRepository.findByWorkspaceIdAndUserId(conv.getWorkspace().getId(), dto.getSenderId()).orElse(null);
+        }
+
         Instant sentAt = dto.getTimestamp() == null ? Instant.now() : dto.getTimestamp();
-        boolean isDelivered = dto.getIsDelivered() != null ? dto.getIsDelivered() : false;
 
         return Message.builder()
-                .sender(sender)
-                .recipient(recipient)
-                .content(dto.getContent())
+                .conversation(conv)
+                .senderMember(senderMember)
+                .content(dto.getContent() != null ? dto.getContent() : "")
                 .isRead(dto.getIsRead() != null ? dto.getIsRead() : false)
                 .isDeleted(dto.getIsDeleted() != null ? dto.getIsDeleted() : false)
-                .isDelivered(isDelivered)
                 .messageType(dto.getMessageType() == null ? MessageType.TEXT : dto.getMessageType())
                 .sentAt(sentAt)
-                .deliveredAt(sentAt)
                 .callOutcome(dto.getCallOutcome())
                 .callDuration(dto.getCallDuration())
                 .videoUsed(dto.getVideoUsed())

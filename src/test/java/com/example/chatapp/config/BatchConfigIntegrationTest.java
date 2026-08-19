@@ -10,6 +10,8 @@ import com.example.chatapp.user.model.entity.RoleName;
 import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.user.repository.RoleRepository;
 import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.workspace.model.entity.*;
+import com.example.chatapp.workspace.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.batch.core.Job;
@@ -49,38 +51,56 @@ public class BatchConfigIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    private com.example.chatapp.user.repository.ContactRepository contactRepository;
+    private RoleRepository roleRepository;
 
     @Autowired
-    private RoleRepository roleRepository;
+    private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private WorkspaceMemberRepository workspaceMemberRepository;
+
+    @Autowired
+    private ChannelRepository channelRepository;
+
+    @Autowired
+    private ConversationRepository conversationRepository;
 
     @Autowired
     private ItemProcessor<MessageDto, Message> messageProcessor;
 
     @Autowired
+    private ConversationParticipantRepository conversationParticipantRepository;
+
+    @Autowired
+    private ChannelMemberRepository channelMemberRepository;
+
+    @Autowired
+    private WorkspaceInvitationRepository workspaceInvitationRepository;
+
+    @Autowired
     private ItemWriter<MessageDto> messageItemWriter;
 
     private User sender;
-    private User recipient;
-    private User systemUser;
+    private Workspace workspace;
+    private WorkspaceMember senderMember;
+    private Channel channel;
+    private Conversation conversation;
 
     @BeforeEach
     void setUp() {
-        contactRepository.deleteAll();
         messageRepository.deleteAll();
         redisMessageRepository.clear();
+        workspaceInvitationRepository.deleteAll();
+        conversationParticipantRepository.deleteAll();
+        conversationRepository.deleteAll();
+        channelMemberRepository.deleteAll();
+        channelRepository.deleteAll();
+        workspaceMemberRepository.deleteAll();
+        workspaceRepository.deleteAll();
         userRepository.deleteAll();
 
         Role userRole = roleRepository.findByName(RoleName.ROLE_USER)
                 .orElseGet(() -> roleRepository.save(Role.builder().name(RoleName.ROLE_USER).build()));
-
-        systemUser = userRepository.save(User.builder()
-                .username("system")
-                .password("system_pass")
-                .role(userRole)
-                .email("system@chatapp.com")
-                .emailVerified(true)
-                .build());
 
         sender = userRepository.save(User.builder()
                 .username("batch_alice")
@@ -90,12 +110,30 @@ public class BatchConfigIntegrationTest {
                 .emailVerified(true)
                 .build());
 
-        recipient = userRepository.save(User.builder()
-                .username("batch_bob")
-                .password("pass123")
-                .role(userRole)
-                .email("bob@chatapp.com")
-                .emailVerified(true)
+        workspace = workspaceRepository.save(Workspace.builder()
+                .name("Batch Workspace")
+                .slug("batch-ws")
+                .owner(sender)
+                .build());
+
+        senderMember = workspaceMemberRepository.save(WorkspaceMember.builder()
+                .workspace(workspace)
+                .user(sender)
+                .role(WorkspaceRole.OWNER)
+                .build());
+
+        channel = channelRepository.save(Channel.builder()
+                .workspace(workspace)
+                .name("general")
+                .slug("general")
+                .type(ChannelType.PUBLIC)
+                .createdByMember(senderMember)
+                .build());
+
+        conversation = conversationRepository.save(Conversation.builder()
+                .workspace(workspace)
+                .type(ConversationType.CHANNEL)
+                .channel(channel)
                 .build());
     }
 
@@ -106,10 +144,13 @@ public class BatchConfigIntegrationTest {
         // 1. Enqueue soft-deleted message in Redis
         MessageDto softDeletedDto = MessageDto.builder()
                 .id(1001L)
+                .workspaceId(workspace.getId())
+                .conversationId(conversation.getId())
+                .channelId(channel.getId())
                 .content("Deleted message")
                 .senderId(sender.getId())
+                .senderMemberId(senderMember.getId())
                 .senderUsername(sender.getUsername())
-                .recipientId(recipient.getId())
                 .timestamp(now)
                 .isRead(false)
                 .isDeleted(true)
@@ -121,10 +162,13 @@ public class BatchConfigIntegrationTest {
         // 2. Enqueue normal active message in Redis
         MessageDto activeDto = MessageDto.builder()
                 .id(1002L)
+                .workspaceId(workspace.getId())
+                .conversationId(conversation.getId())
+                .channelId(channel.getId())
                 .content("Active message content")
                 .senderId(sender.getId())
+                .senderMemberId(senderMember.getId())
                 .senderUsername(sender.getUsername())
-                .recipientId(recipient.getId())
                 .timestamp(now.plusSeconds(1))
                 .isRead(false)
                 .isDeleted(false)
@@ -133,37 +177,22 @@ public class BatchConfigIntegrationTest {
                 .build();
         redisMessageRepository.saveMessage(activeDto);
 
-        // 3. Enqueue public soft-deleted message in Redis
-        MessageDto publicDeletedDto = MessageDto.builder()
-                .id(1003L)
-                .content("Deleted message")
-                .senderId(sender.getId())
-                .senderUsername(sender.getUsername())
-                .recipientId(null)
-                .timestamp(now.plusSeconds(2))
-                .isRead(false)
-                .isDeleted(true)
-                .isDelivered(true)
-                .messageType(MessageType.TEXT)
-                .build();
-        redisMessageRepository.saveMessage(publicDeletedDto);
-
-        // 4. Run Spring Batch redisToDbJob
+        // 3. Run Spring Batch redisToDbJob
         JobParameters jobParameters = new JobParametersBuilder()
                 .addLong("time", System.currentTimeMillis())
                 .toJobParameters();
         JobExecution jobExecution = jobLauncher.run(redisToDbJob, jobParameters);
         assertEquals("COMPLETED", jobExecution.getStatus().toString());
 
-        // 5. Verify database messages
+        // 4. Verify database messages
         List<Message> persistedMessages = messageRepository.findAll();
-        assertEquals(3, persistedMessages.size());
+        assertEquals(2, persistedMessages.size());
 
         Message persistedSoftDeleted = persistedMessages.stream()
-                .filter(m -> m.getRecipient().getId().equals(recipient.getId()) && "Deleted message".equals(m.getContent()))
+                .filter(m -> "Deleted message".equals(m.getContent()))
                 .findFirst()
-                .orElseThrow(() -> new AssertionError("Soft deleted private message not found in DB"));
-        assertTrue(persistedSoftDeleted.getIsDeleted(), "Private message should have isDeleted = true");
+                .orElseThrow(() -> new AssertionError("Soft deleted message not found in DB"));
+        assertTrue(persistedSoftDeleted.getIsDeleted(), "Message should have isDeleted = true");
         assertEquals("Deleted message", persistedSoftDeleted.getContent());
 
         Message persistedActive = persistedMessages.stream()
@@ -172,23 +201,19 @@ public class BatchConfigIntegrationTest {
                 .orElseThrow(() -> new AssertionError("Active message not found in DB"));
         assertFalse(persistedActive.getIsDeleted(), "Active message should have isDeleted = false");
         assertEquals("Active message content", persistedActive.getContent());
-
-        Message persistedPublicDeleted = persistedMessages.stream()
-                .filter(m -> m.getRecipient().getId().equals(systemUser.getId()))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Soft deleted public message not found in DB"));
-        assertTrue(persistedPublicDeleted.getIsDeleted(), "Public message should have isDeleted = true");
-        assertEquals("Deleted message", persistedPublicDeleted.getContent());
     }
 
     @Test
     void messageItemWriterDirectlyPreservesIsDeletedFlag() throws Exception {
         MessageDto deletedDto = MessageDto.builder()
                 .id(2001L)
+                .workspaceId(workspace.getId())
+                .conversationId(conversation.getId())
+                .channelId(channel.getId())
                 .content("Deleted message")
                 .senderId(sender.getId())
+                .senderMemberId(senderMember.getId())
                 .senderUsername(sender.getUsername())
-                .recipientId(recipient.getId())
                 .timestamp(Instant.now())
                 .isRead(true)
                 .isDeleted(true)
@@ -208,10 +233,13 @@ public class BatchConfigIntegrationTest {
     void messageProcessorDirectlyPreservesIsDeletedFlag() throws Exception {
         MessageDto deletedDto = MessageDto.builder()
                 .id(3001L)
+                .workspaceId(workspace.getId())
+                .conversationId(conversation.getId())
+                .channelId(channel.getId())
                 .content("Deleted message")
                 .senderId(sender.getId())
+                .senderMemberId(senderMember.getId())
                 .senderUsername(sender.getUsername())
-                .recipientId(recipient.getId())
                 .timestamp(Instant.now())
                 .isRead(false)
                 .isDeleted(true)

@@ -15,10 +15,14 @@ import java.time.Instant;
 @NoArgsConstructor
 public class MessageDto {
     private Long id;
+    private Long workspaceId;
+    private Long conversationId;
+    private Long channelId;
 
     @Size(max = 5000, message = "content cannot exceed 5000 characters")
     private String content;
     private Long senderId;
+    private Long senderMemberId;
     private String senderUsername;
     private String senderFullName;
     private Long recipientId;
@@ -29,6 +33,6 @@ public class MessageDto {
     private String channel;
     private MessageType messageType;
     private String callOutcome;
-    private Integer callDuration;
+    private Long callDuration;
     private Boolean videoUsed;
 }

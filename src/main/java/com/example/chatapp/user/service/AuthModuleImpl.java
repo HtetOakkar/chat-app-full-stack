@@ -89,13 +89,6 @@ public class AuthModuleImpl implements AuthModule {
         }
 
         User user = userBuilder.build();
-        
-        com.example.chatapp.user.model.entity.UserSettings settings = com.example.chatapp.user.model.entity.UserSettings.builder()
-                .user(user)
-                .sharePresence(true)
-                .build();
-        user.setSettings(settings);
-
         User savedUser = userRepository.saveAndFlush(user);
 
         Date expiration = new Date(new Date().getTime() + jwtExpirationInMs);

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import ChatDashboard from "./ChatDashboard";
 import { ConnectionProvider } from "@/context/ConnectionContext";
+import { WorkspaceProvider } from "@/context/WorkspaceContext";
 import { MessageStoreProvider } from "@/context/MessageStore";
 import { PresenceProvider } from "@/context/PresenceContext";
 import { CallProvider } from "@/context/CallContext";
@@ -17,9 +18,15 @@ jest.mock("@/context/AuthContext", () => ({
 }));
 
 // Mock child components to make testing simpler
-jest.mock("./Sidebar", () => {
-  return function MockSidebar({ viewMode }: { viewMode?: string }) {
-    return <div data-testid="sidebar">Sidebar {viewMode}</div>;
+jest.mock("./WorkspaceSidebar", () => {
+  return function MockWorkspaceSidebar() {
+    return <div data-testid="sidebar">Workspace Sidebar</div>;
+  };
+});
+
+jest.mock("./WorkspaceRail", () => {
+  return function MockWorkspaceRail() {
+    return <div data-testid="workspace-rail" />;
   };
 });
 
@@ -40,18 +47,20 @@ jest.mock("./ChatViewport", () => {
 });
 
 jest.mock("@/lib/api", () => ({
-  apiFetch: jest.fn().mockResolvedValue({}),
+  apiFetch: jest.fn().mockResolvedValue([]),
 }));
 
 const renderWithProviders = (ui: React.ReactElement) => {
   return render(
     <DisplayPreferencesProvider>
       <ConnectionProvider>
-        <MessageStoreProvider>
-          <PresenceProvider>
-            <CallProvider>{ui}</CallProvider>
-          </PresenceProvider>
-        </MessageStoreProvider>
+        <WorkspaceProvider>
+          <MessageStoreProvider>
+            <PresenceProvider>
+              <CallProvider>{ui}</CallProvider>
+            </PresenceProvider>
+          </MessageStoreProvider>
+        </WorkspaceProvider>
       </ConnectionProvider>
     </DisplayPreferencesProvider>
   );
@@ -60,7 +69,7 @@ const renderWithProviders = (ui: React.ReactElement) => {
 describe("ChatDashboard mobile view profile", () => {
   beforeEach(() => {
     window.localStorage.clear();
-    (apiFetch as jest.Mock).mockResolvedValue(null);
+    (apiFetch as jest.Mock).mockResolvedValue([]);
     window.matchMedia = jest.fn().mockReturnValue({
       matches: false,
       addEventListener: jest.fn(),

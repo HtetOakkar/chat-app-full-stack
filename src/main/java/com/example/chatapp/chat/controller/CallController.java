@@ -6,9 +6,6 @@ import com.example.chatapp.chat.service.CallService;
 import com.example.chatapp.exception.BadRequestException;
 import com.example.chatapp.jwt.UserPrincipal;
 import com.example.chatapp.message.model.dto.CallSignalDto;
-import com.example.chatapp.user.model.entity.Contact;
-import com.example.chatapp.user.model.entity.ContactStatus;
-import com.example.chatapp.user.repository.ContactRepository;
 import com.example.chatapp.websocket.MessageBroker;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,10 +25,9 @@ public class CallController {
 
     private final MessageBroker messageBroker;
     private final CallRegistry callRegistry;
-    private final ContactRepository contactRepository;
     private final CallService callService;
 
-    @MessageMapping("/call.offer")
+    @MessageMapping({"/call.offer", "/workspace.{workspaceId}.call.offer"})
     public void processOffer(@Valid @Payload CallSignalDto signalDto, Principal principal) {
         UserPrincipal authenticatedUser = getAuthenticatedUser(principal);
         Long senderId = authenticatedUser.getId();
@@ -41,31 +37,13 @@ public class CallController {
             throw new BadRequestException("recipientId is required for call offer");
         }
 
-        // Validate recipient relationship
-        Optional<Contact> recipientContactOpt = contactRepository.findByOwnerIdAndContactUserId(recipientId, senderId);
-        if (recipientContactOpt.isPresent() && recipientContactOpt.get().getStatus() == ContactStatus.BLOCKED) {
-            log.info("Call offer from blocked user {} to {} silently ignored", senderId, recipientId);
-            return;
-        }
-
-        Optional<Contact> senderContactOpt = contactRepository.findByOwnerIdAndContactUserId(senderId, recipientId);
-        boolean senderValid = senderContactOpt.isPresent() &&
-                (senderContactOpt.get().getStatus() == ContactStatus.ACCEPTED || senderContactOpt.get().getStatus() == ContactStatus.CONTACT);
-        boolean recipientValid = recipientContactOpt.isPresent() &&
-                (recipientContactOpt.get().getStatus() == ContactStatus.ACCEPTED || recipientContactOpt.get().getStatus() == ContactStatus.CONTACT);
-
-        if (!senderValid || !recipientValid) {
-            log.warn("Call offer rejected: non-contact relationship between {} and {}", senderId, recipientId);
-            return;
-        }
-
         // Check if this is an in-call renegotiation/upgrade between the two users
         if (callRegistry.isExistingCall(senderId, recipientId)) {
             log.info("In-call renegotiation offer from {} to {} with callType {}", senderId, recipientId, signalDto.getCallType());
             callRegistry.updateCallType(senderId, signalDto.getCallType());
             signalDto.setType("offer");
             enrichSenderInfo(signalDto, authenticatedUser);
-            messageBroker.publishToUser(recipientId.toString(), "/queue/call", signalDto);
+            publishCallSignal(recipientId, signalDto);
             return;
         }
 
@@ -73,11 +51,12 @@ public class CallController {
         if (callRegistry.isBusy(senderId) || callRegistry.isBusy(recipientId)) {
             log.info("Call busy: sender {} or recipient {} is busy", senderId, recipientId);
             CallSignalDto busySignal = CallSignalDto.builder()
+                    .workspaceId(signalDto.getWorkspaceId())
                     .senderId(recipientId)
                     .recipientId(senderId)
                     .type("busy")
                     .build();
-            messageBroker.publishToUser(senderId.toString(), "/queue/call", busySignal);
+            publishCallSignal(senderId, busySignal);
             return;
         }
 
@@ -87,10 +66,10 @@ public class CallController {
         // Forward offer
         signalDto.setType("offer");
         enrichSenderInfo(signalDto, authenticatedUser);
-        messageBroker.publishToUser(recipientId.toString(), "/queue/call", signalDto);
+        publishCallSignal(recipientId, signalDto);
     }
 
-    @MessageMapping("/call.answer")
+    @MessageMapping({"/call.answer", "/workspace.{workspaceId}.call.answer"})
     public void processAnswer(@Valid @Payload CallSignalDto signalDto, Principal principal) {
         UserPrincipal authenticatedUser = getAuthenticatedUser(principal);
         Long senderId = authenticatedUser.getId();
@@ -109,10 +88,10 @@ public class CallController {
 
         signalDto.setType("answer");
         enrichSenderInfo(signalDto, authenticatedUser);
-        messageBroker.publishToUser(recipientId.toString(), "/queue/call", signalDto);
+        publishCallSignal(recipientId, signalDto);
     }
 
-    @MessageMapping("/call.ice")
+    @MessageMapping({"/call.ice", "/workspace.{workspaceId}.call.ice"})
     public void processIceCandidate(@Valid @Payload CallSignalDto signalDto, Principal principal) {
         UserPrincipal authenticatedUser = getAuthenticatedUser(principal);
         Long senderId = authenticatedUser.getId();
@@ -126,10 +105,10 @@ public class CallController {
 
         signalDto.setType("ice");
         enrichSenderInfo(signalDto, authenticatedUser);
-        messageBroker.publishToUser(recipientId.toString(), "/queue/call", signalDto);
+        publishCallSignal(recipientId, signalDto);
     }
 
-    @MessageMapping("/call.cancel")
+    @MessageMapping({"/call.cancel", "/workspace.{workspaceId}.call.cancel"})
     public void processCancel(@Valid @Payload CallSignalDto signalDto, Principal principal) {
         UserPrincipal authenticatedUser = getAuthenticatedUser(principal);
         Long senderId = authenticatedUser.getId();
@@ -151,10 +130,10 @@ public class CallController {
             signalDto.setType("cancel");
         }
         enrichSenderInfo(signalDto, authenticatedUser);
-        messageBroker.publishToUser(recipientId.toString(), "/queue/call", signalDto);
+        publishCallSignal(recipientId, signalDto);
     }
 
-    @MessageMapping("/call.reject")
+    @MessageMapping({"/call.reject", "/workspace.{workspaceId}.call.reject"})
     public void processReject(@Valid @Payload CallSignalDto signalDto, Principal principal) {
         UserPrincipal authenticatedUser = getAuthenticatedUser(principal);
         Long senderId = authenticatedUser.getId();
@@ -173,10 +152,10 @@ public class CallController {
 
         signalDto.setType("reject");
         enrichSenderInfo(signalDto, authenticatedUser);
-        messageBroker.publishToUser(recipientId.toString(), "/queue/call", signalDto);
+        publishCallSignal(recipientId, signalDto);
     }
 
-    @MessageMapping("/call.hangup")
+    @MessageMapping({"/call.hangup", "/workspace.{workspaceId}.call.hangup"})
     public void processHangup(@Valid @Payload CallSignalDto signalDto, Principal principal) {
         UserPrincipal authenticatedUser = getAuthenticatedUser(principal);
         Long senderId = authenticatedUser.getId();
@@ -203,6 +182,14 @@ public class CallController {
 
         signalDto.setType("hangup");
         enrichSenderInfo(signalDto, authenticatedUser);
+        publishCallSignal(recipientId, signalDto);
+    }
+
+    private void publishCallSignal(Long recipientId, CallSignalDto signalDto) {
+        if (signalDto.getWorkspaceId() != null) {
+            String wsQueue = String.format("/queue/workspace.%d.calls", signalDto.getWorkspaceId());
+            messageBroker.publishToUser(recipientId.toString(), wsQueue, signalDto);
+        }
         messageBroker.publishToUser(recipientId.toString(), "/queue/call", signalDto);
     }
 

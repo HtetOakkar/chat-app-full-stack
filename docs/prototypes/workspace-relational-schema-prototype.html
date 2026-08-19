@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workspace & Channel Relational Schema Prototype</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      padding: 24px;
+    }
+    header {
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+    
+    .container {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 1024px) {
+      .container { grid-template-columns: 1fr; }
+    }
+    
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    
+    /* Buttons */
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease;
+    }
+    .btn:hover { background: var(--accent-hover); }
+    .btn-secondary { background: #334155; color: #e2e8f0; }
+    .btn-secondary:hover { background: #475569; }
+    .btn-danger { background: var(--danger); }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    
+    /* Walkthrough steps */
+    .scenario-desc {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+      color: #cbd5e1;
+    }
+    .steps-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1e293b;
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .step-item.completed {
+      border-color: var(--success);
+      color: var(--text-muted);
+    }
+    
+    /* Tables & Inspector */
+    .table-section {
+      margin-bottom: 16px;
+    }
+    .table-label {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      font-family: var(--font-mono);
+      background: #0f172a;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    th, td {
+      padding: 6px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: #1e293b;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    tr:last-child td { border-bottom: none; }
+    
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-owner { background: rgba(99, 102, 241, 0.2); color: #818cf8; }
+    .badge-admin { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .badge-member { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+    .badge-public { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .badge-private { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    
+    .event-log {
+      max-height: 180px;
+      overflow-y: auto;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .log-item { color: #cbd5e1; }
+    .log-item.success { color: var(--success); }
+    .log-item.error { color: var(--danger); }
+    .log-item.info { color: #38bdf8; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Prototype: Workspace & Channel Relational Schema</h1>
+    <div class="subtitle">
+      <strong>Question Settled:</strong> What is the relational schema (Workspaces, Channels, Members, Roles, DMs, and Messages) ensuring strict multi-tenant isolation, unique slugs, and foreign key cascades?
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Left Column: Controls & Guided Walkthroughs -->
+    <div class="panel">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('scenarios')">Guided Walkthroughs</button>
+        <button class="tab-btn" onclick="switchTab('freeplay')">Free Play Controls</button>
+        <button class="tab-btn" onclick="switchTab('ddl')">SQL DDL & Schema</button>
+      </div>
+
+      <!-- Scenarios Tab -->
+      <div id="tab-scenarios">
+        <div class="panel-title">
+          <span>Choose Scenario:</span>
+          <select id="scenarioSelect" onchange="loadScenario(this.value)" style="background: #0f172a; color: #fff; border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px;">
+            <option value="1">1. Workspace & Default Channels</option>
+            <option value="2">2. Private Channel Access & Isolation</option>
+            <option value="3">3. Workspace Direct Messaging (DM)</option>
+            <option value="4">4. Member Eviction & Cascade Integrity</option>
+          </select>
+        </div>
+
+        <div id="scenarioDescription" class="scenario-desc"></div>
+        <div id="scenarioSteps" class="steps-list"></div>
+      </div>
+
+      <!-- Free Play Tab -->
+      <div id="tab-freeplay" style="display: none;">
+        <div class="panel-title">Workspace Actions</div>
+        <div class="btn-group">
+          <button class="btn" onclick="actionCreateWorkspace('Acme Corp', 'acme')">+ Create Workspace (Acme)</button>
+          <button class="btn" onclick="actionCreateWorkspace('Globex', 'globex')">+ Create Workspace (Globex)</button>
+          <button class="btn btn-secondary" onclick="actionResetState()">↺ Reset Engine</button>
+        </div>
+
+        <div class="panel-title">Membership & Channel Actions</div>
+        <div class="btn-group">
+          <button class="btn btn-secondary" onclick="actionAddMember('bob', 'MEMBER')">Add Bob (Member)</button>
+          <button class="btn btn-secondary" onclick="actionAddMember('charlie', 'ADMIN')">Add Charlie (Admin)</button>
+          <button class="btn btn-secondary" onclick="actionCreateChannel('engineering', 'PUBLIC')">+ #engineering (Public)</button>
+          <button class="btn btn-secondary" onclick="actionCreateChannel('leadership', 'PRIVATE')">+ #leadership (Private)</button>
+          <button class="btn btn-secondary" onclick="actionAddChannelMember('charlie', 'leadership')">Add Charlie to #leadership</button>
+          <button class="btn btn-secondary" onclick="actionSendChannelMessage('alice', 'general', 'Hello team!')">Alice → #general</button>
+          <button class="btn btn-secondary" onclick="actionSendChannelMessage('bob', 'leadership', 'Can I see this?')">Bob → #leadership (Try)</button>
+          <button class="btn btn-secondary" onclick="actionSendDM('alice', 'bob', 'Hey Bob!')">Alice → Bob (DM)</button>
+          <button class="btn btn-danger" onclick="actionRemoveMember('bob')">Evict Bob from Acme</button>
+        </div>
+      </div>
+
+      <!-- DDL Tab -->
+      <div id="tab-ddl" style="display: none;">
+        <div class="panel-title">Target Relational DDL (MySQL / PostgreSQL)</div>
+        <pre style="background: #0f172a; padding: 12px; border-radius: 6px; font-family: var(--font-mono); font-size: 0.78rem; max-height: 480px; overflow-y: auto; color: #a5f3fc;">
+-- Core Users
+CREATE TABLE users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    full_name VARCHAR(100) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Workspaces (Tenant Boundary)
+CREATE TABLE workspaces (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    slug VARCHAR(100) NOT NULL UNIQUE,
+    owner_id BIGINT NOT NULL,
+    icon_url VARCHAR(500) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_workspaces_owner FOREIGN KEY (owner_id) REFERENCES users(id)
+);
+
+-- Workspace Members
+CREATE TABLE workspace_members (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    role VARCHAR(32) NOT NULL DEFAULT 'MEMBER', -- OWNER, ADMIN, MEMBER
+    joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_workspace_user UNIQUE (workspace_id, user_id),
+    CONSTRAINT fk_wm_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    CONSTRAINT fk_wm_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Channels
+CREATE TABLE channels (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id BIGINT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    slug VARCHAR(100) NOT NULL,
+    description VARCHAR(500) NULL,
+    type VARCHAR(32) NOT NULL DEFAULT 'PUBLIC', -- PUBLIC, PRIVATE
+    created_by_member_id BIGINT NOT NULL,
+    is_archived BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_workspace_channel_slug UNIQUE (workspace_id, slug),
+    CONSTRAINT fk_channels_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    CONSTRAINT fk_channels_creator FOREIGN KEY (created_by_member_id) REFERENCES workspace_members(id)
+);
+
+-- Channel Members (For Private Channels & Explicit Memberships)
+CREATE TABLE channel_members (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    channel_id BIGINT NOT NULL,
+    workspace_member_id BIGINT NOT NULL,
+    role VARCHAR(32) NOT NULL DEFAULT 'MEMBER',
+    joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_channel_member UNIQUE (channel_id, workspace_member_id),
+    CONSTRAINT fk_cm_channel FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cm_member FOREIGN KEY (workspace_member_id) REFERENCES workspace_members(id) ON DELETE CASCADE
+);
+
+-- Conversations (Polymorphic container for Channel, DM, Group DM)
+CREATE TABLE conversations (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id BIGINT NOT NULL,
+    type VARCHAR(32) NOT NULL, -- CHANNEL, DIRECT_MESSAGE, GROUP_DIRECT_MESSAGE
+    channel_id BIGINT NULL UNIQUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_conv_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    CONSTRAINT fk_conv_channel FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
+);
+
+-- Conversation Participants (For DMs & Group DMs)
+CREATE TABLE conversation_participants (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    conversation_id BIGINT NOT NULL,
+    workspace_member_id BIGINT NOT NULL,
+    cleared_at TIMESTAMP NULL,
+    joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_conv_member UNIQUE (conversation_id, workspace_member_id),
+    CONSTRAINT fk_cp_conv FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cp_member FOREIGN KEY (workspace_member_id) REFERENCES workspace_members(id) ON DELETE CASCADE
+);
+
+-- Messages
+CREATE TABLE messages (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    conversation_id BIGINT NOT NULL,
+    sender_member_id BIGINT NULL,
+    content VARCHAR(5000) NOT NULL,
+    message_type VARCHAR(32) NOT NULL DEFAULT 'TEXT', -- TEXT, AUDIO_CALL, VIDEO_CALL, SYSTEM
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_msg_conv FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_msg_sender FOREIGN KEY (sender_member_id) REFERENCES workspace_members(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_messages_conv_sent ON messages(conversation_id, sent_at);
+        </pre>
+      </div>
+
+      <div class="panel-title" style="margin-top: 18px;">Action Log</div>
+      <div id="eventLog" class="event-log"></div>
+    </div>
+
+    <!-- Right Column: State Inspector -->
+    <div class="panel">
+      <div class="panel-title">Active Database State Inspector</div>
+
+      <div class="table-section">
+        <div class="table-label">Workspaces (Tenants)</div>
+        <table id="tbl-workspaces">
+          <thead><tr><th>ID</th><th>Name</th><th>Slug</th><th>Owner</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="table-section">
+        <div class="table-label">Workspace Members</div>
+        <table id="tbl-members">
+          <thead><tr><th>ID</th><th>Workspace</th><th>User</th><th>Role</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="table-section">
+        <div class="table-label">Channels & Conversations</div>
+        <table id="tbl-channels">
+          <thead><tr><th>ID</th><th>Workspace</th><th>Name / Type</th><th>Access Rule</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="table-section">
+        <div class="table-label">Recent Messages</div>
+        <table id="tbl-messages">
+          <thead><tr><th>ID</th><th>Conv (Type)</th><th>Sender</th><th>Content</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // PURE RELATIONAL LOGIC MODULE (Liftable)
+    // ==========================================
+    class WorkspaceRelationalEngine {
+      constructor() {
+        this.users = new Map();
+        this.workspaces = new Map();
+        this.workspaceMembers = new Map();
+        this.channels = new Map();
+        this.channelMembers = new Map();
+        this.conversations = new Map();
+        this.conversationParticipants = new Map();
+        this.messages = [];
+        this.idGen = 1;
+      }
+
+      seedUser(username, email) {
+        const id = this.idGen++;
+        const user = { id, username, email };
+        this.users.set(username, user);
+        return user;
+      }
+
+      createWorkspace(name, slug, ownerUsername) {
+        const owner = this.users.get(ownerUsername);
+        if (!owner) throw new Error(`User ${ownerUsername} does not exist`);
+
+        for (const ws of this.workspaces.values()) {
+          if (ws.slug === slug) throw new Error(`Workspace slug '${slug}' already in use`);
+        }
+
+        const wsId = this.idGen++;
+        const ws = { id: wsId, name, slug, ownerId: owner.id, createdAt: new Date() };
+        this.workspaces.set(wsId, ws);
+
+        // Add owner as WorkspaceMember (OWNER)
+        const memberId = this.idGen++;
+        const member = { id: memberId, workspaceId: wsId, userId: owner.id, username: owner.username, role: 'OWNER' };
+        this.workspaceMembers.set(memberId, member);
+
+        // Create default public channel: #general
+        this.createChannel(wsId, 'general', 'General discussions', 'PUBLIC', memberId);
+        return ws;
+      }
+
+      addWorkspaceMember(wsId, username, role = 'MEMBER') {
+        const user = this.users.get(username);
+        if (!user) throw new Error(`User ${username} not found`);
+
+        const existing = [...this.workspaceMembers.values()].find(m => m.workspaceId === wsId && m.userId === user.id);
+        if (existing) throw new Error(`User ${username} is already a member of workspace ${wsId}`);
+
+        const memberId = this.idGen++;
+        const member = { id: memberId, workspaceId: wsId, userId: user.id, username: user.username, role };
+        this.workspaceMembers.set(memberId, member);
+        return member;
+      }
+
+      createChannel(wsId, name, description, type, creatorMemberId) {
+        const creator = this.workspaceMembers.get(creatorMemberId);
+        if (!creator || creator.workspaceId !== wsId) throw new Error(`Creator is not a member of workspace ${wsId}`);
+
+        const slug = name.toLowerCase().replace(/\s+/g, '-');
+        const existing = [...this.channels.values()].find(c => c.workspaceId === wsId && c.slug === slug);
+        if (existing) throw new Error(`Channel '#${slug}' already exists in this workspace`);
+
+        const channelId = this.idGen++;
+        const channel = { id: channelId, workspaceId: wsId, name, slug, description, type, createdBy: creatorMemberId };
+        this.channels.set(channelId, channel);
+
+        // Create backing Conversation for this Channel
+        const convId = this.idGen++;
+        const conv = { id: convId, workspaceId: wsId, type: 'CHANNEL', channelId };
+        this.conversations.set(convId, conv);
+
+        // If private, creator is added to channel_members
+        if (type === 'PRIVATE') {
+          const cmId = this.idGen++;
+          this.channelMembers.set(cmId, { id: cmId, channelId, workspaceMemberId: creatorMemberId, role: 'ADMIN' });
+        }
+
+        return channel;
+      }
+
+      addChannelMember(channelId, workspaceMemberId) {
+        const channel = this.channels.get(channelId);
+        const member = this.workspaceMembers.get(workspaceMemberId);
+        if (!channel || !member) throw new Error('Channel or Member not found');
+        if (channel.workspaceId !== member.workspaceId) throw new Error('Member and Channel must belong to the same workspace');
+
+        const existing = [...this.channelMembers.values()].find(cm => cm.channelId === channelId && cm.workspaceMemberId === workspaceMemberId);
+        if (existing) throw new Error('Member already in channel');
+
+        const cmId = this.idGen++;
+        this.channelMembers.set(cmId, { id: cmId, channelId, workspaceMemberId, role: 'MEMBER' });
+        return true;
+      }
+
+      canAccessChannel(channelId, workspaceMemberId) {
+        const channel = this.channels.get(channelId);
+        const member = this.workspaceMembers.get(workspaceMemberId);
+        if (!channel || !member || channel.workspaceId !== member.workspaceId) return false;
+
+        if (channel.type === 'PUBLIC') return true; // All workspace members have access
+
+        // Private channel check
+        return [...this.channelMembers.values()].some(cm => cm.channelId === channelId && cm.workspaceMemberId === workspaceMemberId);
+      }
+
+      sendChannelMessage(channelId, senderMemberId, content) {
+        if (!this.canAccessChannel(channelId, senderMemberId)) {
+          throw new Error(`403 FORBIDDEN: Member ${senderMemberId} cannot post to channel ${channelId}`);
+        }
+        const conv = [...this.conversations.values()].find(c => c.channelId === channelId);
+        if (!conv) throw new Error('Channel conversation not found');
+
+        const msg = {
+          id: this.idGen++,
+          conversationId: conv.id,
+          senderMemberId,
+          content,
+          messageType: 'TEXT',
+          sentAt: new Date().toLocaleTimeString()
+        };
+        this.messages.push(msg);
+        return msg;
+      }
+
+      getOrCreateDM(wsId, memberIdA, memberIdB) {
+        const memA = this.workspaceMembers.get(memberIdA);
+        const memB = this.workspaceMembers.get(memberIdB);
+        if (!memA || !memB || memA.workspaceId !== wsId || memB.workspaceId !== wsId) {
+          throw new Error('Both participants must be members of the same workspace');
+        }
+
+        // Find existing DM between these two members
+        const dmConvs = [...this.conversations.values()].filter(c => c.workspaceId === wsId && c.type === 'DIRECT_MESSAGE');
+        for (const c of dmConvs) {
+          const parts = [...this.conversationParticipants.values()].filter(p => p.conversationId === c.id);
+          const pIds = parts.map(p => p.workspaceMemberId);
+          if (pIds.includes(memberIdA) && pIds.includes(memberIdB) && pIds.length === 2) {
+            return c;
+          }
+        }
+
+        // Create new DM conversation
+        const convId = this.idGen++;
+        const conv = { id: convId, workspaceId: wsId, type: 'DIRECT_MESSAGE', channelId: null };
+        this.conversations.set(convId, conv);
+
+        this.conversationParticipants.set(this.idGen++, { id: this.idGen, conversationId: convId, workspaceMemberId: memberIdA });
+        this.conversationParticipants.set(this.idGen++, { id: this.idGen, conversationId: convId, workspaceMemberId: memberIdB });
+        return conv;
+      }
+
+      sendDM(wsId, senderMemberId, recipientMemberId, content) {
+        const conv = this.getOrCreateDM(wsId, senderMemberId, recipientMemberId);
+        const msg = {
+          id: this.idGen++,
+          conversationId: conv.id,
+          senderMemberId,
+          content,
+          messageType: 'TEXT',
+          sentAt: new Date().toLocaleTimeString()
+        };
+        this.messages.push(msg);
+        return msg;
+      }
+
+      evictMember(wsId, memberId) {
+        const member = this.workspaceMembers.get(memberId);
+        if (!member || member.workspaceId !== wsId) throw new Error('Member not found');
+        if (member.role === 'OWNER') throw new Error('Cannot evict workspace OWNER');
+
+        // Cascade delete channel memberships
+        for (const [cmId, cm] of this.channelMembers.entries()) {
+          if (cm.workspaceMemberId === memberId) this.channelMembers.delete(cmId);
+        }
+        // Cascade delete DM participation
+        for (const [cpId, cp] of this.conversationParticipants.entries()) {
+          if (cp.workspaceMemberId === memberId) this.conversationParticipants.delete(cpId);
+        }
+        // Remove member record
+        this.workspaceMembers.delete(memberId);
+        return true;
+      }
+    }
+
+    // ==========================================
+    // UI SHELL & INTERACTION DRIVER
+    // ==========================================
+    let engine = new WorkspaceRelationalEngine();
+
+    function log(msg, type = 'info') {
+      const el = document.getElementById('eventLog');
+      const item = document.createElement('div');
+      item.className = `log-item ${type}`;
+      item.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      el.prepend(item);
+    }
+
+    function renderState() {
+      // Workspaces Table
+      const wsTbody = document.querySelector('#tbl-workspaces tbody');
+      wsTbody.innerHTML = '';
+      for (const ws of engine.workspaces.values()) {
+        const owner = [...engine.users.values()].find(u => u.id === ws.ownerId);
+        wsTbody.innerHTML += `<tr><td>${ws.id}</td><td>${ws.name}</td><td>/${ws.slug}</td><td>@${owner ? owner.username : ws.ownerId}</td></tr>`;
+      }
+
+      // Members Table
+      const memTbody = document.querySelector('#tbl-members tbody');
+      memTbody.innerHTML = '';
+      for (const m of engine.workspaceMembers.values()) {
+        const ws = engine.workspaces.get(m.workspaceId);
+        const roleClass = m.role === 'OWNER' ? 'badge-owner' : (m.role === 'ADMIN' ? 'badge-admin' : 'badge-member');
+        memTbody.innerHTML += `<tr><td>${m.id}</td><td>${ws ? ws.name : m.workspaceId}</td><td>@${m.username}</td><td><span class="badge ${roleClass}">${m.role}</span></td></tr>`;
+      }
+
+      // Channels Table
+      const chTbody = document.querySelector('#tbl-channels tbody');
+      chTbody.innerHTML = '';
+      for (const ch of engine.channels.values()) {
+        const ws = engine.workspaces.get(ch.workspaceId);
+        const badgeClass = ch.type === 'PUBLIC' ? 'badge-public' : 'badge-private';
+        const access = ch.type === 'PUBLIC' ? 'All Workspace Members' : `${[...engine.channelMembers.values()].filter(cm => cm.channelId === ch.id).length} Explicit Members`;
+        chTbody.innerHTML += `<tr><td>${ch.id}</td><td>${ws ? ws.slug : ch.workspaceId}</td><td>#${ch.slug} <span class="badge ${badgeClass}">${ch.type}</span></td><td>${access}</td></tr>`;
+      }
+
+      // Messages Table
+      const msgTbody = document.querySelector('#tbl-messages tbody');
+      msgTbody.innerHTML = '';
+      for (const msg of engine.messages.slice(-6).reverse()) {
+        const conv = engine.conversations.get(msg.conversationId);
+        const sender = engine.workspaceMembers.get(msg.senderMemberId);
+        const senderName = sender ? `@${sender.username}` : '(Deactivated Member)';
+        const convLabel = conv.type === 'CHANNEL' ? `#${engine.channels.get(conv.channelId).slug}` : `DM (${conv.id})`;
+        msgTbody.innerHTML += `<tr><td>${msg.id}</td><td>${convLabel}</td><td>${senderName}</td><td>${msg.content}</td></tr>`;
+      }
+    }
+
+    function initEngine() {
+      engine = new WorkspaceRelationalEngine();
+      engine.seedUser('alice', 'alice@company.com');
+      engine.seedUser('bob', 'bob@company.com');
+      engine.seedUser('charlie', 'charlie@company.com');
+      engine.seedUser('david', 'david@other.com');
+      renderState();
+    }
+
+    // Scenarios Setup
+    const scenarios = {
+      1: {
+        title: "1. Workspace Creation & Default Public Channels",
+        desc: "Alice creates 'Acme Corp' (slug: acme). The system automatically provisions the workspace, establishes Alice as OWNER, and seeds the default #general public channel.",
+        steps: [
+          { text: "1. Alice creates Workspace 'Acme Corp'", action: () => actionCreateWorkspace('Acme Corp', 'acme') },
+          { text: "2. Add Bob as standard MEMBER", action: () => actionAddMember('bob', 'MEMBER') },
+          { text: "3. Bob sends message to #general", action: () => actionSendChannelMessage('bob', 'general', 'Hello Acme team!') }
+        ]
+      },
+      2: {
+        title: "2. Private Channel Access & Tenant Isolation",
+        desc: "Alice creates a private channel #leadership. Charlie is explicitly invited. Bob is a workspace member but not in #leadership. Bob's attempt to post is rejected with 403 Forbidden.",
+        steps: [
+          { text: "1. Create workspace & members (Alice, Bob, Charlie)", action: () => { actionCreateWorkspace('Acme Corp', 'acme'); actionAddMember('bob'); actionAddMember('charlie'); } },
+          { text: "2. Alice creates PRIVATE channel #leadership", action: () => actionCreateChannel('leadership', 'PRIVATE') },
+          { text: "3. Alice adds Charlie to #leadership", action: () => actionAddChannelMember('charlie', 'leadership') },
+          { text: "4. Charlie posts in #leadership (Succeeds)", action: () => actionSendChannelMessage('charlie', 'leadership', 'Financial review notes.') },
+          { text: "5. Bob attempts to post in #leadership (Blocked 403)", action: () => actionSendChannelMessage('bob', 'leadership', 'Hey, let me in!') }
+        ]
+      },
+      3: {
+        title: "3. Workspace Direct Messaging (DM)",
+        desc: "Alice initiates a direct message with Bob inside Acme Corp. A Direct Message conversation is created and messages flow without contact requests.",
+        steps: [
+          { text: "1. Setup Acme with Alice and Bob", action: () => { actionCreateWorkspace('Acme Corp', 'acme'); actionAddMember('bob'); } },
+          { text: "2. Alice sends DM to Bob", action: () => actionSendDM('alice', 'bob', 'Hi Bob, quick sync?') },
+          { text: "3. Bob replies to Alice in DM", action: () => actionSendDM('bob', 'alice', 'Sure Alice, on it.') }
+        ]
+      },
+      4: {
+        title: "4. Member Eviction & Cascade Integrity",
+        desc: "Bob leaves or is evicted from Acme Corp. His private channel access and active conversation memberships are revoked, but historical messages remain with attribution intact.",
+        steps: [
+          { text: "1. Setup workspace with messages from Bob", action: () => { actionCreateWorkspace('Acme Corp', 'acme'); actionAddMember('bob'); actionSendChannelMessage('bob', 'general', 'Leaving notes here.'); } },
+          { text: "2. Evict Bob from Acme Corp", action: () => actionRemoveMember('bob') },
+          { text: "3. Verify Bob cannot access channels anymore", action: () => actionSendChannelMessage('bob', 'general', 'I am back?') }
+        ]
+      }
+    };
+
+    let currentScenarioStep = 0;
+    function loadScenario(num) {
+      actionResetState();
+      const sc = scenarios[num];
+      currentScenarioStep = 0;
+      document.getElementById('scenarioDescription').innerText = sc.desc;
+      const stepsDiv = document.getElementById('scenarioSteps');
+      stepsDiv.innerHTML = '';
+      sc.steps.forEach((step, idx) => {
+        const el = document.createElement('div');
+        el.className = 'step-item';
+        el.id = `sc-step-${idx}`;
+        el.innerHTML = `<span>${step.text}</span><button class="btn btn-secondary" onclick="runScenarioStep(${num}, ${idx})">Run Step</button>`;
+        stepsDiv.appendChild(el);
+      });
+    }
+
+    function runScenarioStep(scNum, stepIdx) {
+      const step = scenarios[scNum].steps[stepIdx];
+      step.action();
+      const el = document.getElementById(`sc-step-${stepIdx}`);
+      if (el) {
+        el.classList.add('completed');
+        el.querySelector('button').disabled = true;
+      }
+    }
+
+    // Action Handlers
+    function actionResetState() {
+      initEngine();
+      log('Engine reset to clean state', 'info');
+    }
+
+    function actionCreateWorkspace(name, slug) {
+      try {
+        const ws = engine.createWorkspace(name, slug, 'alice');
+        log(`Workspace '${ws.name}' created with OWNER @alice and #general`, 'success');
+        renderState();
+      } catch (e) { log(e.message, 'error'); }
+    }
+
+    function actionAddMember(username, role = 'MEMBER') {
+      try {
+        const ws = [...engine.workspaces.values()][0];
+        if (!ws) throw new Error('Create a workspace first');
+        const m = engine.addWorkspaceMember(ws.id, username, role);
+        log(`Added @${username} to '${ws.name}' as ${role}`, 'success');
+        renderState();
+      } catch (e) { log(e.message, 'error'); }
+    }
+
+    function actionCreateChannel(name, type = 'PUBLIC') {
+      try {
+        const ws = [...engine.workspaces.values()][0];
+        if (!ws) throw new Error('Create a workspace first');
+        const ownerMember = [...engine.workspaceMembers.values()].find(m => m.workspaceId === ws.id && m.role === 'OWNER');
+        const ch = engine.createChannel(ws.id, name, `${name} room`, type, ownerMember.id);
+        log(`Created channel #${ch.slug} (${type}) in '${ws.name}'`, 'success');
+        renderState();
+      } catch (e) { log(e.message, 'error'); }
+    }
+
+    function actionAddChannelMember(username, channelSlug) {
+      try {
+        const ch = [...engine.channels.values()].find(c => c.slug === channelSlug);
+        const mem = [...engine.workspaceMembers.values()].find(m => m.username === username);
+        if (!ch || !mem) throw new Error('Channel or Member not found');
+        engine.addChannelMember(ch.id, mem.id);
+        log(`Added @${username} to private channel #${channelSlug}`, 'success');
+        renderState();
+      } catch (e) { log(e.message, 'error'); }
+    }
+
+    function actionSendChannelMessage(username, channelSlug, content) {
+      try {
+        const ch = [...engine.channels.values()].find(c => c.slug === channelSlug);
+        const mem = [...engine.workspaceMembers.values()].find(m => m.username === username);
+        if (!ch || !mem) throw new Error('Channel or Member not found in workspace');
+        const msg = engine.sendChannelMessage(ch.id, mem.id, content);
+        log(`[#${channelSlug}] @${username}: "${content}"`, 'success');
+        renderState();
+      } catch (e) { log(`[#${channelSlug}] REJECTED @${username}: ${e.message}`, 'error'); }
+    }
+
+    function actionSendDM(senderUser, recipientUser, content) {
+      try {
+        const ws = [...engine.workspaces.values()][0];
+        const memA = [...engine.workspaceMembers.values()].find(m => m.username === senderUser && m.workspaceId === ws.id);
+        const memB = [...engine.workspaceMembers.values()].find(m => m.username === recipientUser && m.workspaceId === ws.id);
+        if (!memA || !memB) throw new Error('Both users must belong to the active workspace');
+        engine.sendDM(ws.id, memA.id, memB.id, content);
+        log(`[DM @${senderUser} -> @${recipientUser}]: "${content}"`, 'success');
+        renderState();
+      } catch (e) { log(`[DM Failed]: ${e.message}`, 'error'); }
+    }
+
+    function actionRemoveMember(username) {
+      try {
+        const ws = [...engine.workspaces.values()][0];
+        const mem = [...engine.workspaceMembers.values()].find(m => m.username === username && m.workspaceId === ws.id);
+        if (!mem) throw new Error(`Member @${username} not found in workspace`);
+        engine.evictMember(ws.id, mem.id);
+        log(`Evicted @${username} from workspace '${ws.name}'`, 'warning');
+        renderState();
+      } catch (e) { log(e.message, 'error'); }
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('tab-scenarios').style.display = tabId === 'scenarios' ? 'block' : 'none';
+      document.getElementById('tab-freeplay').style.display = tabId === 'freeplay' ? 'block' : 'none';
+      document.getElementById('tab-ddl').style.display = tabId === 'ddl' ? 'block' : 'none';
+    }
+
+    // Init on load
+    initEngine();
+    loadScenario(1);
+  </script>
+</body>
+</html>

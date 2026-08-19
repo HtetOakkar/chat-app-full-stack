@@ -4,7 +4,6 @@ import com.example.chatapp.chat.service.CallRegistry;
 import com.example.chatapp.chat.service.CallService;
 import com.example.chatapp.jwt.UserPrincipal;
 import com.example.chatapp.message.model.dto.CallSignalDto;
-import com.example.chatapp.user.repository.ContactRepository;
 import com.example.chatapp.websocket.MessageBroker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,7 +32,6 @@ class CallControllerTest {
         callController = new CallController(
                 messageBroker,
                 callRegistry,
-                mock(ContactRepository.class),
                 callService
         );
     }

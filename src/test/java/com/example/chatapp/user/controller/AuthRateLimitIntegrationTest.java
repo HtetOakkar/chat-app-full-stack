@@ -1,19 +1,20 @@
 package com.example.chatapp.user.controller;
 
 import com.example.chatapp.email.service.EmailService;
+import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.user.model.entity.User;
-import com.example.chatapp.user.repository.ContactRepository;
 import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.workspace.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Duration;
@@ -45,14 +46,42 @@ class AuthRateLimitIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    private ContactRepository contactRepository;
+    private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private WorkspaceMemberRepository workspaceMemberRepository;
+
+    @Autowired
+    private ChannelRepository channelRepository;
+
+    @Autowired
+    private ChannelMemberRepository channelMemberRepository;
+
+    @Autowired
+    private ConversationRepository conversationRepository;
+
+    @Autowired
+    private ConversationParticipantRepository conversationParticipantRepository;
+
+    @Autowired
+    private WorkspaceInvitationRepository workspaceInvitationRepository;
+
+    @Autowired
+    private MessageRepository messageRepository;
 
     @MockitoBean
     private EmailService emailService;
 
     @BeforeEach
     void cleanUp() {
-        contactRepository.deleteAll();
+        messageRepository.deleteAll();
+        workspaceInvitationRepository.deleteAll();
+        conversationParticipantRepository.deleteAll();
+        conversationRepository.deleteAll();
+        channelMemberRepository.deleteAll();
+        channelRepository.deleteAll();
+        workspaceMemberRepository.deleteAll();
+        workspaceRepository.deleteAll();
         userRepository.deleteAll();
     }
 

@@ -10,7 +10,6 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import com.example.chatapp.user.model.entity.User;
-import com.example.chatapp.user.model.entity.UserSettings;
 import com.example.chatapp.user.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -52,11 +51,6 @@ public class RoleDataInitiator implements CommandLineRunner {
                     .role(userRole)
                     .version(0L)
                     .build();
-            UserSettings settings = UserSettings.builder()
-                    .user(systemUser)
-                    .sharePresence(true)
-                    .build();
-            systemUser.setSettings(settings);
             userRepository.save(systemUser);
             log.info("System user created as a non-loginable service principal.");
         }

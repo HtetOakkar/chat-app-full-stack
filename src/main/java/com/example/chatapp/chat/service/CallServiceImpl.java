@@ -92,7 +92,7 @@ public class CallServiceImpl implements CallService {
                 .isDeleted(false)
                 .isDelivered(true)
                 .callOutcome(outcome)
-                .callDuration((int) duration)
+                .callDuration(duration)
                 .videoUsed(isVideo)
                 .build();
 

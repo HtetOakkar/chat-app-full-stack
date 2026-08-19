@@ -64,4 +64,25 @@ public class EmailServiceImpl implements EmailService {
             throw new RuntimeException("Failed to send email", e);
         }
     }
+
+    @Override
+    public void sendWorkspaceInvitation(String to, String workspaceName, String token) {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("from", "Meow Chit Chat <no-reply@mail.oakar.online>");
+            payload.put("to", List.of(to));
+            payload.put("subject", "You have been invited to join " + workspaceName);
+            payload.put("text", "You have been invited to join " + workspaceName + ". Use token: " + token);
+            payload.put("tags", List.of(Map.of("name", "category", "value", "invitation")));
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(resendApiKey);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+            restTemplate.postForEntity("https://api.resend.com/emails", request, String.class);
+        } catch (Exception e) {
+            // Log or rethrow
+        }
+    }
 }

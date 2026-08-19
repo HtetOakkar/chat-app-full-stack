@@ -3,9 +3,14 @@ package com.example.chatapp.message.repository;
 import com.example.chatapp.message.model.entity.Message;
 import com.example.chatapp.message.model.dto.MessageDto;
 import com.example.chatapp.message.model.entity.MessageType;
-import com.example.chatapp.message.repository.RedisMessageRepository;
+import com.example.chatapp.user.model.entity.Role;
+import com.example.chatapp.user.model.entity.RoleName;
 import com.example.chatapp.user.model.entity.User;
+import com.example.chatapp.user.repository.RoleRepository;
 import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.workspace.model.entity.*;
+import com.example.chatapp.workspace.repository.*;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,7 +34,22 @@ public class RedisMessageRepositoryTest {
     @Autowired
     private UserRepository userRepository;
 
-    @org.junit.jupiter.api.BeforeEach
+    @Autowired
+    private RoleRepository roleRepository;
+
+    @Autowired
+    private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private WorkspaceMemberRepository workspaceMemberRepository;
+
+    @Autowired
+    private ChannelRepository channelRepository;
+
+    @Autowired
+    private ConversationRepository conversationRepository;
+
+    @BeforeEach
     public void setUp() {
         redisMessageRepository.clear();
     }
@@ -47,7 +67,6 @@ public class RedisMessageRepositoryTest {
                 .messageType(MessageType.TEXT)
                 .build();
 
-        // Under current RedisConfig, this will fail with a SerializationException.
         redisMessageRepository.saveMessage(message);
 
         List<MessageDto> messages = redisMessageRepository.getMessages(1);
@@ -130,24 +149,55 @@ public class RedisMessageRepositoryTest {
 
     @Test
     public void testMessageProcessorForPublicMessage() throws Exception {
-        User system = userRepository.findByUsername("system")
-                .orElseThrow(() -> new IllegalStateException("System user should be seeded."));
+        Role userRole = roleRepository.findByName(RoleName.ROLE_USER)
+                .orElseGet(() -> roleRepository.save(Role.builder().name(RoleName.ROLE_USER).build()));
 
-        User sender = userRepository.findByUsername("tdd_user_processor").orElseGet(() -> {
+        User sender = userRepository.findByUsername("tdd_user_proc").orElseGet(() -> {
             User user = User.builder()
-                    .username("tdd_user_processor")
+                    .username("tdd_user_proc")
                     .password("pass")
-                    .role(system.getRole())
+                    .role(userRole)
+                    .email("proc@chatapp.com")
+                    .emailVerified(true)
                     .version(0L)
                     .build();
             return userRepository.save(user);
         });
 
+        Workspace ws = workspaceRepository.save(Workspace.builder()
+                .name("Test WS")
+                .slug("test-ws-proc")
+                .owner(sender)
+                .build());
+
+        WorkspaceMember member = workspaceMemberRepository.save(WorkspaceMember.builder()
+                .workspace(ws)
+                .user(sender)
+                .role(WorkspaceRole.OWNER)
+                .build());
+
+        Channel channel = channelRepository.save(Channel.builder()
+                .workspace(ws)
+                .name("general")
+                .slug("general")
+                .type(ChannelType.PUBLIC)
+                .createdByMember(member)
+                .build());
+
+        Conversation conv = conversationRepository.save(Conversation.builder()
+                .workspace(ws)
+                .type(ConversationType.CHANNEL)
+                .channel(channel)
+                .build());
+
         MessageDto publicMessageDto = MessageDto.builder()
+                .workspaceId(ws.getId())
+                .conversationId(conv.getId())
+                .channelId(channel.getId())
                 .content("Public text message")
                 .senderId(sender.getId())
+                .senderMemberId(member.getId())
                 .senderUsername(sender.getUsername())
-                .recipientId(null) // public message
                 .timestamp(Instant.now())
                 .isRead(false)
                 .isDelivered(true)
@@ -157,7 +207,7 @@ public class RedisMessageRepositoryTest {
         Message processedMessage = messageProcessor.process(publicMessageDto);
 
         assertNotNull(processedMessage);
-        assertNotNull(processedMessage.getRecipient());
-        assertEquals("system", processedMessage.getRecipient().getUsername());
+        assertNotNull(processedMessage.getConversation());
+        assertEquals(conv.getId(), processedMessage.getConversation().getId());
     }
 }

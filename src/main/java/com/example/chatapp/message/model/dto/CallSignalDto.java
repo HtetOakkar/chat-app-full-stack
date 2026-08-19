@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class CallSignalDto {
+    private Long workspaceId;
     private Long senderId;
     private String senderUsername;
     private String senderFullName;

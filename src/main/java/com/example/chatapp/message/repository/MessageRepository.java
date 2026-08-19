@@ -1,13 +1,12 @@
 package com.example.chatapp.message.repository;
 
 import com.example.chatapp.message.model.entity.Message;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
@@ -16,70 +15,41 @@ import java.util.Optional;
 @Repository
 public interface MessageRepository extends JpaRepository<Message, Long> {
 
-    Optional<Message> findBySenderIdAndSentAt(Long senderId, Instant sentAt);
-
     @Query("SELECT m FROM Message m " +
-           "JOIN FETCH m.sender " +
-           "LEFT JOIN FETCH m.recipient " +
-           "WHERE (m.recipient IS NULL OR m.recipient.id = (SELECT systemUser.id FROM User systemUser WHERE systemUser.username = 'system')) AND " +
+           "JOIN FETCH m.conversation c " +
+           "LEFT JOIN FETCH m.senderMember sm " +
+           "LEFT JOIN FETCH sm.user " +
+           "WHERE c.channel.id = :channelId AND " +
            "(:sentAt IS NULL OR m.sentAt < :sentAt OR (m.sentAt = :sentAt AND m.id < :lastId)) " +
            "ORDER BY m.sentAt DESC, m.id DESC")
-    List<Message> findPublicMessages(
+    List<Message> findChannelMessages(
+            @Param("channelId") Long channelId,
             @Param("sentAt") Instant sentAt,
             @Param("lastId") Long lastId,
             Pageable pageable
     );
 
     @Query("SELECT m FROM Message m " +
-           "JOIN FETCH m.sender " +
-           "LEFT JOIN FETCH m.recipient " +
-           "WHERE " +
-           "((m.sender.id = :userId1 AND m.recipient.id = :userId2) OR " +
-           "(m.sender.id = :userId2 AND m.recipient.id = :userId1)) AND " +
+           "JOIN FETCH m.conversation c " +
+           "LEFT JOIN FETCH m.senderMember sm " +
+           "LEFT JOIN FETCH sm.user " +
+           "WHERE c.id = :conversationId AND " +
            "(:clearedAt IS NULL OR m.sentAt > :clearedAt) AND " +
            "(:sentAt IS NULL OR m.sentAt < :sentAt OR (m.sentAt = :sentAt AND m.id < :lastId)) " +
            "ORDER BY m.sentAt DESC, m.id DESC")
-    List<Message> findPrivateMessages(
-            @Param("userId1") Long userId1,
-            @Param("userId2") Long userId2,
+    List<Message> findConversationMessages(
+            @Param("conversationId") Long conversationId,
             @Param("clearedAt") Instant clearedAt,
             @Param("sentAt") Instant sentAt,
             @Param("lastId") Long lastId,
             Pageable pageable
     );
 
-    boolean existsBySenderIdAndRecipientId(Long senderId, Long recipientId);
-
-    @Query("SELECT COUNT(m) FROM Message m WHERE m.sender.id = :senderId AND m.recipient.id = :recipientId AND m.isRead = false AND (:clearedAt IS NULL OR m.sentAt > :clearedAt)")
-    long countUnreadMessages(@Param("senderId") Long senderId, @Param("recipientId") Long recipientId, @Param("clearedAt") Instant clearedAt);
-
     @Query("SELECT m FROM Message m " +
-           "JOIN FETCH m.sender " +
-           "LEFT JOIN FETCH m.recipient " +
-           "WHERE " +
-           "((m.sender.id = :userId1 AND m.recipient.id = :userId2) OR " +
-           "(m.sender.id = :userId2 AND m.recipient.id = :userId1)) AND " +
-           "(:clearedAt IS NULL OR m.sentAt > :clearedAt) " +
-           "ORDER BY m.sentAt DESC, m.id DESC")
-    List<Message> findLatestMessageBetweenUsers(
-            @Param("userId1") Long userId1,
-            @Param("userId2") Long userId2,
-            @Param("clearedAt") Instant clearedAt,
-            Pageable pageable
-    );
-
-    @Query("SELECT m FROM Message m " +
-           "JOIN FETCH m.sender " +
-           "LEFT JOIN FETCH m.recipient " +
-           "WHERE ((m.sender.id = :ownerId AND m.recipient.id IN :contactIds) OR " +
-           "(m.recipient.id = :ownerId AND m.sender.id IN :contactIds)) " +
-           "ORDER BY m.sentAt DESC, m.id DESC")
-    List<Message> findConversationMessagesForContacts(
-            @Param("ownerId") Long ownerId,
-            @Param("contactIds") List<Long> contactIds
-    );
+           "WHERE m.senderMember.id = :senderMemberId AND m.sentAt = :sentAt")
+    Optional<Message> findBySenderMemberIdAndSentAt(@Param("senderMemberId") Long senderMemberId, @Param("sentAt") Instant sentAt);
 
     @Modifying
-    @Query("UPDATE Message m SET m.isRead = true WHERE m.sender.id = :senderId AND m.recipient.id = :recipientId AND m.isRead = false")
-    int markMessagesAsRead(@Param("senderId") Long senderId, @Param("recipientId") Long recipientId);
+    @Query("UPDATE Message m SET m.isRead = true WHERE m.conversation.id = :conversationId AND (m.senderMember.id != :memberId OR m.senderMember IS NULL) AND m.isRead = false")
+    int markConversationMessagesAsRead(@Param("conversationId") Long conversationId, @Param("memberId") Long memberId);
 }

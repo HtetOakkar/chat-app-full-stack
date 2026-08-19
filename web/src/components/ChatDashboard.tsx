@@ -1,23 +1,36 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { apiFetch } from "@/lib/api";
+import WorkspaceRail from "./WorkspaceRail";
+import WorkspaceSidebar from "./WorkspaceSidebar";
+import WorkspaceChannelViewport from "./WorkspaceChannelViewport";
+import WorkspaceDMViewport from "./WorkspaceDMViewport";
+import WorkspaceOnboardingModal from "./WorkspaceOnboardingModal";
+import CreateChannelModal from "./CreateChannelModal";
+import InviteMembersModal from "./InviteMembersModal";
+import MemberDirectoryModal from "./MemberDirectoryModal";
 import Sidebar, { type ActiveChat } from "./Sidebar";
 import ChatViewport from "./ChatViewport";
 import MyProfileCard from "./MyProfileCard";
 import UserProfileCard from "./UserProfileCard";
+import SettingsPage from "./SettingsPage";
 import IncomingCallModal from "./IncomingCallModal";
 import ActiveCallOverlay from "./ActiveCallOverlay";
-import SettingsPage from "./SettingsPage";
 
 export default function ChatDashboard() {
   const { logout, username, userId } = useAuth();
-  const [activeChat, setActiveChat] = useState<ActiveChat | null>({
-    id: 0,
-    username: "Global Registry Chat",
-    isPublic: true,
-  });
+  const {
+    workspaces,
+    currentWorkspace,
+    currentChannel,
+    currentDirectMessage,
+    isLoading: workspaceLoading,
+  } = useWorkspace();
+
+  const [activeChat, setActiveChat] = useState<ActiveChat | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [profile, setProfile] = useState<{ fullName?: string | null } | null>(
     null
@@ -33,6 +46,12 @@ export default function ChatDashboard() {
     status?: string;
   } | null>(null);
 
+  // Modals
+  const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
+  const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [showDirectory, setShowDirectory] = useState(false);
+
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -40,35 +59,17 @@ export default function ChatDashboard() {
         if (data) {
           setProfile(data);
         }
-      } catch {
-        // fail silently
-      }
+      } catch {}
     };
     fetchProfile();
   }, []);
 
+  // Prompt onboarding if user has 0 workspaces
   useEffect(() => {
-    const handleChatDeleted = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const { contactUserId } = customEvent.detail;
-      setActiveChat((prev) => {
-        if (prev && !prev.isPublic && prev.id === contactUserId) {
-          return {
-            id: 0,
-            username: "Global Registry Chat",
-            isPublic: true,
-          };
-        }
-        return prev;
-      });
-      setRefreshTrigger((prev) => prev + 1);
-    };
-
-    window.addEventListener("chat:deleted", handleChatDeleted);
-    return () => {
-      window.removeEventListener("chat:deleted", handleChatDeleted);
-    };
-  }, []);
+    if (!workspaceLoading && workspaces.length === 0) {
+      setShowWorkspaceModal(true);
+    }
+  }, [workspaceLoading, workspaces.length]);
 
   const handleSelectChat = useCallback((chat: ActiveChat | null) => {
     setActiveChat(chat);
@@ -84,17 +85,7 @@ export default function ChatDashboard() {
   );
 
   const handleBannerAction = useCallback(() => {
-    // After accept/ignore/block, refresh sidebar data and clear pending status
     setRefreshTrigger((prev) => prev + 1);
-    setActiveChat((prev) => {
-      if (
-        prev &&
-        (prev.status === "PENDING_REQUEST" || prev.status === "NEGLECTED")
-      ) {
-        return { ...prev, status: undefined };
-      }
-      return prev;
-    });
   }, []);
 
   return (
@@ -103,7 +94,7 @@ export default function ChatDashboard() {
       <header className="shrink-0 bg-surface-container-lowest/80 backdrop-blur-sm border-b border-outline-variant/10 px-4 md:px-6 py-3 md:py-2.5 flex items-center justify-between z-20 relative">
         <div className="flex items-center gap-3">
           <span className="text-[10px] md:text-[9px] font-bold uppercase tracking-[0.15em] text-outline">
-            Curator Dashboard
+            {currentWorkspace ? currentWorkspace.name : "Curator Dashboard"}
           </span>
         </div>
         <div className="flex items-center gap-2 md:gap-3">
@@ -177,17 +168,31 @@ export default function ChatDashboard() {
         </div>
       </header>
 
+      {/* 3-Tier Multi-Tenant Architecture */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar
-          activeChat={activeChat}
-          onSelectChat={handleSelectChat}
-          onSelectProfileUser={handleViewUserProfile}
-          refreshTrigger={refreshTrigger}
-          viewMode={viewMode}
+        {/* Tier 1: Workspace Rail */}
+        <WorkspaceRail
+          onOpenCreateWorkspace={() => setShowWorkspaceModal(true)}
         />
 
-        {/* Main Content */}
+        {/* Tier 2: Workspace Sidebar */}
+        <div
+          className={
+            viewMode === "profile" || viewMode === "settings"
+              ? "hidden md:flex"
+              : "flex"
+          }
+        >
+          <WorkspaceSidebar
+            onOpenCreateChannel={() => setShowCreateChannel(true)}
+            onOpenInvite={() => setShowInvite(true)}
+            onOpenMemberDirectory={() => setShowDirectory(true)}
+            onOpenSettings={() => setViewMode("settings")}
+            onOpenProfile={() => setViewMode("profile")}
+          />
+        </div>
+
+        {/* Tier 3: Main Viewport Content */}
         <div
           className={`flex-1 flex flex-col min-w-0 ${
             activeChat === null && viewMode === "chat"
@@ -195,7 +200,6 @@ export default function ChatDashboard() {
               : "flex"
           }`}
         >
-          {/* Main Viewport Content */}
           <div className="flex-1 flex min-h-0">
             {viewMode === "profile" ? (
               <MyProfileCard onBack={() => setViewMode("chat")} />
@@ -210,6 +214,10 @@ export default function ChatDashboard() {
                 onBack={() => setViewMode("chat")}
                 onSelectChat={handleSelectChat}
               />
+            ) : currentDirectMessage ? (
+              <WorkspaceDMViewport dm={currentDirectMessage} />
+            ) : currentChannel ? (
+              <WorkspaceChannelViewport channel={currentChannel} />
             ) : (
               <ChatViewport
                 activeChat={activeChat}
@@ -222,44 +230,52 @@ export default function ChatDashboard() {
         </div>
       </div>
 
+      {/* Modals */}
+      <WorkspaceOnboardingModal
+        isOpen={showWorkspaceModal}
+        onClose={() => setShowWorkspaceModal(false)}
+      />
+      <CreateChannelModal
+        isOpen={showCreateChannel}
+        onClose={() => setShowCreateChannel(false)}
+      />
+      <InviteMembersModal
+        isOpen={showInvite}
+        onClose={() => setShowInvite(false)}
+      />
+      <MemberDirectoryModal
+        isOpen={showDirectory}
+        onClose={() => setShowDirectory(false)}
+      />
+
       {/* Logout Confirmation Overlay */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-[fadeIn_0.2s_ease-out]">
-          <div className="bg-surface-container-lowest outline outline-1 outline-outline-variant/30 rounded-2xl shadow-[0_24px_64px_rgba(0,66,117,0.12)] max-w-sm w-full overflow-hidden flex flex-col">
-            <div className="px-6 py-5 border-b border-outline-variant/10 bg-surface-container-low flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-error/10 flex items-center justify-center text-error border border-error/10">
-                <span className="material-symbols-outlined text-lg">
-                  logout
-                </span>
-              </div>
-              <h3 className="font-bold text-sm text-on-surface">
-                Sign Out Confirmation
-              </h3>
-            </div>
-            <div className="p-6">
-              <p className="text-sm text-outline mb-6">
-                Are you sure you want to sign out of your account?
-              </p>
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowLogoutConfirm(false)}
-                  className="px-4 py-2 text-xs font-bold text-on-surface hover:bg-surface-container-high rounded-xl transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="px-4 py-2 text-xs font-bold bg-error text-white rounded-xl hover:bg-error/90 transition-colors shadow-sm"
-                >
-                  Sign Out
-                </button>
-              </div>
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-3xl shadow-2xl max-w-sm w-full p-6">
+            <h3 className="font-bold text-sm text-on-surface mb-2">Sign Out</h3>
+            <p className="text-xs text-outline mb-6">
+              Are you sure you want to sign out of your account?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-4 py-2 text-xs font-bold text-on-surface hover:bg-surface-container-high rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={logout}
+                className="px-4 py-2 text-xs font-bold bg-error text-white rounded-xl hover:bg-error/90 transition-colors shadow-sm"
+              >
+                Sign Out
+              </button>
             </div>
           </div>
         </div>
       )}
+
       {/* Call UI Components */}
       <IncomingCallModal />
       <ActiveCallOverlay />

@@ -2,24 +2,21 @@ package com.example.chatapp.chat.controller;
 
 import com.example.chatapp.jwt.UserPrincipal;
 import com.example.chatapp.message.model.dto.MessageDto;
-import com.example.chatapp.user.model.entity.Contact;
-import com.example.chatapp.user.model.entity.ContactStatus;
-import com.example.chatapp.user.model.entity.User;
+import com.example.chatapp.message.repository.MessageRepository;
+import com.example.chatapp.message.repository.RedisMessageRepository;
 import com.example.chatapp.user.model.entity.Role;
 import com.example.chatapp.user.model.entity.RoleName;
-import com.example.chatapp.user.repository.ContactRepository;
-import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.user.repository.RoleRepository;
+import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.workspace.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.util.Optional;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -29,33 +26,56 @@ class ChatControllerIntegrationTest {
     private ChatController chatController;
 
     @Autowired
-    private ContactRepository contactRepository;
-
-    @Autowired
     private UserRepository userRepository;
 
     @Autowired
+    private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private WorkspaceMemberRepository workspaceMemberRepository;
+
+    @Autowired
+    private ChannelRepository channelRepository;
+
+    @Autowired
+    private ChannelMemberRepository channelMemberRepository;
+
+    @Autowired
+    private ConversationRepository conversationRepository;
+
+    @Autowired
+    private ConversationParticipantRepository conversationParticipantRepository;
+
+    @Autowired
+    private WorkspaceInvitationRepository workspaceInvitationRepository;
+
+    @Autowired
+    private MessageRepository messageRepository;
+
+    @Autowired
     private RoleRepository roleRepository;
+
+    @Autowired
+    private RedisMessageRepository redisMessageRepository;
 
     private User bob;
     private User alice;
 
     @BeforeEach
     void setUp() {
-        contactRepository.deleteAll();
+        redisMessageRepository.clear();
+        messageRepository.deleteAll();
+        workspaceInvitationRepository.deleteAll();
+        conversationParticipantRepository.deleteAll();
+        conversationRepository.deleteAll();
+        channelMemberRepository.deleteAll();
+        channelRepository.deleteAll();
+        workspaceMemberRepository.deleteAll();
+        workspaceRepository.deleteAll();
         userRepository.deleteAll();
 
         Role userRole = roleRepository.findByName(RoleName.ROLE_USER)
                 .orElseGet(() -> roleRepository.save(Role.builder().name(RoleName.ROLE_USER).build()));
-
-        // Recreate system user to prevent test pollution
-        User system = User.builder()
-                .username("system")
-                .password("system_pass")
-                .role(userRole)
-                .version(0L)
-                .build();
-        userRepository.save(system);
 
         bob = User.builder()
                 .username("bob")
@@ -73,36 +93,20 @@ class ChatControllerIntegrationTest {
     }
 
     @Test
-    void sendPrivateMessageShouldPersistStatusUpdateToAccepted() {
-        // 1. Setup contact relationship: Bob has a PENDING_REQUEST from Alice
-        Contact bobRelation = Contact.builder()
-                .owner(bob)
-                .contactUser(alice)
-                .status(ContactStatus.PENDING_REQUEST)
-                .build();
-        contactRepository.save(bobRelation);
-
-        Contact aliceRelation = Contact.builder()
-                .owner(alice)
-                .contactUser(bob)
-                .status(ContactStatus.ACCEPTED)
-                .build();
-        contactRepository.save(aliceRelation);
-
-        // 2. Prepare message from Bob to Alice
+    void sendPrivateMessageShouldSaveToRedis() {
         MessageDto messageDto = MessageDto.builder()
                 .recipientId(alice.getId())
-                .content("Hey Alice, replying to your request!")
+                .content("Hey Alice!")
                 .build();
 
         UserPrincipal principal = UserPrincipal.create(bob);
 
-        // 3. Send message
         chatController.sendPrivateMessage(messageDto, principal);
 
-        // 4. Verify in DB
-        Optional<Contact> updatedRelationOpt = contactRepository.findByOwnerIdAndContactUserId(bob.getId(), alice.getId());
-        assertTrue(updatedRelationOpt.isPresent());
-        assertEquals(ContactStatus.ACCEPTED, updatedRelationOpt.get().getStatus());
+        var messages = redisMessageRepository.peekMessages();
+        assertEquals(1, messages.size());
+        assertEquals("Hey Alice!", messages.get(0).getContent());
+        assertEquals(bob.getId(), messages.get(0).getSenderId());
+        assertEquals(alice.getId(), messages.get(0).getRecipientId());
     }
 }
