@@ -91,6 +91,12 @@ export interface InvitationDto {
   createdAt?: string;
 }
 
+export interface BatchAddChannelMembersResponse {
+  addedCount: number;
+  addedUserIds: number[];
+  addedMembers: WorkspaceMemberDto[];
+}
+
 interface WorkspaceContextType {
   workspaces: WorkspaceDto[];
   currentWorkspace: WorkspaceDto | null;
@@ -112,7 +118,17 @@ interface WorkspaceContextType {
   switchChannel: (channelId: number) => void;
   openDirectMessage: (targetUserId: number) => Promise<DirectMessageDto>;
   switchDirectMessage: (targetUserId: number) => void;
+  getChannelMembers: (channelId: number) => Promise<WorkspaceMemberDto[]>;
   addChannelMember: (channelId: number, targetUserId: number) => Promise<void>;
+  batchAddChannelMembers: (
+    channelId: number,
+    userIds: number[]
+  ) => Promise<BatchAddChannelMembersResponse>;
+  removeChannelMember: (
+    channelId: number,
+    targetUserId: number
+  ) => Promise<void>;
+  leaveChannel: (channelId: number) => Promise<void>;
   createEmailInvite: (
     email: string,
     role?: "MEMBER" | "ADMIN"
@@ -191,16 +207,24 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       const data: ChannelDto[] = await apiFetch(
         `/api/workspaces/${currentWorkspace.id}/channels`
       );
-      setChannels(data || []);
-      if (data && data.length > 0 && !currentChannel && !currentDirectMessage) {
-        // default to #general if available
-        const general = data.find((c) => c.slug === "general") || data[0];
-        setCurrentChannel(general);
-      }
+      const list = data || [];
+      setChannels(list);
+      setCurrentChannel((prev) => {
+        if (!prev) {
+          if (!currentDirectMessage && list.length > 0) {
+            return list.find((c) => c.slug === "general") || list[0];
+          }
+          return null;
+        }
+        const updated = list.find((c) => c.id === prev.id);
+        return (
+          updated || list.find((c) => c.slug === "general") || list[0] || null
+        );
+      });
     } catch (err) {
       console.warn("Failed to fetch channels:", err);
     }
-  }, [currentWorkspace, currentChannel, currentDirectMessage]);
+  }, [currentWorkspace, currentDirectMessage]);
 
   const refreshDirectMessages = useCallback(async () => {
     if (!currentWorkspace) return;
@@ -351,10 +375,40 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         } else if (
           payload.type === "CHANNEL_CREATED" ||
           payload.type === "CHANNEL_MEMBER_ADDED" ||
-          payload.type === "CHANNEL_MEMBER_REMOVED" ||
           payload.type === "CHANNEL_UPDATED"
         ) {
           refreshChannels();
+        } else if (payload.type === "CHANNEL_MEMBER_REMOVED") {
+          refreshChannels();
+          if (
+            payload.userId === userId &&
+            currentChannel?.id === payload.channelId
+          ) {
+            setChannels((prevChannels) => {
+              const fallback =
+                prevChannels.find(
+                  (c) => c.slug === "general" && c.id !== payload.channelId
+                ) || null;
+              setCurrentChannel(fallback);
+              return prevChannels;
+            });
+            if (
+              payload.removedByUsername &&
+              payload.removedByUsername !== username
+            ) {
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("toast-notification", {
+                    detail: {
+                      title: "Channel Access Removed",
+                      message: `You were removed from this channel by @${payload.removedByUsername}`,
+                      type: "info",
+                    },
+                  })
+                );
+              }
+            }
+          }
         }
       } catch {}
     });
@@ -531,10 +585,49 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const getChannelMembers = async (
+    channelId: number
+  ): Promise<WorkspaceMemberDto[]> => {
+    return await apiFetch(`/api/channels/${channelId}/members`);
+  };
+
   const addChannelMember = async (channelId: number, targetUserId: number) => {
     await apiFetch(`/api/channels/${channelId}/members`, {
       method: "POST",
       body: JSON.stringify({ userId: targetUserId }),
+    });
+    refreshChannels();
+  };
+
+  const batchAddChannelMembers = async (
+    channelId: number,
+    userIds: number[]
+  ): Promise<BatchAddChannelMembersResponse> => {
+    const res: BatchAddChannelMembersResponse = await apiFetch(
+      `/api/channels/${channelId}/members/batch`,
+      {
+        method: "POST",
+        body: JSON.stringify({ userIds }),
+      }
+    );
+    refreshChannels();
+    return res;
+  };
+
+  const removeChannelMember = async (
+    channelId: number,
+    targetUserId: number
+  ) => {
+    await apiFetch(`/api/channels/${channelId}/members/${targetUserId}`, {
+      method: "DELETE",
+    });
+    refreshChannels();
+  };
+
+  const leaveChannel = async (channelId: number) => {
+    if (!userId) return;
+    await apiFetch(`/api/channels/${channelId}/members/${userId}`, {
+      method: "DELETE",
     });
     refreshChannels();
   };
@@ -660,8 +753,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         switchChannel,
         openDirectMessage,
         switchDirectMessage,
+        getChannelMembers,
         addChannelMember,
+        batchAddChannelMembers,
+        removeChannelMember,
+        leaveChannel,
         createEmailInvite,
+
         createEmailInvitation: createEmailInvite,
         createBatchInvites,
         createJoinLink,

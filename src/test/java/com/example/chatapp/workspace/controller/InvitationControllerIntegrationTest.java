@@ -343,7 +343,16 @@ class InvitationControllerIntegrationTest {
                         .header("Authorization", charlieToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isMember").value(true));
+
+        // System message posted to private channel: @charlie_inv joined the channel
+        mockMvc.perform(get("/api/channels/" + privateChannel.getId() + "/messages")
+                        .header("Authorization", charlieToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages", hasSize(1)))
+                .andExpect(jsonPath("$.messages[0].content").value("@charlie_inv joined the channel"))
+                .andExpect(jsonPath("$.messages[0].messageType").value("SYSTEM"));
     }
+
 
     @Test
     void shareableJoinLink_lifecycle_getToggleReset() throws Exception {

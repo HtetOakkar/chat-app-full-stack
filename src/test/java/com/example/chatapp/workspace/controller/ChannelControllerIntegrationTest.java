@@ -22,10 +22,13 @@ import org.springframework.test.web.servlet.MvcResult;
 import java.util.Map;
 
 import static org.hamcrest.Matchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -204,4 +207,142 @@ class ChannelControllerIntegrationTest {
                 .andExpect(jsonPath("$.messages", hasSize(1)))
                 .andExpect(jsonPath("$.messages[0].content").value("Welcome to Acme general channel!"));
     }
+
+    @Test
+    void singleMemberAddPostsActivityNoticeAndGrantsAccess() throws Exception {
+        // Alice creates private channel
+        MvcResult createRes = mockMvc.perform(post("/api/workspaces/" + workspace.getId() + "/channels")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"secret-ops\", \"type\": \"PRIVATE\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        Long channelId = ((Number) objectMapper.readValue(createRes.getResponse().getContentAsString(), Map.class).get("id")).longValue();
+
+        // Alice sends an initial message
+        mockMvc.perform(post("/api/channels/" + channelId + "/messages")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\": \"Classified info before Bob joined\"}"))
+                .andExpect(status().isCreated());
+
+        // Alice adds Bob
+        mockMvc.perform(post("/api/channels/" + channelId + "/members")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": " + bob.getId() + "}"))
+                .andExpect(status().isCreated());
+
+        // Bob fetches messages and sees past message AND the automated system activity notice (newest first)
+        mockMvc.perform(get("/api/channels/" + channelId + "/messages")
+                        .header("Authorization", bobToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages", hasSize(2)))
+                .andExpect(jsonPath("$.messages[0].content").value("@alice_chan added @bob_chan to the channel"))
+                .andExpect(jsonPath("$.messages[0].messageType").value("SYSTEM"))
+                .andExpect(jsonPath("$.messages[1].content").value("Classified info before Bob joined"));
+    }
+
+
+    @Test
+    void batchMemberAdditionPostsConsolidatedActivityNotice() throws Exception {
+        // Create Carol & David
+        MvcResult resCarol = mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"carol_chan\",\"password\":\"password123\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        User carol = userRepository.findByUsername("carol_chan").orElseThrow();
+
+        MvcResult resDavid = mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"david_chan\",\"password\":\"password123\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        User david = userRepository.findByUsername("david_chan").orElseThrow();
+
+        // Add Carol & David to workspace
+        var wsEntity = workspaceRepository.findById(workspace.getId()).orElseThrow();
+        workspaceMemberRepository.save(com.example.chatapp.workspace.model.entity.WorkspaceMember.builder()
+                .workspace(wsEntity).user(carol).role(WorkspaceRole.MEMBER).build());
+        workspaceMemberRepository.save(com.example.chatapp.workspace.model.entity.WorkspaceMember.builder()
+                .workspace(wsEntity).user(david).role(WorkspaceRole.MEMBER).build());
+
+        // Alice creates private channel
+        MvcResult createRes = mockMvc.perform(post("/api/workspaces/" + workspace.getId() + "/channels")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"squad-launch\", \"type\": \"PRIVATE\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        Long channelId = ((Number) objectMapper.readValue(createRes.getResponse().getContentAsString(), Map.class).get("id")).longValue();
+
+        // Alice batch-adds Bob, Carol, and David in one atomic call
+        String batchBody = String.format("{\"userIds\": [%d, %d, %d]}", bob.getId(), carol.getId(), david.getId());
+        mockMvc.perform(post("/api/channels/" + channelId + "/members/batch")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(batchBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.addedCount").value(3))
+                .andExpect(jsonPath("$.addedUserIds", hasSize(3)));
+
+        // Verify single consolidated activity notice in channel
+        mockMvc.perform(get("/api/channels/" + channelId + "/messages")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages", hasSize(1)))
+                .andExpect(jsonPath("$.messages[0].content").value("@alice_chan added @bob_chan, @carol_chan, and @david_chan to the channel"))
+                .andExpect(jsonPath("$.messages[0].messageType").value("SYSTEM"));
+    }
+
+    @Test
+    void channelDepartureAndRemovalPostsUniformLeaveNoticeAndRevokesAccess() throws Exception {
+        // Alice creates private channel
+        MvcResult createRes = mockMvc.perform(post("/api/workspaces/" + workspace.getId() + "/channels")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"alpha-team\", \"type\": \"PRIVATE\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        Long channelId = ((Number) objectMapper.readValue(createRes.getResponse().getContentAsString(), Map.class).get("id")).longValue();
+
+        // Add Bob
+        mockMvc.perform(post("/api/channels/" + channelId + "/members")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": " + bob.getId() + "}"))
+                .andExpect(status().isCreated());
+
+        // Bob voluntarily leaves the channel
+        mockMvc.perform(delete("/api/channels/" + channelId + "/members/" + bob.getId())
+                        .header("Authorization", bobToken))
+                .andExpect(status().isNoContent());
+
+        // Bob can no longer read or send messages in the channel
+        mockMvc.perform(get("/api/channels/" + channelId + "/messages")
+                        .header("Authorization", bobToken))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/channels/" + channelId + "/messages")
+                        .header("Authorization", bobToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\": \"Should fail\"}"))
+                .andExpect(status().isUnauthorized());
+
+        // Alice checks channel messages and sees the uniform leave notice
+        mockMvc.perform(get("/api/channels/" + channelId + "/messages")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages", hasSize(2))) // leave notice (newest) + add notice (older)
+                .andExpect(jsonPath("$.messages[0].content").value("@bob_chan left the channel"))
+                .andExpect(jsonPath("$.messages[0].messageType").value("SYSTEM"))
+                .andExpect(jsonPath("$.messages[1].content").value("@alice_chan added @bob_chan to the channel"))
+                .andExpect(jsonPath("$.messages[1].messageType").value("SYSTEM"));
+    }
+
 }
+

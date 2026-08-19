@@ -3,9 +3,11 @@ package com.example.chatapp.workspace.controller;
 import com.example.chatapp.jwt.UserPrincipal;
 import com.example.chatapp.message.model.dto.MessageDto;
 import com.example.chatapp.message.model.dto.MessagePage;
+import com.example.chatapp.workspace.model.dto.BatchAddChannelMembersResponse;
 import com.example.chatapp.workspace.model.dto.ChannelDto;
 import com.example.chatapp.workspace.model.dto.WorkspaceMemberDto;
 import com.example.chatapp.workspace.model.request.AddChannelMemberRequest;
+import com.example.chatapp.workspace.model.request.BatchAddChannelMembersRequest;
 import com.example.chatapp.workspace.model.request.CreateChannelRequest;
 import com.example.chatapp.workspace.service.ChannelService;
 import jakarta.validation.Valid;
@@ -54,6 +56,16 @@ public class ChannelController {
         channelService.addChannelMember(channelId, currentUser.getId(), request.getUserId());
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
+
+    @PostMapping({"/api/channels/{channelId}/members/batch", "/api/v1/channels/{channelId}/members/batch"})
+    public ResponseEntity<BatchAddChannelMembersResponse> batchAddChannelMembers(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @PathVariable Long channelId,
+            @Valid @RequestBody BatchAddChannelMembersRequest request) {
+        BatchAddChannelMembersResponse response = channelService.batchAddChannelMembers(channelId, currentUser.getId(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
 
     @DeleteMapping({"/api/channels/{channelId}/members/{userId}", "/api/v1/channels/{channelId}/members/{userId}"})
     public ResponseEntity<Void> removeChannelMember(

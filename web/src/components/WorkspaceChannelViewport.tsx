@@ -7,6 +7,7 @@ import { useConnection } from "@/context/ConnectionContext";
 import { apiFetch } from "@/lib/api";
 import { Virtuoso } from "react-virtuoso";
 import EmojiPicker, { Theme, EmojiStyle } from "emoji-picker-react";
+import ChannelDetailsModal from "./ChannelDetailsModal";
 
 interface ChannelMessage {
   id: number;
@@ -19,6 +20,7 @@ interface ChannelMessage {
   timestamp?: string;
   sentAt?: string;
   isDeleted?: boolean;
+  messageType?: string;
 }
 
 const formatChannelTime = (dateStr?: string): string => {
@@ -64,6 +66,10 @@ export default function WorkspaceChannelViewport({
   const [messages, setMessages] = useState<ChannelMessage[]>([]);
   const [inputText, setInputText] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [modalInitialTab, setModalInitialTab] = useState<
+    "members" | "add" | "email"
+  >("members");
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
 
   const cursorRef = useRef<string | null>(null);
@@ -194,10 +200,37 @@ export default function WorkspaceChannelViewport({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <span className="px-2.5 py-1 rounded-full bg-surface-container text-outline text-[10px] font-bold">
-            {channel.memberCount}{" "}
-            {channel.memberCount === 1 ? "member" : "members"}
-          </span>
+          {channel.type === "PRIVATE" && (
+            <button
+              type="button"
+              onClick={() => {
+                setModalInitialTab("add");
+                setShowDetailsModal(true);
+              }}
+              className="px-2.5 py-1 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-colors flex items-center gap-1"
+              title="Add Members"
+            >
+              <span className="material-symbols-outlined text-sm font-bold">
+                person_add
+              </span>
+              <span className="hidden sm:inline">Add Members</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setModalInitialTab("members");
+              setShowDetailsModal(true);
+            }}
+            className="px-2.5 py-1 rounded-full bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface text-[10px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+            title="View Channel Details & Members"
+          >
+            <span className="material-symbols-outlined text-xs">group</span>
+            <span>
+              {channel.memberCount}{" "}
+              {channel.memberCount === 1 ? "member" : "members"}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -228,9 +261,36 @@ export default function WorkspaceChannelViewport({
             List: VirtuosoChannelList,
           }}
           itemContent={(index, msg) => {
+            const timeStr = formatChannelTime(msg.timestamp || msg.sentAt);
+
+            // System activity message rendering (e.g. @alice added @bob to the channel)
+            if (
+              msg.messageType === "SYSTEM" ||
+              msg.messageType === "JOIN" ||
+              msg.messageType === "LEAVE"
+            ) {
+              return (
+                <div
+                  key={msg.id}
+                  className="flex items-center justify-center my-2.5 w-full select-none"
+                >
+                  <div className="px-3.5 py-1.5 rounded-full bg-surface-container/70 border border-outline-variant/10 text-outline text-[11px] font-medium flex items-center gap-1.5 shadow-2xs">
+                    <span className="material-symbols-outlined text-xs text-primary/80">
+                      {msg.messageType === "LEAVE" ? "logout" : "info"}
+                    </span>
+                    <span className="text-on-surface/80">{msg.content}</span>
+                    {timeStr && (
+                      <span className="text-[9px] text-outline/60 ml-1 font-mono">
+                        {timeStr}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
             const senderId = msg.senderId ?? msg.senderUserId;
             const isOwn = senderId === userId;
-            const timeStr = formatChannelTime(msg.timestamp || msg.sentAt);
 
             return (
               <div
@@ -310,6 +370,14 @@ export default function WorkspaceChannelViewport({
           </div>
         </form>
       </div>
+
+      {/* Channel Details & Members Modal */}
+      <ChannelDetailsModal
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        channel={channel}
+        initialTab={modalInitialTab}
+      />
     </div>
   );
 }

@@ -14,11 +14,14 @@ import com.example.chatapp.message.repository.RedisMessageRepository;
 import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.websocket.MessageBroker;
 import com.example.chatapp.websocket.SessionRegistry;
+import com.example.chatapp.workspace.model.dto.BatchAddChannelMembersResponse;
 import com.example.chatapp.workspace.model.dto.ChannelDto;
 import com.example.chatapp.workspace.model.dto.WorkspaceMemberDto;
 import com.example.chatapp.workspace.model.entity.*;
+import com.example.chatapp.workspace.model.request.BatchAddChannelMembersRequest;
 import com.example.chatapp.workspace.model.request.CreateChannelRequest;
 import com.example.chatapp.workspace.repository.*;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -30,7 +33,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
+
 
 @Service
 @RequiredArgsConstructor
@@ -159,10 +165,19 @@ public class ChannelServiceImpl implements ChannelService {
     @Override
     @Transactional
     public void addChannelMember(Long channelId, Long requestingUserId, Long targetUserId) {
+        batchAddChannelMembers(channelId, requestingUserId, BatchAddChannelMembersRequest.builder()
+                .userIds(List.of(targetUserId))
+                .build());
+    }
+
+    @Override
+    @Transactional
+    public BatchAddChannelMembersResponse batchAddChannelMembers(Long channelId, Long requestingUserId, BatchAddChannelMembersRequest request) {
         Channel channel = channelRepository.findById(channelId)
                 .orElseThrow(() -> new NotFoundException("Channel not found with ID: " + channelId));
 
         Long workspaceId = channel.getWorkspace().getId();
+        Workspace ws = channel.getWorkspace();
         if (channel.getType() == ChannelType.PUBLIC) {
             throw new BadRequestException("Cannot explicitly add members to a public channel");
         }
@@ -172,25 +187,62 @@ public class ChannelServiceImpl implements ChannelService {
             throw new UnauthorizedException("Only private channel members can invite colleagues");
         }
 
-        WorkspaceMember targetMember = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, targetUserId)
-                .orElseThrow(() -> new BadRequestException("Target user is not a member of this workspace"));
+        WorkspaceMember requestingMember = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, requestingUserId)
+                .orElseThrow(() -> new UnauthorizedException("You are not a member of this workspace"));
 
-        if (!channelMemberRepository.existsByChannelIdAndWorkspaceMemberId(channelId, targetMember.getId())) {
-            ChannelMember cm = ChannelMember.builder()
-                    .channel(channel)
-                    .workspaceMember(targetMember)
-                    .build();
-            channelMemberRepository.save(cm);
+        List<Long> newlyAddedUserIds = new ArrayList<>();
+        List<WorkspaceMemberDto> newlyAddedMembers = new ArrayList<>();
+        List<String> targetUsernames = new ArrayList<>();
+
+        if (request.getUserIds() != null) {
+            Set<Long> uniqueIds = new java.util.LinkedHashSet<>(request.getUserIds());
+            for (Long targetUserId : uniqueIds) {
+                Optional<WorkspaceMember> targetMemberOpt = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, targetUserId);
+                if (targetMemberOpt.isEmpty()) {
+                    if (uniqueIds.size() == 1) {
+                        throw new BadRequestException("Target user is not a member of this workspace");
+                    }
+                    continue;
+                }
+                WorkspaceMember targetMember = targetMemberOpt.get();
+                if (!channelMemberRepository.existsByChannelIdAndWorkspaceMemberId(channelId, targetMember.getId())) {
+                    ChannelMember cm = ChannelMember.builder()
+                            .channel(channel)
+                            .workspaceMember(targetMember)
+                            .build();
+                    channelMemberRepository.save(cm);
+
+                    newlyAddedUserIds.add(targetUserId);
+                    newlyAddedMembers.add(toWorkspaceMemberDto(targetMember));
+                    targetUsernames.add(targetMember.getUser().getUsername());
+                }
+            }
+        }
+
+        if (!targetUsernames.isEmpty()) {
+            String notice = buildConsolidatedAddMessage(requestingMember.getUser().getUsername(), targetUsernames);
+            postSystemMessage(channel, ws, requestingMember, notice);
 
             java.util.Map<String, Object> event = new java.util.HashMap<>();
             event.put("type", "CHANNEL_MEMBER_ADDED");
             event.put("workspaceId", workspaceId);
             event.put("channelId", channelId);
-            event.put("userId", targetUserId);
+            event.put("userIds", newlyAddedUserIds);
+            if (newlyAddedUserIds.size() == 1) {
+                event.put("userId", newlyAddedUserIds.get(0));
+            }
+            event.put("addedByUserId", requestingUserId);
             String eventsTopic = String.format("/topic/workspace.%d.events", workspaceId);
             messageBroker.publishToTopic(eventsTopic, event);
         }
+
+        return BatchAddChannelMembersResponse.builder()
+                .addedCount(newlyAddedUserIds.size())
+                .addedUserIds(newlyAddedUserIds)
+                .addedMembers(newlyAddedMembers)
+                .build();
     }
+
 
     @Override
     @Transactional
@@ -199,12 +251,22 @@ public class ChannelServiceImpl implements ChannelService {
                 .orElseThrow(() -> new NotFoundException("Channel not found with ID: " + channelId));
 
         Long workspaceId = channel.getWorkspace().getId();
+        Workspace ws = channel.getWorkspace();
+        if (channel.getType() == ChannelType.PUBLIC) {
+            throw new BadRequestException("Cannot remove members from a public channel");
+        }
+
         WorkspaceMember targetMember = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, targetUserId)
                 .orElseThrow(() -> new NotFoundException("Target member not found in workspace"));
 
+        if (!channelMemberRepository.existsByChannelIdAndWorkspaceMemberId(channelId, targetMember.getId())) {
+            throw new NotFoundException("User is not a member of this channel");
+        }
+
+        WorkspaceMember requestingMember = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, requestingUserId)
+                .orElseThrow(() -> new UnauthorizedException("You are not a member of this workspace"));
+
         if (!requestingUserId.equals(targetUserId)) {
-            WorkspaceMember requestingMember = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, requestingUserId)
-                    .orElseThrow(() -> new UnauthorizedException("You are not a member of this workspace"));
             if (requestingMember.getRole() != WorkspaceRole.OWNER && requestingMember.getRole() != WorkspaceRole.ADMIN) {
                 throw new UnauthorizedException("Only workspace owners/admins or the member themselves can remove members");
             }
@@ -212,14 +274,24 @@ public class ChannelServiceImpl implements ChannelService {
 
         channelMemberRepository.deleteByChannelIdAndWorkspaceMemberId(channelId, targetMember.getId());
 
+        // Uniform leave announcement: @member left the channel
+        String targetUsername = targetMember.getUser().getUsername();
+        String leaveNotice = "@" + targetUsername + " left the channel";
+        postSystemMessage(channel, ws, targetMember, leaveNotice);
+
         java.util.Map<String, Object> event = new java.util.HashMap<>();
         event.put("type", "CHANNEL_MEMBER_REMOVED");
         event.put("workspaceId", workspaceId);
         event.put("channelId", channelId);
         event.put("userId", targetUserId);
+        event.put("removedByUserId", requestingUserId);
+        event.put("removedByUsername", requestingMember.getUser().getUsername());
+        event.put("removedByFullName", requestingMember.getUser().getFullName() != null ? requestingMember.getUser().getFullName() : requestingMember.getUser().getUsername());
+        event.put("isSelfLeave", requestingUserId.equals(targetUserId));
         String eventsTopic = String.format("/topic/workspace.%d.events", workspaceId);
         messageBroker.publishToTopic(eventsTopic, event);
     }
+
 
     @Override
     @Transactional(readOnly = true)
@@ -365,6 +437,54 @@ public class ChannelServiceImpl implements ChannelService {
                 .build();
     }
 
+    private void postSystemMessage(Channel channel, Workspace ws, WorkspaceMember actorMember, String content) {
+        var convOpt = conversationRepository.findByChannelId(channel.getId());
+        if (convOpt.isEmpty()) {
+            return;
+        }
+        Conversation conv = convOpt.get();
+        Instant now = Instant.now();
+
+        Message message = Message.builder()
+                .conversation(conv)
+                .senderMember(actorMember)
+                .content(content)
+                .messageType(MessageType.SYSTEM)
+                .isRead(false)
+                .isDeleted(false)
+                .sentAt(now)
+                .build();
+        message = messageRepository.save(message);
+
+        MessageDto dto = messageMapper.toMessageDto(message);
+        String channelTopic = String.format("/topic/workspace.%d.channel.%d", ws.getId(), channel.getId());
+        messageBroker.publishToTopic(channelTopic, dto);
+    }
+
+    private String buildConsolidatedAddMessage(String actorUsername, List<String> targetUsernames) {
+        if (targetUsernames == null || targetUsernames.isEmpty()) {
+            return "@" + actorUsername + " added members to the channel";
+        }
+        if (targetUsernames.size() == 1) {
+            return "@" + actorUsername + " added @" + targetUsernames.get(0) + " to the channel";
+        }
+        if (targetUsernames.size() == 2) {
+            return "@" + actorUsername + " added @" + targetUsernames.get(0) + " and @" + targetUsernames.get(1) + " to the channel";
+        }
+        StringBuilder sb = new StringBuilder("@").append(actorUsername).append(" added ");
+        for (int i = 0; i < targetUsernames.size(); i++) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            if (i == targetUsernames.size() - 1) {
+                sb.append("and ");
+            }
+            sb.append("@").append(targetUsernames.get(i));
+        }
+        sb.append(" to the channel");
+        return sb.toString();
+    }
+
     private WorkspaceMemberDto toWorkspaceMemberDto(WorkspaceMember member) {
         User user = member.getUser();
         boolean isOnline = sessionRegistry != null && sessionRegistry.isOnline(user.getId());
@@ -380,3 +500,4 @@ public class ChannelServiceImpl implements ChannelService {
                 .build();
     }
 }
+
