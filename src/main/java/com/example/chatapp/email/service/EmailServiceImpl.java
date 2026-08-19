@@ -53,17 +53,7 @@ public class EmailServiceImpl implements EmailService {
             payload.put("tags", List.of(Map.of("name", "category", "value", "verification")));
             payload.put("headers", Map.of("X-Entity-Ref-ID", code));
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(resendApiKey);
-
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
-
-            ResponseEntity<String> response = restTemplate.postForEntity(
-                    "https://api.resend.com/emails",
-                    request,
-                    String.class
-            );
+            ResponseEntity<String> response = sendEmailPayload(payload);
 
             if (!response.getStatusCode().is2xxSuccessful()) {
                 throw new RuntimeException("Failed to send email: " + response.getBody());
@@ -143,18 +133,22 @@ public class EmailServiceImpl implements EmailService {
             payload.put("text", textBody);
             payload.put("tags", List.of(Map.of("name", "category", "value", "invitation")));
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(resendApiKey);
-
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity("https://api.resend.com/emails", request, String.class);
+            ResponseEntity<String> response = sendEmailPayload(payload);
             if (!response.getStatusCode().is2xxSuccessful()) {
                 log.error("Failed to send invitation email: {}", response.getBody());
             }
         } catch (Exception e) {
             log.error("Exception while sending workspace invitation email", e);
         }
+    }
+
+    private ResponseEntity<String> sendEmailPayload(Map<String, Object> payload) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(resendApiKey);
+
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+        return restTemplate.postForEntity("https://api.resend.com/emails", request, String.class);
     }
 
     private String escapeHtml(String input) {

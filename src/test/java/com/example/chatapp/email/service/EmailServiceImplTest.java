@@ -76,7 +76,7 @@ public class EmailServiceImplTest {
     void sendWorkspaceInvitation_withInviterName_ShouldDispatchBrandedHtmlEmailWithDirectJoinLinkAndPlainTextFallback() {
         // Arrange
         String to = "bob@example.com";
-        String workspaceName = "Acme Team";
+        String workspaceName = "Acme Workspace";
         String inviterName = "Alice Smith";
         String token = "tok12345";
 
@@ -96,18 +96,18 @@ public class EmailServiceImplTest {
         org.junit.jupiter.api.Assertions.assertNotNull(payload);
         List<String> toList = (List<String>) payload.get("to");
         assertEquals("bob@example.com", toList.get(0));
-        org.junit.jupiter.api.Assertions.assertTrue(((String) payload.get("subject")).contains("Acme Team"));
+        org.junit.jupiter.api.Assertions.assertTrue(((String) payload.get("subject")).contains("Acme Workspace"));
 
         String html = (String) payload.get("html");
         org.junit.jupiter.api.Assertions.assertNotNull(html, "HTML content must be provided");
-        org.junit.jupiter.api.Assertions.assertTrue(html.contains("Acme Team"), "HTML should contain workspace name");
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("Acme Workspace"), "HTML should contain workspace name");
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("Alice Smith"), "HTML should contain inviter info");
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("Accept Invitation &amp; Join") || html.contains("Accept Invitation & Join"), "HTML should contain Accept Invitation & Join CTA");
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("http://localhost:3000/join/tok12345"), "HTML should contain direct join URL");
 
         String text = (String) payload.get("text");
         org.junit.jupiter.api.Assertions.assertNotNull(text, "Text content must be provided");
-        org.junit.jupiter.api.Assertions.assertTrue(text.contains("Acme Team"), "Text should contain workspace name");
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("Acme Workspace"), "Text should contain workspace name");
         org.junit.jupiter.api.Assertions.assertTrue(text.contains("Alice Smith"), "Text should contain inviter info");
         org.junit.jupiter.api.Assertions.assertTrue(text.contains("http://localhost:3000/join/tok12345"), "Text should contain direct join URL");
 
@@ -124,7 +124,7 @@ public class EmailServiceImplTest {
                 .thenReturn(ResponseEntity.ok("success"));
 
         // Act
-        emailService.sendWorkspaceInvitation("bob@example.com", "Acme Team", "tok12345");
+        emailService.sendWorkspaceInvitation("bob@example.com", "Acme Workspace", "tok12345");
 
         // Assert
         ArgumentCaptor<HttpEntity<Map<String, Object>>> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
@@ -147,20 +147,20 @@ public class EmailServiceImplTest {
                 .thenReturn(ResponseEntity.ok("success"));
 
         // Act
-        emailService.sendWorkspaceInvitation("bob@example.com", "Acme Team", null, "tok12345");
+        emailService.sendWorkspaceInvitation("bob@example.com", "Acme Workspace", null, "tok12345");
 
         // Assert
         ArgumentCaptor<HttpEntity<Map<String, Object>>> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
         verify(restTemplate).postForEntity(eq("https://api.resend.com/emails"), entityCaptor.capture(), eq(String.class));
 
         Map<String, Object> payload = entityCaptor.getValue().getBody();
-        org.junit.jupiter.api.Assertions.assertEquals("You have been invited to join Acme Team", payload.get("subject"));
+        org.junit.jupiter.api.Assertions.assertEquals("You have been invited to join Acme Workspace", payload.get("subject"));
 
         String html = (String) payload.get("html");
         String text = (String) payload.get("text");
 
-        org.junit.jupiter.api.Assertions.assertTrue(html.contains("You have been invited to collaborate in <strong>Acme Team</strong>"));
-        org.junit.jupiter.api.Assertions.assertTrue(text.contains("You have been invited to collaborate in Acme Team"));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("You have been invited to collaborate in <strong>Acme Workspace</strong>"));
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("You have been invited to collaborate in Acme Workspace"));
     }
 
     @Test
@@ -171,7 +171,7 @@ public class EmailServiceImplTest {
 
         // Act & Assert (should not throw)
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
-                emailService.sendWorkspaceInvitation("bob@example.com", "Acme Team", "Alice", "tok12345")
+                emailService.sendWorkspaceInvitation("bob@example.com", "Acme Workspace", "Alice", "tok12345")
         );
     }
 }
