@@ -126,6 +126,13 @@ class InvitationControllerIntegrationTest {
 
         String token = (String) objectMapper.readValue(inviteRes.getResponse().getContentAsString(), Map.class).get("token");
 
+        org.mockito.Mockito.verify(emailService).sendWorkspaceInvitation(
+                org.mockito.ArgumentMatchers.eq("bob_inv@example.com"),
+                org.mockito.ArgumentMatchers.eq("Acme Collab"),
+                org.mockito.ArgumentMatchers.eq("alice_inv"),
+                org.mockito.ArgumentMatchers.eq(token)
+        );
+
         // Preview token
         mockMvc.perform(get("/api/invitations/" + token))
                 .andExpect(status().isOk())

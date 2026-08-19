@@ -71,4 +71,107 @@ public class EmailServiceImplTest {
         org.junit.jupiter.api.Assertions.assertNotNull(variables, "Template variables must be provided");
         assertEquals("123456", variables.get("code"));
     }
+
+    @Test
+    void sendWorkspaceInvitation_withInviterName_ShouldDispatchBrandedHtmlEmailWithDirectJoinLinkAndPlainTextFallback() {
+        // Arrange
+        String to = "bob@example.com";
+        String workspaceName = "Acme Team";
+        String inviterName = "Alice Smith";
+        String token = "tok12345";
+
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(ResponseEntity.ok("success"));
+
+        // Act
+        emailService.sendWorkspaceInvitation(to, workspaceName, inviterName, token);
+
+        // Assert
+        ArgumentCaptor<HttpEntity<Map<String, Object>>> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForEntity(eq("https://api.resend.com/emails"), entityCaptor.capture(), eq(String.class));
+
+        HttpEntity<Map<String, Object>> capturedEntity = entityCaptor.getValue();
+        Map<String, Object> payload = capturedEntity.getBody();
+
+        org.junit.jupiter.api.Assertions.assertNotNull(payload);
+        List<String> toList = (List<String>) payload.get("to");
+        assertEquals("bob@example.com", toList.get(0));
+        org.junit.jupiter.api.Assertions.assertTrue(((String) payload.get("subject")).contains("Acme Team"));
+
+        String html = (String) payload.get("html");
+        org.junit.jupiter.api.Assertions.assertNotNull(html, "HTML content must be provided");
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("Acme Team"), "HTML should contain workspace name");
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("Alice Smith"), "HTML should contain inviter info");
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("Accept Invitation &amp; Join") || html.contains("Accept Invitation & Join"), "HTML should contain Accept Invitation & Join CTA");
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("http://localhost:3000/join/tok12345"), "HTML should contain direct join URL");
+
+        String text = (String) payload.get("text");
+        org.junit.jupiter.api.Assertions.assertNotNull(text, "Text content must be provided");
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("Acme Team"), "Text should contain workspace name");
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("Alice Smith"), "Text should contain inviter info");
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("http://localhost:3000/join/tok12345"), "Text should contain direct join URL");
+
+        List<Map<String, String>> tags = (List<Map<String, String>>) payload.get("tags");
+        org.junit.jupiter.api.Assertions.assertNotNull(tags);
+        org.junit.jupiter.api.Assertions.assertEquals("invitation", tags.get(0).get("value"));
+    }
+
+    @Test
+    void sendWorkspaceInvitation_withCustomFrontendUrl_ShouldTargetConfiguredUrl() {
+        // Arrange
+        emailService.setFrontendUrl("https://app.customdomain.com/");
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(ResponseEntity.ok("success"));
+
+        // Act
+        emailService.sendWorkspaceInvitation("bob@example.com", "Acme Team", "tok12345");
+
+        // Assert
+        ArgumentCaptor<HttpEntity<Map<String, Object>>> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForEntity(eq("https://api.resend.com/emails"), entityCaptor.capture(), eq(String.class));
+
+        HttpEntity<Map<String, Object>> capturedEntity = entityCaptor.getValue();
+        Map<String, Object> payload = capturedEntity.getBody();
+
+        String html = (String) payload.get("html");
+        String text = (String) payload.get("text");
+
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("https://app.customdomain.com/join/tok12345"));
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("https://app.customdomain.com/join/tok12345"));
+    }
+
+    @Test
+    void sendWorkspaceInvitation_withoutInviterName_ShouldDispatchAppropriateSubjectAndBody() {
+        // Arrange
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(ResponseEntity.ok("success"));
+
+        // Act
+        emailService.sendWorkspaceInvitation("bob@example.com", "Acme Team", null, "tok12345");
+
+        // Assert
+        ArgumentCaptor<HttpEntity<Map<String, Object>>> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForEntity(eq("https://api.resend.com/emails"), entityCaptor.capture(), eq(String.class));
+
+        Map<String, Object> payload = entityCaptor.getValue().getBody();
+        org.junit.jupiter.api.Assertions.assertEquals("You have been invited to join Acme Team", payload.get("subject"));
+
+        String html = (String) payload.get("html");
+        String text = (String) payload.get("text");
+
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("You have been invited to collaborate in <strong>Acme Team</strong>"));
+        org.junit.jupiter.api.Assertions.assertTrue(text.contains("You have been invited to collaborate in Acme Team"));
+    }
+
+    @Test
+    void sendWorkspaceInvitation_whenHttpFails_ShouldCatchAndNotThrowException() {
+        // Arrange
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenThrow(new RuntimeException("Connection refused"));
+
+        // Act & Assert (should not throw)
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
+                emailService.sendWorkspaceInvitation("bob@example.com", "Acme Team", "Alice", "tok12345")
+        );
+    }
 }

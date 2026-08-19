@@ -62,7 +62,12 @@ public class InvitationServiceImpl implements InvitationService {
                 .build();
         invitation = workspaceInvitationRepository.save(invitation);
 
-        emailService.sendWorkspaceInvitation(request.getEmail(), ws.getName(), token);
+        User inviterUser = requestingMember.getUser();
+        String inviterName = inviterUser != null && inviterUser.getFullName() != null && !inviterUser.getFullName().isBlank()
+                ? inviterUser.getFullName()
+                : (inviterUser != null ? inviterUser.getUsername() : null);
+
+        emailService.sendWorkspaceInvitation(request.getEmail(), ws.getName(), inviterName, token);
 
         log.info("Created email invitation id={} for email={} to workspace={}", invitation.getId(), request.getEmail(), ws.getName());
 
