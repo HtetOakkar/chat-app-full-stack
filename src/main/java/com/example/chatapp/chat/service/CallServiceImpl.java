@@ -101,6 +101,12 @@ public class CallServiceImpl implements CallService {
         // Notify both parties of the new call record message
         messageBroker.publishToUser(session.getCallerId().toString(), "/queue/messages", messageDto);
         messageBroker.publishToUser(session.getCalleeId().toString(), "/queue/messages", messageDto);
+
+        if (session.getWorkspaceId() != null) {
+            String wsQueue = String.format("/queue/workspace.%d.messages", session.getWorkspaceId());
+            messageBroker.publishToUser(session.getCallerId().toString(), wsQueue, messageDto);
+            messageBroker.publishToUser(session.getCalleeId().toString(), wsQueue, messageDto);
+        }
     }
 
     private String formatCallLabel(String outcome) {

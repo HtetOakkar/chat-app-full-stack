@@ -29,10 +29,12 @@ class CallControllerTest {
         messageBroker = mock(MessageBroker.class);
         callService = mock(CallService.class);
         callRegistry = new CallRegistry();
+        var workspaceMemberRepository = mock(com.example.chatapp.workspace.repository.WorkspaceMemberRepository.class);
         callController = new CallController(
                 messageBroker,
                 callRegistry,
-                callService
+                callService,
+                workspaceMemberRepository
         );
     }
 

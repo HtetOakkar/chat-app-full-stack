@@ -26,6 +26,7 @@ public class CallController {
     private final MessageBroker messageBroker;
     private final CallRegistry callRegistry;
     private final CallService callService;
+    private final com.example.chatapp.workspace.repository.WorkspaceMemberRepository workspaceMemberRepository;
 
     @MessageMapping({"/call.offer", "/workspace.{workspaceId}.call.offer"})
     public void processOffer(@Valid @Payload CallSignalDto signalDto, Principal principal) {
@@ -35,6 +36,16 @@ public class CallController {
 
         if (recipientId == null) {
             throw new BadRequestException("recipientId is required for call offer");
+        }
+
+        // Validate workspace membership if workspaceId is present
+        if (signalDto.getWorkspaceId() != null) {
+            Long wId = signalDto.getWorkspaceId();
+            if (workspaceMemberRepository.findByWorkspaceIdAndUserId(wId, senderId).isEmpty() ||
+                workspaceMemberRepository.findByWorkspaceIdAndUserId(wId, recipientId).isEmpty()) {
+                log.warn("Call offer rejected: Sender {} or recipient {} is not a member of workspace {}", senderId, recipientId, wId);
+                return;
+            }
         }
 
         // Check if this is an in-call renegotiation/upgrade between the two users
@@ -61,7 +72,7 @@ public class CallController {
         }
 
         // Register call
-        callRegistry.registerCall(senderId, recipientId, signalDto.getCallType());
+        callRegistry.registerCall(signalDto.getWorkspaceId(), senderId, recipientId, signalDto.getCallType());
 
         // Forward offer
         signalDto.setType("offer");

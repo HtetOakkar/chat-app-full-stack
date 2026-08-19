@@ -11,10 +11,15 @@ public class CallRegistry {
     private final Map<Long, CallSession> activeCalls = new ConcurrentHashMap<>();
 
     public synchronized Optional<CallSession> registerCall(Long callerId, Long calleeId, String callType) {
+        return registerCall(null, callerId, calleeId, callType);
+    }
+
+    public synchronized Optional<CallSession> registerCall(Long workspaceId, Long callerId, Long calleeId, String callType) {
         if (isBusy(callerId) || isBusy(calleeId)) {
             return Optional.empty();
         }
         CallSession session = CallSession.builder()
+                .workspaceId(workspaceId)
                 .callerId(callerId)
                 .calleeId(calleeId)
                 .callType(callType)

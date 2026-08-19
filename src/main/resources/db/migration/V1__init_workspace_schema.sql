@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_email ON users(email);
 
--- Workspaces (Tenant Boundary)
+-- -----------------------------------------------------
+-- 2. Workspaces
+-- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS workspaces (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
