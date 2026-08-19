@@ -19,12 +19,18 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
-    let errorMsg = "API request failed";
+    let errorMsg = `API request failed with status ${response.status}`;
     try {
       const errorData = await response.json();
       errorMsg = errorData.message || errorData.error || errorMsg;
     } catch {
-      // JSON parsing failed, keep fallback
+      // JSON parsing failed, try reading plain text or keep fallback
+      try {
+        const errText = await response.text();
+        if (errText && errText.length < 200 && !errText.includes("<!DOCTYPE")) {
+          errorMsg = errText;
+        }
+      } catch {}
     }
 
     if (response.status === 401) {
