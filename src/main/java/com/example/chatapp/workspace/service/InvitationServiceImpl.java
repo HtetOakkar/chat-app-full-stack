@@ -47,9 +47,7 @@ public class InvitationServiceImpl implements InvitationService {
         WorkspaceMember requestingMember = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, userId)
                 .orElseThrow(() -> new UnauthorizedException("You are not a member of this workspace"));
 
-        if (requestingMember.getRole() == WorkspaceRole.MEMBER && request.getRole() == WorkspaceRole.ADMIN) {
-            throw new UnauthorizedException("Only workspace owners and admins can send invitations with the ADMIN role");
-        }
+        validateInvitationRole(requestingMember, request.getRole());
 
         Workspace ws = requestingMember.getWorkspace();
         String token = UUID.randomUUID().toString().replace("-", "");
@@ -67,11 +65,7 @@ public class InvitationServiceImpl implements InvitationService {
                 .build();
         invitation = workspaceInvitationRepository.save(invitation);
 
-        User inviterUser = requestingMember.getUser();
-        String inviterName = inviterUser != null && inviterUser.getFullName() != null && !inviterUser.getFullName().isBlank()
-                ? inviterUser.getFullName()
-                : (inviterUser != null ? inviterUser.getUsername() : null);
-
+        String inviterName = getInviterDisplayName(requestingMember.getUser());
         emailService.sendWorkspaceInvitation(request.getEmail(), ws.getName(), inviterName, token, null);
 
         log.info("Created email invitation id={} for email={} to workspace={}", invitation.getId(), request.getEmail(), ws.getName());
@@ -85,9 +79,7 @@ public class InvitationServiceImpl implements InvitationService {
         WorkspaceMember requestingMember = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, userId)
                 .orElseThrow(() -> new UnauthorizedException("You are not a member of this workspace"));
 
-        if (requestingMember.getRole() == WorkspaceRole.MEMBER && request.getRole() == WorkspaceRole.ADMIN) {
-            throw new UnauthorizedException("Only workspace owners and admins can send invitations with the ADMIN role");
-        }
+        validateInvitationRole(requestingMember, request.getRole());
 
         Workspace ws = requestingMember.getWorkspace();
 
@@ -113,9 +105,7 @@ public class InvitationServiceImpl implements InvitationService {
         }
 
         User inviterUser = requestingMember.getUser();
-        String inviterName = inviterUser != null && inviterUser.getFullName() != null && !inviterUser.getFullName().isBlank()
-                ? inviterUser.getFullName()
-                : (inviterUser != null ? inviterUser.getUsername() : null);
+        String inviterName = getInviterDisplayName(inviterUser);
 
         List<BatchInvitationItemResult> results = new ArrayList<>();
         int sentCount = 0;
@@ -241,27 +231,18 @@ public class InvitationServiceImpl implements InvitationService {
         WorkspaceMember requestingMember = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, userId)
                 .orElseThrow(() -> new UnauthorizedException("You are not a member of this workspace"));
 
+        Instant now = Instant.now();
         List<WorkspaceInvitation> existingLinks = workspaceInvitationRepository.findByWorkspaceIdAndTypeOrderByCreatedAtDesc(workspaceId, InvitationType.SHAREABLE_LINK);
         for (WorkspaceInvitation link : existingLinks) {
-            if (link.getStatus() == InvitationStatus.PENDING || link.getStatus() == InvitationStatus.INACTIVE) {
+            if ((link.getStatus() == InvitationStatus.PENDING || link.getStatus() == InvitationStatus.INACTIVE)
+                    && (link.getExpiresAt() == null || link.getExpiresAt().isAfter(now))) {
                 return toInvitationDto(link);
             }
         }
 
-        // None exists: create canonical persistent shareable link
+        // None exists or previous expired: create canonical persistent shareable link
         Workspace ws = requestingMember.getWorkspace();
-        String token = UUID.randomUUID().toString().replace("-", "");
-        Instant expiresAt = Instant.now().plus(36500, ChronoUnit.DAYS); // 100 years persistent
-
-        WorkspaceInvitation newLink = WorkspaceInvitation.builder()
-                .workspace(ws)
-                .inviter(requestingMember.getUser())
-                .token(token)
-                .type(InvitationType.SHAREABLE_LINK)
-                .role(WorkspaceRole.MEMBER)
-                .status(InvitationStatus.PENDING)
-                .expiresAt(expiresAt)
-                .build();
+        WorkspaceInvitation newLink = createFreshShareableLink(ws, requestingMember.getUser());
         newLink = workspaceInvitationRepository.save(newLink);
 
         return toInvitationDto(newLink);
@@ -277,10 +258,12 @@ public class InvitationServiceImpl implements InvitationService {
             throw new UnauthorizedException("Only workspace owners and admins can toggle shareable join links");
         }
 
+        Instant now = Instant.now();
         List<WorkspaceInvitation> existingLinks = workspaceInvitationRepository.findByWorkspaceIdAndTypeOrderByCreatedAtDesc(workspaceId, InvitationType.SHAREABLE_LINK);
         WorkspaceInvitation targetLink = null;
         for (WorkspaceInvitation link : existingLinks) {
-            if (link.getStatus() == InvitationStatus.PENDING || link.getStatus() == InvitationStatus.INACTIVE) {
+            if ((link.getStatus() == InvitationStatus.PENDING || link.getStatus() == InvitationStatus.INACTIVE)
+                    && (link.getExpiresAt() == null || link.getExpiresAt().isAfter(now))) {
                 targetLink = link;
                 break;
             }
@@ -288,16 +271,7 @@ public class InvitationServiceImpl implements InvitationService {
 
         if (targetLink == null) {
             Workspace ws = requestingMember.getWorkspace();
-            String token = UUID.randomUUID().toString().replace("-", "");
-            targetLink = WorkspaceInvitation.builder()
-                    .workspace(ws)
-                    .inviter(requestingMember.getUser())
-                    .token(token)
-                    .type(InvitationType.SHAREABLE_LINK)
-                    .role(WorkspaceRole.MEMBER)
-                    .status(InvitationStatus.PENDING)
-                    .expiresAt(Instant.now().plus(36500, ChronoUnit.DAYS))
-                    .build();
+            targetLink = createFreshShareableLink(ws, requestingMember.getUser());
         } else {
             if (targetLink.getStatus() == InvitationStatus.PENDING) {
                 targetLink.setStatus(InvitationStatus.INACTIVE);
@@ -331,16 +305,7 @@ public class InvitationServiceImpl implements InvitationService {
 
         // Create fresh persistent link
         Workspace ws = requestingMember.getWorkspace();
-        String token = UUID.randomUUID().toString().replace("-", "");
-        WorkspaceInvitation freshLink = WorkspaceInvitation.builder()
-                .workspace(ws)
-                .inviter(requestingMember.getUser())
-                .token(token)
-                .type(InvitationType.SHAREABLE_LINK)
-                .role(WorkspaceRole.MEMBER)
-                .status(InvitationStatus.PENDING)
-                .expiresAt(Instant.now().plus(36500, ChronoUnit.DAYS))
-                .build();
+        WorkspaceInvitation freshLink = createFreshShareableLink(ws, requestingMember.getUser());
         freshLink = workspaceInvitationRepository.save(freshLink);
 
         return toInvitationDto(freshLink);
@@ -387,11 +352,7 @@ public class InvitationServiceImpl implements InvitationService {
         invitation.setExpiresAt(Instant.now().plus(30, ChronoUnit.DAYS));
         invitation = workspaceInvitationRepository.save(invitation);
 
-        User inviterUser = requestingMember.getUser();
-        String inviterName = inviterUser != null && inviterUser.getFullName() != null && !inviterUser.getFullName().isBlank()
-                ? inviterUser.getFullName()
-                : (inviterUser != null ? inviterUser.getUsername() : null);
-
+        String inviterName = getInviterDisplayName(requestingMember.getUser());
         emailService.sendWorkspaceInvitation(invitation.getEmail(), invitation.getWorkspace().getName(), inviterName, invitation.getToken(), invitation.getCustomMessage());
 
         return toInvitationDto(invitation);
@@ -524,6 +485,35 @@ public class InvitationServiceImpl implements InvitationService {
                 .build();
     }
 
+    private void validateInvitationRole(WorkspaceMember requestingMember, WorkspaceRole targetRole) {
+        if (targetRole == WorkspaceRole.OWNER) {
+            throw new BadRequestException("Cannot invite users with the OWNER role");
+        }
+        if (requestingMember.getRole() == WorkspaceRole.MEMBER && targetRole == WorkspaceRole.ADMIN) {
+            throw new UnauthorizedException("Only workspace owners and admins can send invitations with the ADMIN role");
+        }
+    }
+
+    private String getInviterDisplayName(User inviter) {
+        if (inviter == null) return null;
+        return inviter.getFullName() != null && !inviter.getFullName().isBlank()
+                ? inviter.getFullName()
+                : inviter.getUsername();
+    }
+
+    private WorkspaceInvitation createFreshShareableLink(Workspace ws, User inviter) {
+        String token = UUID.randomUUID().toString().replace("-", "");
+        return WorkspaceInvitation.builder()
+                .workspace(ws)
+                .inviter(inviter)
+                .token(token)
+                .type(InvitationType.SHAREABLE_LINK)
+                .role(WorkspaceRole.MEMBER)
+                .status(InvitationStatus.PENDING)
+                .expiresAt(Instant.now().plus(36500, ChronoUnit.DAYS))
+                .build();
+    }
+
     private void validateInvitationActive(WorkspaceInvitation invitation) {
         if (invitation.getStatus() == InvitationStatus.INACTIVE) {
             throw new BadRequestException("This shareable join link has been deactivated");
@@ -544,10 +534,7 @@ public class InvitationServiceImpl implements InvitationService {
 
     private InvitationDto toInvitationDto(WorkspaceInvitation inv) {
         Workspace ws = inv.getWorkspace();
-        User inviter = inv.getInviter();
-        String inviterName = inviter != null
-                ? (inviter.getFullName() != null && !inviter.getFullName().isBlank() ? inviter.getFullName() : inviter.getUsername())
-                : null;
+        String inviterName = getInviterDisplayName(inv.getInviter());
 
         List<Long> initialChannelIds = null;
         List<ChannelDto> initialChannels = null;

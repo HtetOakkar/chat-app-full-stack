@@ -12,6 +12,14 @@ interface InviteMembersModalProps {
   onClose: () => void;
 }
 
+function parseEmailTokens(input: string): string[] {
+  if (!input.trim()) return [];
+  return input
+    .split(/[\s,;]+/)
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => t.length > 0);
+}
+
 export default function InviteMembersModal({
   isOpen,
   onClose,
@@ -101,11 +109,8 @@ export default function InviteMembersModal({
 
   // Add raw email text as chip(s)
   const addEmailTokens = (input: string) => {
-    if (!input.trim()) return;
-    const tokens = input
-      .split(/[\s,;]+/)
-      .map((t) => t.trim().toLowerCase())
-      .filter((t) => t.length > 0);
+    const tokens = parseEmailTokens(input);
+    if (tokens.length === 0) return;
 
     setEmailChips((prev) => {
       const set = new Set(prev);
@@ -161,10 +166,7 @@ export default function InviteMembersModal({
     // If there's text currently typed in input, add it as a token first
     let allEmails = [...emailChips];
     if (currentEmailInput.trim()) {
-      const extra = currentEmailInput
-        .split(/[\s,;]+/)
-        .map((t) => t.trim().toLowerCase())
-        .filter((t) => t.length > 0);
+      const extra = parseEmailTokens(currentEmailInput);
       const set = new Set([...allEmails, ...extra]);
       allEmails = Array.from(set);
     }

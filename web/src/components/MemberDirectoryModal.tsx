@@ -84,11 +84,13 @@ export default function MemberDirectoryModal({
 
   const handleRevoke = async (id: number, email?: string) => {
     setActionLoadingId(id);
+    const previous = [...pendingInvites];
+    setPendingInvites((prev) => prev.filter((inv) => inv.id !== id));
     try {
       await revokeInvitation(id);
-      setPendingInvites((prev) => prev.filter((inv) => inv.id !== id));
       showToast(`Invitation revoked for ${email || "recipient"}.`);
     } catch (err: any) {
+      setPendingInvites(previous);
       showToast(err?.message || "Failed to revoke invitation.");
     } finally {
       setActionLoadingId(null);
