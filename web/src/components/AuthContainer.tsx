@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { apiEndpoint } from "@/lib/apiBase";
 import DisplayPreferencesControls from "./DisplayPreferencesControls";
@@ -10,6 +11,7 @@ type FormMode = "login" | "signup";
 const productName = "Meow Chit Chat";
 
 export default function AuthContainer() {
+  const router = useRouter();
   const t = useTranslations();
   const [formMode, setFormMode] = useState<FormMode>("login");
   const [username, setUsername] = useState("");
@@ -30,6 +32,29 @@ export default function AuthContainer() {
   const [cooldown, setCooldown] = useState(0);
 
   const { login } = useAuth();
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const redirectParam = params.get("redirect");
+      if (redirectParam && redirectParam.startsWith("/")) {
+        sessionStorage.setItem("auth_redirect", redirectParam);
+      }
+    }
+  }, []);
+
+  const handleAuthSuccess = (token: string) => {
+    login(token);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const redirectUrl =
+        params.get("redirect") || sessionStorage.getItem("auth_redirect");
+      if (redirectUrl && redirectUrl.startsWith("/")) {
+        sessionStorage.removeItem("auth_redirect");
+        router.push(redirectUrl);
+      }
+    }
+  };
 
   useEffect(() => {
     if (cooldown > 0) {
@@ -95,7 +120,7 @@ export default function AuthContainer() {
         setVerificationView(true);
         setCooldown(60);
       } else {
-        login(data.token);
+        handleAuthSuccess(data.token);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t.unexpectedError;
@@ -126,7 +151,7 @@ export default function AuthContainer() {
       }
 
       const data = await res.json();
-      login(data.token);
+      handleAuthSuccess(data.token);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t.unexpectedError;
       setError(message);

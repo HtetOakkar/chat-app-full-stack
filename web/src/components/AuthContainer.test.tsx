@@ -3,6 +3,15 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AuthContainer from "./AuthContainer";
 import { DisplayPreferencesProvider } from "@/context/DisplayPreferencesContext";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
+
+const mockPush = jest.fn();
+
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
+}));
 
 jest.mock("@/context/AuthContext", () => ({
   useAuth: jest.fn(),
@@ -94,5 +103,103 @@ describe("AuthContainer localization", () => {
     await waitFor(() =>
       expect(screen.getByText("SERVER SAYS NO")).toBeInTheDocument()
     );
+  });
+});
+
+describe("AuthContainer redirect continuity", () => {
+  const mockLogin = jest.fn();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useAuth as jest.Mock).mockReturnValue({ login: mockLogin });
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    global.fetch = jest.fn();
+  });
+
+  it("navigates to redirect URL after successful login", async () => {
+    window.history.pushState({}, "", "/?redirect=/join/token-xyz");
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ token: "fake-jwt-token" }),
+    });
+
+    renderAuth();
+
+    expect(window.sessionStorage.getItem("auth_redirect")).toBe(
+      "/join/token-xyz"
+    );
+
+    fireEvent.change(screen.getByLabelText(/username/i), {
+      target: { value: "alice" },
+    });
+    fireEvent.change(screen.getByLabelText(/^password$/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.click(
+      screen.getAllByRole("button", { name: /sign in/i }).at(-1)!
+    );
+
+    await waitFor(() => {
+      expect(mockLogin).toHaveBeenCalledWith("fake-jwt-token");
+      expect(window.sessionStorage.getItem("auth_redirect")).toBeNull();
+      expect(mockPush).toHaveBeenCalledWith("/join/token-xyz");
+    });
+  });
+
+  it("preserves redirect across multi-step registration and email verification", async () => {
+    window.history.pushState({}, "", "/");
+    window.sessionStorage.setItem("auth_redirect", "/join/token-multi-step");
+
+    (global.fetch as jest.Mock)
+      // Step 1: signup response
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ message: "Verification code sent" }),
+      })
+      // Step 2: verify-email response
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: "verified-jwt-token" }),
+      });
+
+    renderAuth();
+
+    // Switch to sign up
+    fireEvent.click(screen.getByRole("button", { name: /sign up/i }));
+
+    fireEvent.change(screen.getByLabelText(/username/i), {
+      target: { value: "bob" },
+    });
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: "bob@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^password/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText(/re-enter password/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    // Verification screen appears
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Email Verification" })
+      ).toBeInTheDocument();
+    });
+
+    // Enter 6-digit code
+    fireEvent.change(screen.getByLabelText(/verification code/i), {
+      target: { value: "123456" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /verify code/i }));
+
+    await waitFor(() => {
+      expect(mockLogin).toHaveBeenCalledWith("verified-jwt-token");
+      expect(window.sessionStorage.getItem("auth_redirect")).toBeNull();
+      expect(mockPush).toHaveBeenCalledWith("/join/token-multi-step");
+    });
   });
 });
