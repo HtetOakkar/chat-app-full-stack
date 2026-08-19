@@ -272,6 +272,10 @@ export default function ChatDashboard() {
       <MemberDirectoryModal
         isOpen={showDirectory}
         onClose={() => setShowDirectory(false)}
+        onOpenInvite={() => {
+          setShowDirectory(false);
+          setShowInvite(true);
+        }}
       />
 
       {/* Logout Confirmation Overlay */}

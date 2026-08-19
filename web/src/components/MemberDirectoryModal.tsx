@@ -12,11 +12,13 @@ import { useCall } from "@/context/CallContext";
 interface MemberDirectoryModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenInvite?: () => void;
 }
 
 export default function MemberDirectoryModal({
   isOpen,
   onClose,
+  onOpenInvite,
 }: MemberDirectoryModalProps) {
   const {
     currentWorkspace,
@@ -137,13 +139,27 @@ export default function MemberDirectoryModal({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors"
-          >
-            <span className="material-symbols-outlined text-base">close</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenInvite && (
+              <button
+                type="button"
+                onClick={onOpenInvite}
+                className="px-3 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 text-xs font-bold transition-colors flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-sm">
+                  person_add
+                </span>
+                <span>Invite</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors"
+            >
+              <span className="material-symbols-outlined text-base">close</span>
+            </button>
+          </div>
         </div>
 
         {/* Tab Buttons (if Admin/Owner) */}

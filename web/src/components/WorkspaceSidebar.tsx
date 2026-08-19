@@ -84,21 +84,19 @@ export default function WorkspaceSidebar({
         {/* Workspace Quick Actions Dropdown */}
         {isWorkspaceMenuOpen && (
           <div className="absolute left-3 right-3 top-full mt-1 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl shadow-xl z-50 p-1.5 flex flex-col gap-0.5">
-            {isOwnerOrAdmin && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsWorkspaceMenuOpen(false);
-                  onOpenInvite();
-                }}
-                className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/5 rounded-xl transition-colors text-left"
-              >
-                <span className="material-symbols-outlined text-base">
-                  person_add
-                </span>
-                Invite Colleagues
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                setIsWorkspaceMenuOpen(false);
+                onOpenInvite();
+              }}
+              className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/5 rounded-xl transition-colors text-left"
+            >
+              <span className="material-symbols-outlined text-base">
+                person_add
+              </span>
+              Invite Colleagues
+            </button>
             <button
               type="button"
               onClick={() => {
