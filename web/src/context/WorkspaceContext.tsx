@@ -310,13 +310,20 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       } catch {}
     });
 
-    // 3. Workspace Events (e.g. member joined)
+    // 3. Workspace Events (e.g. member joined, channel created)
     const unsubEvents = subscribe(`/topic/workspace.${wId}.events`, (frame) => {
       try {
         const payload = JSON.parse(frame.body);
         if (payload.type === "MEMBER_JOINED") {
           refreshMembers();
           refreshWorkspaces();
+        } else if (
+          payload.type === "CHANNEL_CREATED" ||
+          payload.type === "CHANNEL_MEMBER_ADDED" ||
+          payload.type === "CHANNEL_MEMBER_REMOVED" ||
+          payload.type === "CHANNEL_UPDATED"
+        ) {
+          refreshChannels();
         }
       } catch {}
     });
@@ -390,6 +397,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     refreshMembers,
     refreshWorkspaces,
     refreshDirectMessages,
+    refreshChannels,
   ]);
 
   const createWorkspace = async (

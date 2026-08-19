@@ -86,7 +86,19 @@ public class ChannelServiceImpl implements ChannelService {
 
         log.info("Created channel id={} slug='{}' type={} in workspace id={}", channel.getId(), slug, channel.getType(), workspaceId);
 
-        return toChannelDto(channel, conv.getId(), true, 1);
+        ChannelDto dto = toChannelDto(channel, conv.getId(), true, 1);
+
+        // Broadcast channel created event to workspace
+        java.util.Map<String, Object> event = new java.util.HashMap<>();
+        event.put("type", "CHANNEL_CREATED");
+        event.put("workspaceId", workspaceId);
+        event.put("channelId", channel.getId());
+        event.put("channelName", channel.getName());
+        event.put("channelType", channel.getType().name());
+        String eventsTopic = String.format("/topic/workspace.%d.events", workspaceId);
+        messageBroker.publishToTopic(eventsTopic, event);
+
+        return dto;
     }
 
     @Override
@@ -169,6 +181,14 @@ public class ChannelServiceImpl implements ChannelService {
                     .workspaceMember(targetMember)
                     .build();
             channelMemberRepository.save(cm);
+
+            java.util.Map<String, Object> event = new java.util.HashMap<>();
+            event.put("type", "CHANNEL_MEMBER_ADDED");
+            event.put("workspaceId", workspaceId);
+            event.put("channelId", channelId);
+            event.put("userId", targetUserId);
+            String eventsTopic = String.format("/topic/workspace.%d.events", workspaceId);
+            messageBroker.publishToTopic(eventsTopic, event);
         }
     }
 
@@ -191,6 +211,14 @@ public class ChannelServiceImpl implements ChannelService {
         }
 
         channelMemberRepository.deleteByChannelIdAndWorkspaceMemberId(channelId, targetMember.getId());
+
+        java.util.Map<String, Object> event = new java.util.HashMap<>();
+        event.put("type", "CHANNEL_MEMBER_REMOVED");
+        event.put("workspaceId", workspaceId);
+        event.put("channelId", channelId);
+        event.put("userId", targetUserId);
+        String eventsTopic = String.format("/topic/workspace.%d.events", workspaceId);
+        messageBroker.publishToTopic(eventsTopic, event);
     }
 
     @Override

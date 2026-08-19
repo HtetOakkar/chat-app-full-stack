@@ -14,10 +14,21 @@ export default function WorkspacePage() {
   const { switchWorkspace, currentWorkspace } = useWorkspace();
 
   useEffect(() => {
-    if (workspaceSlug && currentWorkspace?.slug !== workspaceSlug) {
+    if (
+      !isLoading &&
+      isAuthenticated &&
+      workspaceSlug &&
+      currentWorkspace?.slug !== workspaceSlug
+    ) {
       switchWorkspace(workspaceSlug);
     }
-  }, [workspaceSlug, currentWorkspace?.slug, switchWorkspace]);
+  }, [
+    isLoading,
+    isAuthenticated,
+    workspaceSlug,
+    currentWorkspace?.slug,
+    switchWorkspace,
+  ]);
 
   if (isLoading) {
     return (

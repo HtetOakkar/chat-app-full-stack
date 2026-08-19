@@ -28,8 +28,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsLoading(false);
+    try {
+      const storedToken = localStorage.getItem("token");
+      if (storedToken) {
+        setAuthToken(storedToken);
+        setToken(storedToken);
+      }
+    } catch (e) {
+      console.warn("Failed to read token from localStorage:", e);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   const logout = () => {

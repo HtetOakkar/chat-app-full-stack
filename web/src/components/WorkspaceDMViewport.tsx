@@ -46,10 +46,24 @@ const getDMTime = (msg: DMMessage): number => {
   return isNaN(time) ? 0 : time;
 };
 
+const VirtuosoDMList = React.forwardRef<HTMLDivElement, any>(
+  ({ children, style, ...props }, ref) => (
+    <div
+      {...props}
+      ref={ref}
+      style={{ ...style }}
+      className="p-6 flex flex-col gap-3 min-w-0 max-w-full overflow-x-hidden"
+    >
+      {children}
+    </div>
+  )
+);
+VirtuosoDMList.displayName = "VirtuosoDMList";
+
 export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
-  const { currentWorkspace, presenceMap, typingMap } = useWorkspace();
+  const { currentWorkspace, presenceMap } = useWorkspace();
   const { userId } = useAuth();
-  const { connected, subscribe, stompClientRef } = useConnection();
+  const { connected, stompClientRef } = useConnection();
   const { initiateCall } = useCall();
 
   const target = dm.targetMember;
@@ -57,52 +71,68 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
 
   const [messages, setMessages] = useState<DMMessage[]>([]);
   const [inputText, setInputText] = useState("");
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+
+  const cursorRef = useRef<string | null>(null);
+  const hasMoreRef = useRef<boolean>(true);
   const loadingHistoryRef = useRef(false);
 
-  // Load initial DM history
-  const loadDMHistory = useCallback(async () => {
-    if (!currentWorkspace || !target || loadingHistoryRef.current || !hasMore)
-      return;
-    loadingHistoryRef.current = true;
+  // Fetch DM history
+  const fetchDMMessages = useCallback(
+    async (isInitial = false) => {
+      if (!currentWorkspace || !target || loadingHistoryRef.current) return;
+      if (!isInitial && !hasMoreRef.current) return;
 
-    try {
-      const url = `/api/workspaces/${currentWorkspace.id}/dm/${target.userId}/messages?limit=30${
-        cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""
-      }`;
-      const data = await apiFetch(url);
-      const fetched: DMMessage[] = data.messages || [];
-      const nextCursor = data.nextCursor;
+      loadingHistoryRef.current = true;
+      const currentCursor = isInitial ? null : cursorRef.current;
 
-      if (!nextCursor || fetched.length === 0) {
-        setHasMore(false);
-      } else {
-        setCursor(nextCursor);
+      try {
+        const url = `/api/workspaces/${currentWorkspace.id}/dm/${target.userId}/messages?limit=30${
+          currentCursor ? `&cursor=${encodeURIComponent(currentCursor)}` : ""
+        }`;
+        const data = await apiFetch(url);
+        const fetched: DMMessage[] = data.messages || [];
+        const nextCursor = data.nextCursor;
+
+        if (!nextCursor || fetched.length === 0) {
+          hasMoreRef.current = false;
+        } else {
+          cursorRef.current = nextCursor;
+        }
+
+        setMessages((prev) => {
+          if (isInitial) {
+            const sorted = [...fetched].sort(
+              (a, b) => getDMTime(a) - getDMTime(b)
+            );
+            return sorted;
+          }
+          const existingIds = new Set(prev.map((m) => m.id));
+          const newUnique = fetched.filter((m) => !existingIds.has(m.id));
+          const combined = [...newUnique, ...prev];
+          combined.sort((a, b) => getDMTime(a) - getDMTime(b));
+          return combined;
+        });
+      } catch (err) {
+        console.warn("Failed to fetch DM messages:", err);
+      } finally {
+        loadingHistoryRef.current = false;
       }
-
-      setMessages((prev) => {
-        const existingIds = new Set(prev.map((m) => m.id));
-        const newUnique = fetched.filter((m) => !existingIds.has(m.id));
-        const combined = [...newUnique, ...prev];
-        combined.sort((a, b) => getDMTime(a) - getDMTime(b));
-        return combined;
-      });
-    } catch (err) {
-      console.warn("Failed to fetch DM messages:", err);
-    } finally {
-      loadingHistoryRef.current = false;
-    }
-  }, [currentWorkspace, target, cursor, hasMore]);
+    },
+    [currentWorkspace, target]
+  );
 
   useEffect(() => {
+    cursorRef.current = null;
+    hasMoreRef.current = true;
     setMessages([]);
-    setCursor(null);
-    setHasMore(true);
-    loadDMHistory();
-  }, [target.userId]);
+    fetchDMMessages(true);
+  }, [target.userId, fetchDMMessages]);
+
+  const loadMoreDMHistory = useCallback(() => {
+    fetchDMMessages(false);
+  }, [fetchDMMessages]);
 
   // Listen to window workspace:dm:received event
   useEffect(() => {
@@ -159,11 +189,11 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-surface-container-lowest/30 min-w-0">
+    <div className="flex-1 flex flex-col h-full bg-surface-container-lowest/30 min-w-0 overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-3.5 border-b border-outline-variant/10 flex items-center justify-between bg-surface-container-lowest z-10 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="relative">
+      <div className="px-6 py-3.5 border-b border-outline-variant/10 flex items-center justify-between bg-surface-container-lowest z-10 shrink-0 min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="relative shrink-0">
             <div className="w-9 h-9 rounded-2xl bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">
               {target.username.charAt(0).toUpperCase()}
             </div>
@@ -173,11 +203,11 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
               }`}
             />
           </div>
-          <div>
-            <h3 className="font-extrabold text-sm text-on-surface leading-tight">
+          <div className="min-w-0">
+            <h3 className="font-extrabold text-sm text-on-surface leading-tight truncate">
               {target.fullName || target.username}
             </h3>
-            <p className="text-[10px] font-bold text-outline uppercase tracking-wider">
+            <p className="text-[10px] font-bold text-outline uppercase tracking-wider truncate">
               {isOnline ? (
                 <span className="text-emerald-500">Active Now</span>
               ) : (
@@ -187,7 +217,7 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => handleCall("AUDIO")}
@@ -223,10 +253,14 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
         </div>
       ) : (
         <Virtuoso
-          className="flex-1 custom-scrollbar p-6"
+          className="flex-1 custom-scrollbar overflow-x-hidden"
+          style={{ flex: 1 }}
           data={messages}
-          startReached={loadDMHistory}
+          startReached={loadMoreDMHistory}
           followOutput={(isAtBottom) => (isAtBottom ? "smooth" : false)}
+          components={{
+            List: VirtuosoDMList,
+          }}
           itemContent={(index, msg) => {
             const senderId = msg.senderId ?? msg.senderUserId;
             const isOwn = senderId === userId;
@@ -236,16 +270,19 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
 
             if (isCall) {
               return (
-                <div key={msg.id} className="flex justify-center my-2">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-low border border-outline-variant/15 text-xs text-on-surface">
-                    <span className="material-symbols-outlined text-sm">
+                <div
+                  key={msg.id}
+                  className="flex justify-center my-2 min-w-0 w-full"
+                >
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-low border border-outline-variant/15 text-xs text-on-surface max-w-full">
+                    <span className="material-symbols-outlined text-sm shrink-0">
                       {msg.messageType === "VIDEO" ? "videocam" : "call"}
                     </span>
-                    <span className="font-semibold">
+                    <span className="font-semibold truncate">
                       {msg.callOutcome || "Call Ended"}
                     </span>
                     {timeStr && (
-                      <span className="text-[10px] text-outline ml-1">
+                      <span className="text-[10px] text-outline ml-1 shrink-0">
                         {timeStr}
                       </span>
                     )}
@@ -257,16 +294,18 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
             return (
               <div
                 key={msg.id}
-                className={`flex flex-col mb-3 ${isOwn ? "items-end" : "items-start"}`}
+                className={`flex flex-col mb-3 min-w-0 w-full ${isOwn ? "items-end" : "items-start"}`}
               >
                 <div
-                  className={`p-3.5 rounded-2xl text-xs max-w-[75%] leading-relaxed ${
+                  className={`p-3.5 rounded-2xl text-xs max-w-[75%] leading-relaxed min-w-0 break-words [overflow-wrap:anywhere] ${
                     isOwn
                       ? "bg-primary text-white rounded-br-sm shadow-sm"
                       : "bg-surface-container-lowest text-on-surface rounded-bl-sm border border-outline-variant/10 shadow-xs"
                   }`}
                 >
-                  <p>{msg.content}</p>
+                  <p className="break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
+                    {msg.content}
+                  </p>
                   {timeStr && (
                     <span
                       className={`text-[8px] font-bold mt-1.5 block tracking-tighter uppercase ${
@@ -284,7 +323,7 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
       )}
 
       {/* Input */}
-      <div className="relative" ref={emojiPickerRef}>
+      <div className="relative shrink-0" ref={emojiPickerRef}>
         {showEmojiPicker && (
           <div className="absolute bottom-[100%] right-4 mb-2 z-50 shadow-2xl rounded-2xl overflow-hidden border border-outline-variant/20">
             <EmojiPicker
@@ -300,13 +339,13 @@ export default function WorkspaceDMViewport({ dm }: { dm: DirectMessageDto }) {
           onSubmit={handleSendMessage}
           className="p-4 border-t border-outline-variant/10 bg-surface-container-lowest shrink-0"
         >
-          <div className="bg-surface-container-low rounded-2xl p-1.5 flex items-center gap-2 border border-transparent focus-within:border-primary/30 transition-all">
+          <div className="bg-surface-container-low rounded-2xl p-1.5 flex items-center gap-2 border border-transparent focus-within:border-primary/30 transition-all min-w-0">
             <input
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder={`Message ${target.fullName || target.username}...`}
-              className="flex-1 bg-transparent border-none outline-none focus:ring-0 text-xs px-3 py-2 text-on-surface placeholder:text-outline"
+              className="flex-1 min-w-0 bg-transparent border-none outline-none focus:ring-0 text-xs px-3 py-2 text-on-surface placeholder:text-outline"
             />
             <button
               type="button"

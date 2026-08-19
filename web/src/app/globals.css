@@ -92,8 +92,11 @@
 }
 
 @utility custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #e2e2e2 transparent;
   &::-webkit-scrollbar {
     width: 4px;
+    height: 4px;
   }
   &::-webkit-scrollbar-track {
     background: transparent;

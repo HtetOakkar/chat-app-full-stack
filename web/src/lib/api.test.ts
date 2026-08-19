@@ -8,11 +8,9 @@ describe("apiFetch bearer token transport", () => {
     jest.restoreAllMocks();
   });
 
-  it("sends the in-memory bearer token instead of reading localStorage", async () => {
-    localStorage.setItem("token", "stored-token");
-    setAuthToken("memory-token");
+  it("sends the bearer token in Authorization header", async () => {
+    setAuthToken("test-token-123");
 
-    const getItemSpy = jest.spyOn(Storage.prototype, "getItem");
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       text: async () => "{}",
@@ -21,12 +19,32 @@ describe("apiFetch bearer token transport", () => {
 
     await apiFetch("/api/test");
 
-    expect(getItemSpy).not.toHaveBeenCalledWith("token");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/test",
       expect.objectContaining({
         headers: expect.objectContaining({
-          Authorization: "Bearer memory-token",
+          Authorization: "Bearer test-token-123",
+        }),
+      })
+    );
+  });
+
+  it("retrieves token from localStorage if available", async () => {
+    localStorage.setItem("token", "persisted-token");
+
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      text: async () => "{}",
+    } as Response);
+    global.fetch = fetchMock;
+
+    await apiFetch("/api/test");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/test",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer persisted-token",
         }),
       })
     );

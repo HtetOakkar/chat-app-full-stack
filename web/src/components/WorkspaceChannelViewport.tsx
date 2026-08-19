@@ -38,73 +38,104 @@ const getChannelTime = (msg: ChannelMessage): number => {
   return isNaN(time) ? 0 : time;
 };
 
+const VirtuosoChannelList = React.forwardRef<HTMLDivElement, any>(
+  ({ children, style, ...props }, ref) => (
+    <div
+      {...props}
+      ref={ref}
+      style={{ ...style }}
+      className="p-6 flex flex-col gap-3 min-w-0 max-w-full overflow-x-hidden"
+    >
+      {children}
+    </div>
+  )
+);
+VirtuosoChannelList.displayName = "VirtuosoChannelList";
+
 export default function WorkspaceChannelViewport({
   channel,
 }: {
   channel: ChannelDto;
 }) {
-  const { currentWorkspace, typingMap } = useWorkspace();
-  const { userId, username } = useAuth();
+  const { currentWorkspace } = useWorkspace();
+  const { userId } = useAuth();
   const { connected, subscribe, stompClientRef } = useConnection();
 
   const [messages, setMessages] = useState<ChannelMessage[]>([]);
   const [inputText, setInputText] = useState("");
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+
+  const cursorRef = useRef<string | null>(null);
+  const hasMoreRef = useRef<boolean>(true);
   const loadingHistoryRef = useRef(false);
 
-  // Load initial channel messages
-  const loadChannelHistory = useCallback(async () => {
-    if (!currentWorkspace || !channel || loadingHistoryRef.current || !hasMore)
-      return;
-    loadingHistoryRef.current = true;
+  const channelId = channel.id;
 
-    try {
-      const url = `/api/channels/${channel.id}/messages?limit=30${
-        cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""
-      }`;
-      const data = await apiFetch(url);
-      const fetched: ChannelMessage[] = data.messages || [];
-      const nextCursor = data.nextCursor;
+  // Fetch channel history
+  const fetchMessages = useCallback(
+    async (isInitial = false) => {
+      if (!currentWorkspace || !channelId || loadingHistoryRef.current) return;
+      if (!isInitial && !hasMoreRef.current) return;
 
-      if (!nextCursor || fetched.length === 0) {
-        setHasMore(false);
-      } else {
-        setCursor(nextCursor);
+      loadingHistoryRef.current = true;
+      const currentCursor = isInitial ? null : cursorRef.current;
+
+      try {
+        const url = `/api/channels/${channelId}/messages?limit=30${
+          currentCursor ? `&cursor=${encodeURIComponent(currentCursor)}` : ""
+        }`;
+        const data = await apiFetch(url);
+        const fetched: ChannelMessage[] = data.messages || [];
+        const nextCursor = data.nextCursor;
+
+        if (!nextCursor || fetched.length === 0) {
+          hasMoreRef.current = false;
+        } else {
+          cursorRef.current = nextCursor;
+        }
+
+        setMessages((prev) => {
+          if (isInitial) {
+            const sorted = [...fetched].sort(
+              (a, b) => getChannelTime(a) - getChannelTime(b)
+            );
+            return sorted;
+          }
+          const existingIds = new Set(prev.map((m) => m.id));
+          const newUnique = fetched.filter((m) => !existingIds.has(m.id));
+          const combined = [...newUnique, ...prev];
+          combined.sort((a, b) => getChannelTime(a) - getChannelTime(b));
+          return combined;
+        });
+      } catch (err) {
+        console.warn("Failed to fetch channel messages:", err);
+      } finally {
+        loadingHistoryRef.current = false;
       }
-
-      setMessages((prev) => {
-        const existingIds = new Set(prev.map((m) => m.id));
-        const newUnique = fetched.filter((m) => !existingIds.has(m.id));
-        const combined = [...newUnique, ...prev];
-        combined.sort((a, b) => getChannelTime(a) - getChannelTime(b));
-        return combined;
-      });
-    } catch (err) {
-      console.warn("Failed to fetch channel messages:", err);
-    } finally {
-      loadingHistoryRef.current = false;
-    }
-  }, [currentWorkspace, channel, cursor, hasMore]);
+    },
+    [currentWorkspace, channelId]
+  );
 
   useEffect(() => {
+    cursorRef.current = null;
+    hasMoreRef.current = true;
     setMessages([]);
-    setCursor(null);
-    setHasMore(true);
-    loadChannelHistory();
-  }, [channel.id]);
+    fetchMessages(true);
+  }, [channelId, fetchMessages]);
+
+  const loadMoreHistory = useCallback(() => {
+    fetchMessages(false);
+  }, [fetchMessages]);
 
   // STOMP Subscription for Channel
   useEffect(() => {
-    if (!connected || !currentWorkspace || !channel) return;
+    if (!connected || !currentWorkspace || !channelId) return;
 
     const wId = currentWorkspace.id;
-    const cId = channel.id;
 
     const unsub = subscribe(
-      `/topic/workspace.${wId}.channel.${cId}`,
+      `/topic/workspace.${wId}.channel.${channelId}`,
       (frame) => {
         try {
           const msg: ChannelMessage = JSON.parse(frame.body);
@@ -119,7 +150,7 @@ export default function WorkspaceChannelViewport({
     return () => {
       unsub();
     };
-  }, [connected, currentWorkspace, channel, subscribe]);
+  }, [connected, currentWorkspace, channelId, subscribe]);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,17 +172,17 @@ export default function WorkspaceChannelViewport({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-surface-container-lowest/30 min-w-0">
+    <div className="flex-1 flex flex-col h-full bg-surface-container-lowest/30 min-w-0 overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-3.5 border-b border-outline-variant/10 flex items-center justify-between bg-surface-container-lowest z-10 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+      <div className="px-6 py-3.5 border-b border-outline-variant/10 flex items-center justify-between bg-surface-container-lowest z-10 shrink-0 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
             <span className="material-symbols-outlined text-base">
               {channel.type === "PRIVATE" ? "lock" : "tag"}
             </span>
           </div>
-          <div>
-            <h3 className="font-extrabold text-sm text-on-surface leading-tight">
+          <div className="min-w-0">
+            <h3 className="font-extrabold text-sm text-on-surface leading-tight truncate">
               #{channel.name}
             </h3>
             {channel.description && (
@@ -162,7 +193,7 @@ export default function WorkspaceChannelViewport({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <span className="px-2.5 py-1 rounded-full bg-surface-container text-outline text-[10px] font-bold">
             {channel.memberCount}{" "}
             {channel.memberCount === 1 ? "member" : "members"}
@@ -188,10 +219,14 @@ export default function WorkspaceChannelViewport({
         </div>
       ) : (
         <Virtuoso
-          className="flex-1 custom-scrollbar p-6"
+          className="flex-1 custom-scrollbar overflow-x-hidden"
+          style={{ flex: 1 }}
           data={messages}
-          startReached={loadChannelHistory}
+          startReached={loadMoreHistory}
           followOutput={(isAtBottom) => (isAtBottom ? "smooth" : false)}
+          components={{
+            List: VirtuosoChannelList,
+          }}
           itemContent={(index, msg) => {
             const senderId = msg.senderId ?? msg.senderUserId;
             const isOwn = senderId === userId;
@@ -200,21 +235,23 @@ export default function WorkspaceChannelViewport({
             return (
               <div
                 key={msg.id}
-                className={`flex flex-col mb-3 ${isOwn ? "items-end" : "items-start"}`}
+                className={`flex flex-col mb-3 min-w-0 w-full ${isOwn ? "items-end" : "items-start"}`}
               >
                 {!isOwn && (
-                  <span className="text-[10px] font-bold text-outline mb-1 ml-1">
+                  <span className="text-[10px] font-bold text-outline mb-1 ml-1 truncate max-w-full">
                     {msg.senderFullName || msg.senderUsername}
                   </span>
                 )}
                 <div
-                  className={`p-3.5 rounded-2xl text-xs max-w-[75%] leading-relaxed ${
+                  className={`p-3.5 rounded-2xl text-xs max-w-[75%] leading-relaxed min-w-0 break-words [overflow-wrap:anywhere] ${
                     isOwn
                       ? "bg-primary text-white rounded-br-sm shadow-sm"
                       : "bg-surface-container-lowest text-on-surface rounded-bl-sm border border-outline-variant/10 shadow-xs"
                   }`}
                 >
-                  <p>{msg.content}</p>
+                  <p className="break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
+                    {msg.content}
+                  </p>
                   {timeStr && (
                     <span
                       className={`text-[8px] font-bold mt-1.5 block tracking-tighter uppercase ${
@@ -232,7 +269,7 @@ export default function WorkspaceChannelViewport({
       )}
 
       {/* Input */}
-      <div className="relative" ref={emojiPickerRef}>
+      <div className="relative shrink-0" ref={emojiPickerRef}>
         {showEmojiPicker && (
           <div className="absolute bottom-[100%] right-4 mb-2 z-50 shadow-2xl rounded-2xl overflow-hidden border border-outline-variant/20">
             <EmojiPicker
@@ -248,13 +285,13 @@ export default function WorkspaceChannelViewport({
           onSubmit={handleSendMessage}
           className="p-4 border-t border-outline-variant/10 bg-surface-container-lowest shrink-0"
         >
-          <div className="bg-surface-container-low rounded-2xl p-1.5 flex items-center gap-2 border border-transparent focus-within:border-primary/30 transition-all">
+          <div className="bg-surface-container-low rounded-2xl p-1.5 flex items-center gap-2 border border-transparent focus-within:border-primary/30 transition-all min-w-0">
             <input
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder={`Message #${channel.name}...`}
-              className="flex-1 bg-transparent border-none outline-none focus:ring-0 text-xs px-3 py-2 text-on-surface placeholder:text-outline"
+              className="flex-1 min-w-0 bg-transparent border-none outline-none focus:ring-0 text-xs px-3 py-2 text-on-surface placeholder:text-outline"
             />
             <button
               type="button"

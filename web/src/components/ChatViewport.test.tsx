@@ -254,4 +254,45 @@ describe("ChatViewport", () => {
     // Should display outcome
     expect(screen.getByText(/missed/i)).toBeInTheDocument();
   });
+
+  it("renders sent user message with proper wrapping styles and no horizontal overflow", () => {
+    const ownMessage = {
+      id: 201,
+      content:
+        "A very long message from user https://example.com/very/long/url/that/could/cause/overflow",
+      senderId: 1, // own message
+      senderUsername: "user1",
+      recipientId: 2,
+      timestamp: new Date().toISOString(),
+      messageType: "CHAT",
+    };
+
+    (useMessageStore as jest.Mock).mockReturnValue({
+      publicMessages: [],
+      privateMessages: { 2: [ownMessage] },
+      sendPublicMessage: jest.fn(),
+      sendPrivateMessage: jest.fn(),
+      loadPublicHistory: mockLoadPublicHistory,
+      loadPrivateHistory: mockLoadPrivateHistory,
+      hasMorePublicHistory: false,
+      hasMorePrivateHistory: {},
+    });
+
+    render(
+      <ChatViewport
+        activeChat={{
+          id: 2,
+          isPublic: false,
+          username: "user2",
+          status: "ACCEPTED",
+        }}
+        onBannerAction={jest.fn()}
+      />
+    );
+
+    const messageContent = screen.getByText(/A very long message from user/i);
+    expect(messageContent).toBeInTheDocument();
+    expect(messageContent.className).toContain("break-words");
+    expect(messageContent.className).toContain("[overflow-wrap:anywhere]");
+  });
 });

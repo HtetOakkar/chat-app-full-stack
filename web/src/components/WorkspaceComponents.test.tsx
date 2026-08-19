@@ -1,13 +1,12 @@
 import React from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import WorkspaceRail from "./WorkspaceRail";
-import WorkspaceSidebar from "./WorkspaceSidebar";
 import CreateChannelModal from "./CreateChannelModal";
 import InviteMembersModal from "./InviteMembersModal";
 import WorkspaceOnboardingModal from "./WorkspaceOnboardingModal";
 import WorkspaceDMViewport from "./WorkspaceDMViewport";
 import WorkspaceChannelViewport from "./WorkspaceChannelViewport";
-import { WorkspaceProvider, useWorkspace } from "@/context/WorkspaceContext";
+import { WorkspaceProvider } from "@/context/WorkspaceContext";
 import { useAuth } from "@/context/AuthContext";
 import { useConnection } from "@/context/ConnectionContext";
 import { useCall } from "@/context/CallContext";
@@ -282,5 +281,94 @@ describe("Workspace Components", () => {
       })
     );
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("WorkspaceChannelViewport immediately loads messages when switching channels and handles live incoming messages", async () => {
+    let subscriberCallback: ((frame: { body: string }) => void) | null = null;
+    (useConnection as jest.Mock).mockReturnValue({
+      connected: true,
+      subscribe: jest
+        .fn()
+        .mockImplementation(
+          (
+            destination: string,
+            callback: (frame: { body: string }) => void
+          ) => {
+            if (destination.includes("/topic/workspace.1.channel.2")) {
+              subscriberCallback = callback;
+            }
+            return () => {};
+          }
+        ),
+      stompClientRef: { current: { publish: jest.fn() } },
+    });
+
+    (apiFetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes("/api/workspaces/me")) {
+        return Promise.resolve(mockWorkspaces);
+      }
+      if (url.includes("/channels/2/messages")) {
+        return Promise.resolve({
+          messages: [
+            {
+              id: 101,
+              content: "Initial message in new channel",
+              senderId: 20,
+              senderUsername: "bob",
+              timestamp: "2026-08-19T11:00:00Z",
+            },
+          ],
+          nextCursor: null,
+        });
+      }
+      return Promise.resolve([]);
+    });
+
+    const newChannel = {
+      id: 2,
+      workspaceId: 1,
+      conversationId: 52,
+      name: "new-channel",
+      slug: "new-channel",
+      type: "PUBLIC" as const,
+      isArchived: false,
+      isMember: true,
+      memberCount: 2,
+      createdAt: "2026-08-19T00:00:00Z",
+    };
+
+    await act(async () => {
+      render(
+        <WorkspaceProvider>
+          <WorkspaceChannelViewport channel={newChannel} />
+        </WorkspaceProvider>
+      );
+    });
+
+    // Initial messages should be fetched and displayed
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByText("Initial message in new channel")
+    ).toBeInTheDocument();
+
+    // Now simulate incoming live message delivered via STOMP
+    await act(async () => {
+      if (subscriberCallback) {
+        subscriberCallback({
+          body: JSON.stringify({
+            id: 102,
+            content: "Live message from Alice",
+            senderId: 10,
+            senderUsername: "alice",
+            timestamp: "2026-08-19T11:01:00Z",
+          }),
+        });
+      }
+    });
+
+    expect(screen.getByText("Live message from Alice")).toBeInTheDocument();
   });
 });
