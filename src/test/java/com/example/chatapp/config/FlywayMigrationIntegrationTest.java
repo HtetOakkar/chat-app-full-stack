@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class FlywayMigrationIntegrationTest {
 
     @Test
-    void flyway_FullMigrationCycle_ShouldApplyV1AndV2Successfully() throws Exception {
+    void flyway_FullMigrationCycle_ShouldApplyAllMigrationsSuccessfully() throws Exception {
         // Arrange: In-memory H2 database in MySQL mode
         JdbcDataSource dataSource = new JdbcDataSource();
         dataSource.setURL("jdbc:h2:mem:flyway_test_db;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false");
@@ -36,9 +36,9 @@ class FlywayMigrationIntegrationTest {
         // Act: Run migrations
         MigrateResult result = flyway.migrate();
 
-        // Assert: Both migrations executed
+        // Assert: Migrations executed
         assertTrue(result.success, "Flyway migrations should succeed");
-        assertTrue(result.migrationsExecuted >= 2, "Should execute at least V1 and V2");
+        assertTrue(result.migrationsExecuted >= 3, "Should execute at least V1, V2, and V3");
 
         // Validate checksums
         assertDoesNotThrow(flyway::validate, "Flyway validation should pass without checksum mismatch");
@@ -56,6 +56,16 @@ class FlywayMigrationIntegrationTest {
                 assertTrue(columnNames.contains("initial_channel_ids"), "workspace_invitations should have initial_channel_ids column");
                 assertTrue(columnNames.contains("token"), "workspace_invitations should have token column");
                 assertTrue(columnNames.contains("status"), "workspace_invitations should have status column");
+            }
+
+            try (ResultSet columns = metaData.getColumns(null, null, "user_settings", null)) {
+                Set<String> columnNames = new HashSet<>();
+                while (columns.next()) {
+                    columnNames.add(columns.getString("COLUMN_NAME").toLowerCase());
+                }
+
+                assertTrue(columnNames.contains("user_id"), "user_settings should have user_id column");
+                assertTrue(columnNames.contains("share_presence"), "user_settings should have share_presence column");
             }
         }
     }

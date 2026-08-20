@@ -56,8 +56,10 @@ VirtuosoChannelList.displayName = "VirtuosoChannelList";
 
 export default function WorkspaceChannelViewport({
   channel,
+  onBack,
 }: {
   channel: ChannelDto;
+  onBack?: () => void;
 }) {
   const { currentWorkspace } = useWorkspace();
   const { userId } = useAuth();
@@ -180,8 +182,20 @@ export default function WorkspaceChannelViewport({
   return (
     <div className="flex-1 flex flex-col h-full bg-surface-container-lowest/30 min-w-0 overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-3.5 border-b border-outline-variant/10 flex items-center justify-between bg-surface-container-lowest z-10 shrink-0 min-w-0">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <div className="px-3 md:px-6 py-3.5 border-b border-outline-variant/10 flex items-center justify-between bg-surface-container-lowest z-10 shrink-0 min-w-0">
+        <div className="flex items-center gap-2 md:gap-2.5 min-w-0">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="md:hidden w-11 h-11 -ml-2 text-outline hover:text-on-surface hover:bg-surface-container-high rounded-xl transition-colors flex items-center justify-center shrink-0"
+              aria-label="Back to channels"
+            >
+              <span className="material-symbols-outlined text-xl">
+                arrow_back
+              </span>
+            </button>
+          )}
           <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
             <span className="material-symbols-outlined text-base">
               {channel.type === "PRIVATE" ? "lock" : "tag"}
@@ -192,7 +206,7 @@ export default function WorkspaceChannelViewport({
               #{channel.name}
             </h3>
             {channel.description && (
-              <p className="text-[11px] text-outline truncate max-w-md">
+              <p className="text-[11px] text-outline truncate max-w-xs md:max-w-md hidden sm:block">
                 {channel.description}
               </p>
             )}
@@ -331,19 +345,32 @@ export default function WorkspaceChannelViewport({
       {/* Input */}
       <div className="relative shrink-0" ref={emojiPickerRef}>
         {showEmojiPicker && (
-          <div className="absolute bottom-[100%] right-4 mb-2 z-50 shadow-2xl rounded-2xl overflow-hidden border border-outline-variant/20">
-            <EmojiPicker
-              onEmojiClick={(emojiData) =>
-                setInputText((prev) => prev + emojiData.emoji)
-              }
-              theme={Theme.AUTO}
-              emojiStyle={EmojiStyle.NATIVE}
+          <>
+            {/* Mobile Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/40 z-50 sm:hidden"
+              onClick={() => setShowEmojiPicker(false)}
             />
-          </div>
+            <div className="fixed bottom-0 left-0 right-0 sm:absolute sm:bottom-[100%] sm:right-4 sm:left-auto mb-0 sm:mb-2 z-50 shadow-2xl rounded-t-3xl sm:rounded-2xl overflow-hidden border border-outline-variant/20 max-h-[60vh] sm:max-h-none flex justify-center bg-surface-container-lowest">
+              <EmojiPicker
+                onEmojiClick={(emojiData) => {
+                  setInputText((prev) => prev + emojiData.emoji);
+                  if (
+                    typeof window !== "undefined" &&
+                    window.innerWidth < 640
+                  ) {
+                    setShowEmojiPicker(false);
+                  }
+                }}
+                theme={Theme.AUTO}
+                emojiStyle={EmojiStyle.NATIVE}
+              />
+            </div>
+          </>
         )}
         <form
           onSubmit={handleSendMessage}
-          className="p-4 border-t border-outline-variant/10 bg-surface-container-lowest shrink-0"
+          className="p-3 md:p-4 border-t border-outline-variant/10 bg-surface-container-lowest shrink-0"
         >
           <div className="bg-surface-container-low rounded-2xl p-1.5 flex items-center gap-2 border border-transparent focus-within:border-primary/30 transition-all min-w-0">
             <input
@@ -356,14 +383,16 @@ export default function WorkspaceChannelViewport({
             <button
               type="button"
               onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              className="w-8 h-8 text-outline hover:text-on-surface rounded-xl flex items-center justify-center hover:bg-surface-container-high transition-colors"
+              aria-label="Insert Emoji"
+              className="w-10 h-10 md:w-8 md:h-8 text-outline hover:text-on-surface rounded-xl flex items-center justify-center hover:bg-surface-container-high transition-colors shrink-0"
             >
               <span className="material-symbols-outlined text-base">mood</span>
             </button>
             <button
               type="submit"
               disabled={!inputText.trim()}
-              className="w-8 h-8 bg-primary text-white rounded-xl flex items-center justify-center hover:bg-primary/90 transition-all shadow-xs disabled:opacity-40"
+              aria-label="Send Message"
+              className="w-10 h-10 md:w-8 md:h-8 bg-primary text-white rounded-xl flex items-center justify-center hover:bg-primary/90 transition-all shadow-xs disabled:opacity-40 shrink-0"
             >
               <span className="material-symbols-outlined text-sm">send</span>
             </button>

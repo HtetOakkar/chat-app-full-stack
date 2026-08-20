@@ -46,8 +46,8 @@ export default function CreateChannelModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-t-3xl sm:rounded-3xl shadow-2xl max-w-md w-full max-h-[90dvh] overflow-hidden flex flex-col">
         {/* Modal Header */}
         <div className="px-6 py-5 border-b border-outline-variant/15 bg-surface-container-low/50 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -61,7 +61,8 @@ export default function CreateChannelModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors"
+            aria-label="Close create channel modal"
+            className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors"
           >
             <span className="material-symbols-outlined text-base">close</span>
           </button>

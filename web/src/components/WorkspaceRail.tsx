@@ -15,7 +15,7 @@ export default function WorkspaceRail({
   return (
     <nav
       aria-label="Workspaces"
-      className="w-16 md:w-18 shrink-0 bg-surface-container-lowest border-r border-outline-variant/15 flex flex-col items-center py-3.5 gap-3.5 z-30 select-none"
+      className="hidden md:flex w-16 md:w-18 shrink-0 bg-surface-container-lowest border-r border-outline-variant/15 flex-col items-center py-3.5 gap-3.5 z-30 select-none"
     >
       {/* App Logo */}
       <div className="w-11 h-11 rounded-2xl bg-primary flex items-center justify-center text-white shadow-md shadow-primary/20 mb-1 cursor-default font-black text-lg">

@@ -733,15 +733,28 @@ export default function ChatViewport({
       {/* Message Input */}
       <div className="relative shrink-0" ref={emojiPickerRef}>
         {showEmojiPicker && (
-          <div className="absolute bottom-[100%] right-4 mb-2 z-50 shadow-2xl rounded-xl overflow-hidden border border-outline-variant/20">
-            <EmojiPicker
-              onEmojiClick={(emojiData) => {
-                setInputText((prev) => prev + emojiData.emoji);
-              }}
-              theme={Theme.AUTO}
-              emojiStyle={EmojiStyle.NATIVE}
+          <>
+            {/* Mobile Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/40 z-50 sm:hidden"
+              onClick={() => setShowEmojiPicker(false)}
             />
-          </div>
+            <div className="fixed bottom-0 left-0 right-0 sm:absolute sm:bottom-[100%] sm:right-4 sm:left-auto mb-0 sm:mb-2 z-50 shadow-2xl rounded-t-3xl sm:rounded-2xl overflow-hidden border border-outline-variant/20 max-h-[60vh] sm:max-h-none flex justify-center bg-surface-container-lowest">
+              <EmojiPicker
+                onEmojiClick={(emojiData) => {
+                  setInputText((prev) => prev + emojiData.emoji);
+                  if (
+                    typeof window !== "undefined" &&
+                    window.innerWidth < 640
+                  ) {
+                    setShowEmojiPicker(false);
+                  }
+                }}
+                theme={Theme.AUTO}
+                emojiStyle={EmojiStyle.NATIVE}
+              />
+            </div>
+          </>
         )}
         <form
           onSubmit={handleSendMessage}

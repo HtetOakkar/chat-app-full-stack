@@ -179,7 +179,7 @@ export default function ActiveCallOverlay() {
             </div>
 
             {/* Local Stream (Small PIP box) */}
-            <div className="absolute bottom-6 right-6 w-32 h-44 rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-zinc-900 z-10">
+            <div className="absolute bottom-24 right-4 sm:bottom-6 sm:right-6 w-24 h-32 sm:w-32 sm:h-44 rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-zinc-900 z-10">
               {!isCameraOff && localStream ? (
                 <video
                   ref={localVideoRef}
@@ -211,12 +211,13 @@ export default function ActiveCallOverlay() {
       </div>
 
       {/* Calling Controls Panel */}
-      <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-20 bg-zinc-900/80 backdrop-blur-md px-6 py-3.5 rounded-full flex items-center gap-6 shadow-2xl border border-white/5">
+      <div className="absolute bottom-6 sm:bottom-10 left-1/2 transform -translate-x-1/2 z-20 bg-zinc-900/90 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3.5 rounded-3xl sm:rounded-full flex flex-wrap justify-center items-center gap-2.5 sm:gap-6 shadow-2xl border border-white/10 max-w-[95vw]">
         {/* Toggle Audio Mute */}
         <button
           type="button"
           onClick={toggleMute}
-          className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+          aria-label={isMuted ? t.unmuteMicrophone : t.muteMicrophone}
+          className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors shrink-0 ${
             isMuted
               ? "bg-error text-white hover:bg-error/90"
               : "bg-white/10 text-white hover:bg-white/25"
@@ -232,7 +233,12 @@ export default function ActiveCallOverlay() {
         <button
           type="button"
           onClick={toggleCamera}
-          className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+          aria-label={
+            isCameraOff || callType === "AUDIO"
+              ? t.turnCameraOn
+              : t.turnCameraOff
+          }
+          className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors shrink-0 ${
             isCameraOff || callType === "AUDIO"
               ? "bg-white/10 text-white hover:bg-white/25"
               : "bg-primary text-white hover:bg-primary/90"
@@ -250,11 +256,12 @@ export default function ActiveCallOverlay() {
 
         {/* Switch Audio Source */}
         {audioOutputDevices && audioOutputDevices.length > 0 && (
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => setShowAudioMenu(!showAudioMenu)}
-              className="w-11 h-11 rounded-full bg-white/10 text-white hover:bg-white/25 flex items-center justify-center transition-colors"
+              aria-label={t.switchAudioSource}
+              className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white/10 text-white hover:bg-white/25 flex items-center justify-center transition-colors shrink-0"
               title={t.switchAudioSource}
             >
               <span className="material-symbols-outlined text-lg">
@@ -303,7 +310,8 @@ export default function ActiveCallOverlay() {
         <button
           type="button"
           onClick={() => setIsFullscreen(!isFullscreen)}
-          className="w-11 h-11 rounded-full bg-white/10 text-white hover:bg-white/25 flex items-center justify-center transition-colors"
+          aria-label={isFullscreen ? t.exitFullscreen : t.enterFullscreen}
+          className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white/10 text-white hover:bg-white/25 flex items-center justify-center transition-colors shrink-0"
           title={isFullscreen ? t.exitFullscreen : t.enterFullscreen}
         >
           <span className="material-symbols-outlined text-lg">
@@ -315,7 +323,8 @@ export default function ActiveCallOverlay() {
         <button
           type="button"
           onClick={status === "dialing" ? cancelCall : hangupCall}
-          className="w-12 h-12 rounded-full bg-error text-white hover:bg-error/90 flex items-center justify-center transition-colors shadow-lg"
+          aria-label={t.endCall}
+          className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-error text-white hover:bg-error/90 flex items-center justify-center transition-colors shadow-lg shrink-0"
           title={t.endCall}
         >
           <span className="material-symbols-outlined text-xl">call_end</span>

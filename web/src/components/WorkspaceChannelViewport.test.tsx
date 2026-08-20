@@ -25,21 +25,29 @@ jest.mock("react-virtuoso", () => ({
 describe("WorkspaceChannelViewport", () => {
   const mockPrivateChannel: ChannelDto = {
     id: 5,
+    workspaceId: 1,
+    conversationId: 50,
     name: "confidential",
     slug: "confidential",
     type: "PRIVATE",
+    isArchived: false,
+    isMember: true,
     memberCount: 3,
-    workspaceId: 1,
+    createdAt: "2026-08-19T00:00:00Z",
     description: "Confidential channel",
   };
 
   const mockPublicChannel: ChannelDto = {
     id: 1,
+    workspaceId: 1,
+    conversationId: 10,
     name: "general",
     slug: "general",
     type: "PUBLIC",
+    isArchived: false,
+    isMember: true,
     memberCount: 10,
-    workspaceId: 1,
+    createdAt: "2026-08-19T00:00:00Z",
   };
 
   const mockMessages = [

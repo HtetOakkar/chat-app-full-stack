@@ -3,7 +3,9 @@ package com.example.chatapp.user.service;
 import com.example.chatapp.exception.BadRequestException;
 import com.example.chatapp.exception.NotFoundException;
 import com.example.chatapp.message.model.dto.OnlineStatusDto;
+import com.example.chatapp.user.model.dto.UserSettingsDto;
 import com.example.chatapp.user.model.entity.User;
+import com.example.chatapp.user.model.entity.UserSettings;
 import com.example.chatapp.user.repository.PresenceRepository;
 import com.example.chatapp.user.repository.UserRepository;
 import com.example.chatapp.websocket.MessageBroker;
@@ -190,9 +192,106 @@ public class PresenceModuleImpl implements PresenceModule {
     }
 
     @Override
+    @Transactional
+    public UserSettingsDto togglePresenceSharing(Long userId, boolean sharePresence) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        Set<Long> receiversBefore = getEligiblePresenceReceivers(userId);
+
+        UserSettings settings = user.getSettings();
+        if (settings == null) {
+            settings = UserSettings.builder()
+                    .user(user)
+                    .sharePresence(sharePresence)
+                    .build();
+            user.setSettings(settings);
+        } else {
+            settings.setSharePresence(sharePresence);
+        }
+
+        userRepository.save(user);
+
+        if (!sharePresence) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("userId", userId);
+            map.put("status", "OFFLINE");
+            map.put("timestamp", Instant.now());
+            map.put("username", user.getUsername());
+
+            for (Long receiverId : receiversBefore) {
+                messageBroker.publishToUser(receiverId.toString(), "/queue/online", map);
+            }
+            messageBroker.publishToUser(userId.toString(), "/queue/online", map);
+
+            if (workspaceMemberRepository != null) {
+                try {
+                    List<WorkspaceMember> memberships = workspaceMemberRepository.findByUserId(userId);
+                    for (WorkspaceMember wm : memberships) {
+                        if (wm.getWorkspace() != null) {
+                            messageBroker.publishToTopic("/topic/workspace." + wm.getWorkspace().getId() + ".presence", map);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Error broadcasting offline presence to workspace topics: {}", e.getMessage());
+                }
+            }
+        } else {
+            if (sessionRegistry != null && sessionRegistry.isOnline(userId)) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("userId", userId);
+                map.put("status", "ONLINE");
+                map.put("timestamp", Instant.now());
+                map.put("username", user.getUsername());
+
+                Set<Long> receiversAfter = getEligiblePresenceReceivers(userId);
+                for (Long receiverId : receiversAfter) {
+                    messageBroker.publishToUser(receiverId.toString(), "/queue/online", map);
+                }
+                messageBroker.publishToUser(userId.toString(), "/queue/online", map);
+
+                if (workspaceMemberRepository != null) {
+                    try {
+                        List<WorkspaceMember> memberships = workspaceMemberRepository.findByUserId(userId);
+                        for (WorkspaceMember wm : memberships) {
+                            if (wm.getWorkspace() != null) {
+                                messageBroker.publishToTopic("/topic/workspace." + wm.getWorkspace().getId() + ".presence", map);
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.warn("Error broadcasting online presence to workspace topics: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+
+        return UserSettingsDto.builder()
+                .sharePresence(settings.isSharePresence())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserSettingsDto getPrivacySettings(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        return UserSettingsDto.builder()
+                .sharePresence(user.getSettings() != null ? user.getSettings().isSharePresence() : true)
+                .build();
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public boolean canUserSharePresence(Long userId) {
-        return true;
+        return userRepository.findById(userId)
+                .map(u -> {
+                    if (u.getSettings() != null) {
+                        return u.getSettings().isSharePresence();
+                    }
+                    return true;
+                })
+                .orElse(false);
     }
 
     @Override
@@ -207,9 +306,6 @@ public class PresenceModuleImpl implements PresenceModule {
     @Override
     @Transactional(readOnly = true)
     public List<User> getEligiblePresenceUsers(Long userId) {
-        if (!canUserSharePresence(userId)) {
-            return Collections.emptyList();
-        }
         return presenceRepository.findEligiblePresenceUsers(userId);
     }
 

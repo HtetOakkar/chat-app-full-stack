@@ -447,9 +447,7 @@ describe("Workspace Components", () => {
     });
     fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
 
-    const noteInput = screen.getByPlaceholderText(
-      /Hey team, welcome to our workspace/i
-    );
+    const noteInput = screen.getByPlaceholderText(/Welcome to our workspace/i);
     fireEvent.change(noteInput, { target: { value: "Welcome to Acme Corp!" } });
 
     await act(async () => {

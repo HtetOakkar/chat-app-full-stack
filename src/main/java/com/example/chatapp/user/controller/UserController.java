@@ -1,7 +1,9 @@
 package com.example.chatapp.user.controller;
 
 import com.example.chatapp.user.model.dto.UserDto;
+import com.example.chatapp.user.model.dto.UserSettingsDto;
 import com.example.chatapp.user.model.request.UpdateProfileRequest;
+import com.example.chatapp.user.model.request.UpdateUserSettingsRequest;
 import com.example.chatapp.user.model.request.VerifyEmailRequest;
 import com.example.chatapp.user.model.response.UserProfileResponse;
 import com.example.chatapp.user.service.AuthModule;
@@ -76,5 +78,18 @@ public class UserController {
     public ResponseEntity<List<OnlineStatusDto>> getOnlineUsers(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         return ResponseEntity.ok(presenceModule.getOnlineUsers(currentUser.getId()));
+    }
+
+    @GetMapping("/settings")
+    public ResponseEntity<UserSettingsDto> getUserSettings(
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        return ResponseEntity.ok(presenceModule.getPrivacySettings(currentUser.getId()));
+    }
+
+    @PutMapping("/settings")
+    public ResponseEntity<UserSettingsDto> updateUserSettings(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @Valid @RequestBody UpdateUserSettingsRequest request) {
+        return ResponseEntity.ok(presenceModule.togglePresenceSharing(currentUser.getId(), request.getSharePresence()));
     }
 }

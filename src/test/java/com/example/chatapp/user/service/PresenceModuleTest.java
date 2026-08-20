@@ -179,4 +179,64 @@ class PresenceModuleTest {
         verify(presenceRepository).updateLastSeenAt(123L, now);
         verify(presenceRepository, never()).updateLastSeenAt(eq(null), any());
     }
+
+    @Test
+    void togglePresenceSharing_ShouldUpdateSettingsAndBroadcastOffline() {
+        Long userId = 1L;
+        User user = User.builder().id(userId).username("testuser").build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(presenceRepository.findEligiblePresenceReceivers(userId)).thenReturn(Set.of(2L));
+
+        com.example.chatapp.user.model.dto.UserSettingsDto result = presenceModule.togglePresenceSharing(userId, false);
+
+        assertFalse(result.isSharePresence());
+        verify(userRepository).save(user);
+        verify(messageBroker).publishToUser(eq("2"), eq("/queue/online"), any(Map.class));
+        verify(messageBroker).publishToUser(eq("1"), eq("/queue/online"), any(Map.class));
+    }
+
+    @Test
+    void togglePresenceSharing_ShouldBroadcastOnlineIfUserIsOnline() {
+        Long userId = 1L;
+        User user = User.builder().id(userId).username("testuser").build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(sessionRegistry.isOnline(userId)).thenReturn(true);
+        when(presenceRepository.findEligiblePresenceReceivers(userId)).thenReturn(Set.of(2L));
+
+        com.example.chatapp.user.model.dto.UserSettingsDto result = presenceModule.togglePresenceSharing(userId, true);
+
+        assertTrue(result.isSharePresence());
+        verify(userRepository).save(user);
+        verify(messageBroker).publishToUser(eq("2"), eq("/queue/online"), any(Map.class));
+        verify(messageBroker).publishToUser(eq("1"), eq("/queue/online"), any(Map.class));
+    }
+
+    @Test
+    void getPrivacySettings_ShouldReturnDefaultWhenNoSettings() {
+        Long userId = 1L;
+        User user = User.builder().id(userId).username("testuser").build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        com.example.chatapp.user.model.dto.UserSettingsDto result = presenceModule.getPrivacySettings(userId);
+
+        assertTrue(result.isSharePresence());
+    }
+
+    @Test
+    void getPrivacySettings_ShouldReturnCustomValueWhenSettingsExist() {
+        Long userId = 1L;
+        com.example.chatapp.user.model.entity.UserSettings settings = com.example.chatapp.user.model.entity.UserSettings.builder()
+                .sharePresence(false)
+                .build();
+        User user = User.builder().id(userId).username("testuser").settings(settings).build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        com.example.chatapp.user.model.dto.UserSettingsDto result = presenceModule.getPrivacySettings(userId);
+
+        assertFalse(result.isSharePresence());
+    }
 }

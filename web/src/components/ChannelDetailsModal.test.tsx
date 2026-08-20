@@ -14,28 +14,36 @@ jest.mock("@/context/AuthContext");
 describe("ChannelDetailsModal", () => {
   const mockChannel: ChannelDto = {
     id: 10,
+    workspaceId: 1,
+    conversationId: 100,
     name: "secret-ops",
     slug: "secret-ops",
     type: "PRIVATE",
+    isArchived: false,
+    isMember: true,
     memberCount: 2,
-    workspaceId: 1,
+    createdAt: "2026-08-19T00:00:00Z",
     description: "Private discussions",
   };
 
   const mockChannelMembers: WorkspaceMemberDto[] = [
     {
       id: 1,
+      workspaceId: 1,
       userId: 101,
       username: "alice",
       fullName: "Alice Smith",
       role: "OWNER",
+      joinedAt: "2026-08-19T00:00:00Z",
     },
     {
       id: 2,
+      workspaceId: 1,
       userId: 102,
       username: "bob",
       fullName: "Bob Jones",
       role: "MEMBER",
+      joinedAt: "2026-08-19T00:00:00Z",
     },
   ];
 
@@ -43,17 +51,21 @@ describe("ChannelDetailsModal", () => {
     ...mockChannelMembers,
     {
       id: 3,
+      workspaceId: 1,
       userId: 103,
       username: "carol",
       fullName: "Carol Danvers",
       role: "MEMBER",
+      joinedAt: "2026-08-19T00:00:00Z",
     },
     {
       id: 4,
+      workspaceId: 1,
       userId: 104,
       username: "david",
       fullName: "David Clark",
       role: "MEMBER",
+      joinedAt: "2026-08-19T00:00:00Z",
     },
   ];
 

@@ -50,8 +50,8 @@ export default function WorkspaceOnboardingModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-t-3xl sm:rounded-3xl shadow-2xl max-w-md w-full max-h-[90dvh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 pb-2">
           <div>
@@ -66,7 +66,7 @@ export default function WorkspaceOnboardingModal({
             type="button"
             onClick={handleClose}
             aria-label="Close"
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container transition-colors"
+            className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container transition-colors"
           >
             <span className="material-symbols-outlined text-lg">close</span>
           </button>

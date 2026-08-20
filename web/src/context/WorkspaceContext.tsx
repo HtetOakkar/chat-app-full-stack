@@ -159,6 +159,7 @@ interface WorkspaceContextType {
   refreshChannels: () => Promise<void>;
   refreshDirectMessages: () => Promise<void>;
   refreshMembers: () => Promise<void>;
+  clearActiveConversation: () => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | null>(null);
@@ -585,6 +586,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const clearActiveConversation = useCallback(() => {
+    setCurrentChannel(null);
+    setCurrentDirectMessage(null);
+  }, []);
+
   const getChannelMembers = async (
     channelId: number
   ): Promise<WorkspaceMemberDto[]> => {
@@ -775,6 +781,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         refreshChannels,
         refreshDirectMessages,
         refreshMembers,
+        clearActiveConversation,
       }}
     >
       {children}

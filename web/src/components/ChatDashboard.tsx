@@ -27,6 +27,7 @@ export default function ChatDashboard() {
     currentWorkspace,
     currentChannel,
     currentDirectMessage,
+    clearActiveConversation,
     isLoading: workspaceLoading,
   } = useWorkspace();
 
@@ -87,7 +88,7 @@ export default function ChatDashboard() {
       <header className="shrink-0 bg-surface-container-lowest/80 backdrop-blur-sm border-b border-outline-variant/10 px-4 md:px-6 py-3 md:py-2.5 flex items-center justify-between z-20 relative">
         <div className="flex items-center gap-3">
           <span className="text-[10px] md:text-[9px] font-bold uppercase tracking-[0.15em] text-outline">
-            {currentWorkspace ? currentWorkspace.name : "Curator Dashboard"}
+            {currentWorkspace ? currentWorkspace.name : "Workspaces"}
           </span>
         </div>
         <div className="flex items-center gap-2 md:gap-3">
@@ -220,35 +221,69 @@ export default function ChatDashboard() {
         ) : (
           /* Workspaces Active: Tier 2 Sidebar & Tier 3 Content */
           <>
-            <div className="flex">
+            <div
+              className={`h-full ${
+                (currentDirectMessage !== null ||
+                  currentChannel !== null ||
+                  activeChat !== null) &&
+                viewMode === "chat"
+                  ? "hidden md:flex"
+                  : "flex w-full md:w-auto"
+              }`}
+            >
               <WorkspaceSidebar
                 onOpenCreateChannel={() => setShowCreateChannel(true)}
                 onOpenInvite={() => setShowInvite(true)}
                 onOpenMemberDirectory={() => setShowDirectory(true)}
                 onOpenSettings={() => setViewMode("settings")}
                 onOpenProfile={() => setViewMode("profile")}
+                onOpenCreateWorkspace={() => setShowWorkspaceModal(true)}
               />
             </div>
 
             <div
               className={`flex-1 flex flex-col min-w-0 ${
-                activeChat === null && viewMode === "chat"
+                activeChat === null &&
+                currentDirectMessage === null &&
+                currentChannel === null &&
+                viewMode === "chat"
                   ? "hidden md:flex"
                   : "flex"
               }`}
             >
               <div className="flex-1 flex min-h-0">
                 {currentDirectMessage ? (
-                  <WorkspaceDMViewport dm={currentDirectMessage} />
+                  <WorkspaceDMViewport
+                    dm={currentDirectMessage}
+                    onBack={clearActiveConversation}
+                  />
                 ) : currentChannel ? (
-                  <WorkspaceChannelViewport channel={currentChannel} />
-                ) : (
+                  <WorkspaceChannelViewport
+                    channel={currentChannel}
+                    onBack={clearActiveConversation}
+                  />
+                ) : activeChat ? (
                   <ChatViewport
                     activeChat={activeChat}
                     onBannerAction={handleBannerAction}
                     onBackToList={() => handleSelectChat(null)}
                     onViewUserProfile={handleViewUserProfile}
                   />
+                ) : (
+                  <div className="hidden md:flex flex-1 flex-col items-center justify-center p-8 text-center bg-surface-container-lowest/30 select-none">
+                    <div className="w-16 h-16 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 shadow-xs">
+                      <span className="material-symbols-outlined text-3xl">
+                        chat
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-on-surface mb-1">
+                      No Conversation Selected
+                    </h3>
+                    <p className="text-xs text-outline max-w-xs leading-relaxed">
+                      Select a channel or direct message from the sidebar to
+                      start collaborating.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

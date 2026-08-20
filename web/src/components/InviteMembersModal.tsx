@@ -6,18 +6,11 @@ import {
   type InvitationDto,
   type BatchInvitationItemResult,
 } from "@/context/WorkspaceContext";
+import { parseEmailTokens } from "@/lib/emailUtils";
 
 interface InviteMembersModalProps {
   isOpen: boolean;
   onClose: () => void;
-}
-
-function parseEmailTokens(input: string): string[] {
-  if (!input.trim()) return [];
-  return input
-    .split(/[\s,;]+/)
-    .map((t) => t.trim().toLowerCase())
-    .filter((t) => t.length > 0);
 }
 
 export default function InviteMembersModal({
@@ -253,8 +246,8 @@ export default function InviteMembersModal({
     : "";
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-t-3xl sm:rounded-3xl shadow-2xl max-w-lg w-full max-h-[90dvh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-6 py-5 border-b border-outline-variant/15 bg-surface-container-low/50 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
@@ -275,7 +268,8 @@ export default function InviteMembersModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors"
+            aria-label="Close invite modal"
+            className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors"
           >
             <span className="material-symbols-outlined text-base">close</span>
           </button>
@@ -561,7 +555,7 @@ export default function InviteMembersModal({
                   rows={2}
                   value={customMessage}
                   onChange={(e) => setCustomMessage(e.target.value)}
-                  placeholder="Hey team, welcome to our workspace! Check out the #general channel to get started."
+                  placeholder="Welcome to our workspace! Check out the #general channel to get started."
                   className="w-full px-3.5 py-2 bg-surface-container rounded-xl border border-outline-variant/30 text-xs focus:outline-none focus:border-primary transition-colors resize-none placeholder:text-outline"
                 />
               </div>
