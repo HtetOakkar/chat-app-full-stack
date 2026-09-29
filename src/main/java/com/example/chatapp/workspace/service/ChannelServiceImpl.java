@@ -31,9 +31,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.text.Normalizer;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -165,12 +167,18 @@ public class ChannelServiceImpl implements ChannelService {
 
     @Override
     @Transactional
-    public void addChannelMember(Long channelId, Long requestingUserId, Long targetUserId) {
-        batchAddChannelMembers(channelId, requestingUserId, BatchAddChannelMembersRequest.builder()
+    public BatchAddChannelMembersResponse addChannelMember(Long channelId, Long requestingUserId, Long targetUserId) {
+        return batchAddChannelMembers(channelId, requestingUserId, BatchAddChannelMembersRequest.builder()
                 .userIds(List.of(targetUserId))
                 .build());
     }
 
+    /**
+     * Adds Workspace Members to a Private Channel and reports every requested user ID as added,
+     * already a Channel Member, or not a Workspace Member. Runs in a bounded number of queries
+     * whatever the batch size: one resolving the Workspace Members (with their Users), one for
+     * existing Channel Memberships and one batch save.
+     */
     @Override
     @Transactional
     public BatchAddChannelMembersResponse batchAddChannelMembers(Long channelId, Long requestingUserId, BatchAddChannelMembersRequest request) {
@@ -190,45 +198,47 @@ public class ChannelServiceImpl implements ChannelService {
         WorkspaceMember requestingMember = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, requestingUserId)
                 .orElseThrow(() -> new UnauthorizedException("You are not a member of this workspace"));
 
-        List<Long> newlyAddedUserIds = new ArrayList<>();
-        List<WorkspaceMemberDto> newlyAddedMembers = new ArrayList<>();
-        List<WorkspaceMember> addedWorkspaceMembers = new ArrayList<>();
+        Set<Long> requestedUserIds = new LinkedHashSet<>(request.getUserIds());
 
-        if (request.getUserIds() != null) {
-            Set<Long> uniqueIds = new java.util.LinkedHashSet<>(request.getUserIds());
-            for (Long targetUserId : uniqueIds) {
-                Optional<WorkspaceMember> targetMemberOpt = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, targetUserId);
-                if (targetMemberOpt.isEmpty()) {
-                    if (uniqueIds.size() == 1) {
-                        throw new BadRequestException("Target user is not a member of this workspace");
-                    }
-                    continue;
-                }
-                WorkspaceMember targetMember = targetMemberOpt.get();
-                if (!channelMemberRepository.existsByChannelIdAndWorkspaceMemberId(channelId, targetMember.getId())) {
-                    ChannelMember cm = ChannelMember.builder()
-                            .channel(channel)
-                            .workspaceMember(targetMember)
-                            .build();
-                    channelMemberRepository.save(cm);
+        Map<Long, WorkspaceMember> workspaceMembersByUserId = new HashMap<>();
+        for (WorkspaceMember wm : workspaceMemberRepository.findWithUserByWorkspaceIdAndUserIdIn(workspaceId, requestedUserIds)) {
+            workspaceMembersByUserId.put(wm.getUser().getId(), wm);
+        }
 
-                    newlyAddedUserIds.add(targetUserId);
-                    newlyAddedMembers.add(toWorkspaceMemberDto(targetMember));
-                    addedWorkspaceMembers.add(targetMember);
-                }
+        Set<Long> existingWorkspaceMemberIds = workspaceMembersByUserId.isEmpty()
+                ? Set.of()
+                : channelMemberRepository.findExistingWorkspaceMemberIds(channelId,
+                        workspaceMembersByUserId.values().stream().map(WorkspaceMember::getId).toList());
+
+        List<Long> added = new ArrayList<>();
+        List<Long> alreadyMembers = new ArrayList<>();
+        List<Long> notWorkspaceMembers = new ArrayList<>();
+        List<WorkspaceMember> addedMembers = new ArrayList<>();
+        for (Long userId : requestedUserIds) {
+            WorkspaceMember wm = workspaceMembersByUserId.get(userId);            if (wm == null) {
+                notWorkspaceMembers.add(userId);
+            } else if (existingWorkspaceMemberIds.contains(wm.getId())) {
+                alreadyMembers.add(userId);
+            } else {
+                added.add(userId);
+                addedMembers.add(wm);
             }
         }
 
-        channelActivityNoticePublisher.membersAdded(channel, requestingMember, addedWorkspaceMembers);
+        if (!addedMembers.isEmpty()) {
+            channelMemberRepository.saveAll(addedMembers.stream()
+                    .map(wm -> ChannelMember.builder().channel(channel).workspaceMember(wm).build())
+                    .toList());
 
-        if (!newlyAddedUserIds.isEmpty()) {
-            java.util.Map<String, Object> event = new java.util.HashMap<>();
+            channelActivityNoticePublisher.membersAdded(channel, requestingMember, addedMembers);
+
+            Map<String, Object> event = new HashMap<>();
             event.put("type", "CHANNEL_MEMBER_ADDED");
             event.put("workspaceId", workspaceId);
             event.put("channelId", channelId);
-            event.put("userIds", newlyAddedUserIds);
-            if (newlyAddedUserIds.size() == 1) {
-                event.put("userId", newlyAddedUserIds.get(0));
+            event.put("userIds", added);
+            if (added.size() == 1) {
+                event.put("userId", added.get(0));
             }
             event.put("addedByUserId", requestingUserId);
             String eventsTopic = String.format("/topic/workspace.%d.events", workspaceId);
@@ -236,9 +246,9 @@ public class ChannelServiceImpl implements ChannelService {
         }
 
         return BatchAddChannelMembersResponse.builder()
-                .addedCount(newlyAddedUserIds.size())
-                .addedUserIds(newlyAddedUserIds)
-                .addedMembers(newlyAddedMembers)
+                .added(added)
+                .alreadyMembers(alreadyMembers)
+                .notWorkspaceMembers(notWorkspaceMembers)
                 .build();
     }
 

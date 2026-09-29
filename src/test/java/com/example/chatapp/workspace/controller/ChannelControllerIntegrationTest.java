@@ -20,6 +20,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -286,8 +288,9 @@ class ChannelControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(batchBody))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.addedCount").value(3))
-                .andExpect(jsonPath("$.addedUserIds", hasSize(3)));
+                .andExpect(jsonPath("$.added", contains(bob.getId().intValue(), carol.getId().intValue(), david.getId().intValue())))
+                .andExpect(jsonPath("$.alreadyMembers", empty()))
+                .andExpect(jsonPath("$.notWorkspaceMembers", empty()));
 
         // Verify single consolidated activity notice in channel
         mockMvc.perform(get("/api/channels/" + channelId + "/messages")
@@ -344,5 +347,180 @@ class ChannelControllerIntegrationTest {
                 .andExpect(jsonPath("$.messages[1].messageType").value("SYSTEM"));
     }
 
+
+    // --- Batch Channel Member addition (#80, #81, #97) ---
+
+    private User signUp(String username) throws Exception {
+        mockMvc.perform(post("/api/v1/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + username + "\",\"password\":\"password123\"}"))
+                .andExpect(status().isOk());
+        return userRepository.findByUsername(username).orElseThrow();
+    }
+
+    private User signUpWorkspaceMember(String username) throws Exception {
+        User user = signUp(username);
+        var wsEntity = workspaceRepository.findById(workspace.getId()).orElseThrow();
+        workspaceMemberRepository.save(com.example.chatapp.workspace.model.entity.WorkspaceMember.builder()
+                .workspace(wsEntity).user(user).role(WorkspaceRole.MEMBER).build());
+        return user;
+    }
+
+    private Long createPrivateChannelAsAlice(String name) throws Exception {
+        MvcResult createRes = mockMvc.perform(post("/api/workspaces/" + workspace.getId() + "/channels")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"" + name + "\", \"type\": \"PRIVATE\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return ((Number) objectMapper.readValue(createRes.getResponse().getContentAsString(), Map.class).get("id")).longValue();
+    }
+
+    @Test
+    void batchAdditionWithMixedInputReportsEachCategoryAndNamesOnlyAddedMembers() throws Exception {
+        User carol = signUpWorkspaceMember("carol_chan");
+        User outsider = signUp("outsider_chan");
+        Long channelId = createPrivateChannelAsAlice("mixed-bag");
+
+        // Bob is already a Channel Member before the batch.
+        mockMvc.perform(post("/api/channels/" + channelId + "/members")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": " + bob.getId() + "}"))
+                .andExpect(status().isCreated());
+
+        String body = String.format("{\"userIds\": [%d, %d, %d]}", carol.getId(), bob.getId(), outsider.getId());
+        mockMvc.perform(post("/api/channels/" + channelId + "/members/batch")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.added", contains(carol.getId().intValue())))
+                .andExpect(jsonPath("$.alreadyMembers", contains(bob.getId().intValue())))
+                .andExpect(jsonPath("$.notWorkspaceMembers", contains(outsider.getId().intValue())));
+
+        mockMvc.perform(get("/api/channels/" + channelId + "/messages")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages", hasSize(2)))
+                .andExpect(jsonPath("$.messages[0].content").value("@alice_chan added @carol_chan to the channel"))
+                .andExpect(jsonPath("$.messages[1].content").value("@alice_chan added @bob_chan to the channel"));
+    }
+
+    @Test
+    void singleAdditionOfNonWorkspaceMemberReturnsCategorizedResultInsteadOfBadRequest() throws Exception {
+        User outsider = signUp("outsider_chan");
+        Long channelId = createPrivateChannelAsAlice("single-miss");
+
+        mockMvc.perform(post("/api/channels/" + channelId + "/members")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": " + outsider.getId() + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.added", empty()))
+                .andExpect(jsonPath("$.alreadyMembers", empty()))
+                .andExpect(jsonPath("$.notWorkspaceMembers", contains(outsider.getId().intValue())));
+    }
+
+    @Test
+    void singleAdditionReportsTheAddedMemberWithCreated() throws Exception {
+        Long channelId = createPrivateChannelAsAlice("single-hit");
+
+        mockMvc.perform(post("/api/channels/" + channelId + "/members")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": " + bob.getId() + "}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.added", contains(bob.getId().intValue())))
+                .andExpect(jsonPath("$.alreadyMembers", empty()))
+                .andExpect(jsonPath("$.notWorkspaceMembers", empty()));
+    }
+
+    @Test
+    void additionThatAddsNobodyReturnsOkAndPostsNoNotice() throws Exception {
+        User outsider = signUp("outsider_chan");
+        Long channelId = createPrivateChannelAsAlice("no-op");
+
+        // Alice is already a Channel Member (she created it); the outsider isn't in the Workspace.
+        String body = String.format("{\"userIds\": [%d, %d]}", alice.getId(), outsider.getId());
+        mockMvc.perform(post("/api/channels/" + channelId + "/members/batch")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.added", empty()))
+                .andExpect(jsonPath("$.alreadyMembers", contains(alice.getId().intValue())))
+                .andExpect(jsonPath("$.notWorkspaceMembers", contains(outsider.getId().intValue())));
+
+        mockMvc.perform(get("/api/channels/" + channelId + "/messages")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages", empty()));
+    }
+
+    @Test
+    void batchAdditionRejectsMoreThanFiftyUserIds() throws Exception {
+        Long channelId = createPrivateChannelAsAlice("too-many");
+        String ids = LongStream.rangeClosed(1, 50)
+                .mapToObj(i -> Long.toString(1_000_000 + i))
+                .collect(Collectors.joining(","));
+
+        mockMvc.perform(post("/api/channels/" + channelId + "/members/batch")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userIds\": [" + bob.getId() + "," + ids + "]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("You can add at most 50 colleagues at a time"));
+
+        assertOnlyAliceIsChannelMember(channelId);
+    }
+
+    @Test
+    void batchAdditionAcceptsExactlyFiftyUserIds() throws Exception {
+        Long channelId = createPrivateChannelAsAlice("just-enough");
+        String ids = LongStream.rangeClosed(1, 49)
+                .mapToObj(i -> Long.toString(1_000_000 + i))
+                .collect(Collectors.joining(","));
+
+        mockMvc.perform(post("/api/channels/" + channelId + "/members/batch")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userIds\": [" + bob.getId() + "," + ids + "]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.added", contains(bob.getId().intValue())))
+                .andExpect(jsonPath("$.notWorkspaceMembers", hasSize(49)));
+    }
+
+    @Test
+    void batchAdditionRejectsNullUserId() throws Exception {
+        Long channelId = createPrivateChannelAsAlice("null-id");
+
+        mockMvc.perform(post("/api/channels/" + channelId + "/members/batch")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userIds\": [" + bob.getId() + ", null]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("userIds must not contain null"));
+
+        assertOnlyAliceIsChannelMember(channelId);
+    }
+
+    @Test
+    void batchAdditionRejectsEmptyList() throws Exception {
+        Long channelId = createPrivateChannelAsAlice("empty-list");
+
+        mockMvc.perform(post("/api/channels/" + channelId + "/members/batch")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userIds\": []}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    private void assertOnlyAliceIsChannelMember(Long channelId) throws Exception {
+        mockMvc.perform(get("/api/channels/" + channelId + "/members")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].userId", contains(alice.getId().intValue())));
+    }
 }
 

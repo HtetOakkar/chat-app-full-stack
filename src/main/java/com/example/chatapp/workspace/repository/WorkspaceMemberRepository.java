@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,6 +17,11 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
     @Query("SELECT wm FROM WorkspaceMember wm WHERE wm.workspace.slug = :slug AND wm.user.id = :userId")
     Optional<WorkspaceMember> findByWorkspaceSlugAndUserId(@Param("slug") String slug, @Param("userId") Long userId);
     
+    /** Resolves many Workspace Members in one query, fetching each Member's User alongside. */
+    @Query("SELECT wm FROM WorkspaceMember wm JOIN FETCH wm.user u WHERE wm.workspace.id = :workspaceId AND u.id IN :userIds")
+    List<WorkspaceMember> findWithUserByWorkspaceIdAndUserIdIn(@Param("workspaceId") Long workspaceId,
+                                                              @Param("userIds") Collection<Long> userIds);
+
     List<WorkspaceMember> findByUserId(Long userId);
     
     List<WorkspaceMember> findByWorkspaceId(Long workspaceId);

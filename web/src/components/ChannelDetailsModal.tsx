@@ -6,6 +6,8 @@ import {
   type ChannelDto,
   type WorkspaceMemberDto,
   type BatchInvitationItemResult,
+  type BatchAddChannelMembersResponse,
+  MAX_CHANNEL_MEMBER_BATCH,
 } from "@/context/WorkspaceContext";
 import { useAuth } from "@/context/AuthContext";
 import { parseEmailTokens } from "@/lib/emailUtils";
@@ -29,7 +31,6 @@ export default function ChannelDetailsModal({
     members: workspaceMembers,
     presenceMap,
     getChannelMembers,
-    addChannelMember,
     batchAddChannelMembers,
     removeChannelMember,
     leaveChannel,
@@ -47,6 +48,8 @@ export default function ChannelDetailsModal({
   // Add Members Tab State
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [addingMembers, setAddingMembers] = useState(false);
+  const [additionResult, setAdditionResult] =
+    useState<BatchAddChannelMembersResponse | null>(null);
 
   // Email Invite Tab State
   const [emailChips, setEmailChips] = useState<string[]>([]);
@@ -93,6 +96,7 @@ export default function ChannelDetailsModal({
       fetchChannelMembers();
       setTab(initialTab);
       setSelectedUserIds([]);
+      setAdditionResult(null);
       setFeedback(null);
       setShowLeaveConfirm(false);
       setMemberToRemove(null);
@@ -125,6 +129,17 @@ export default function ChannelDetailsModal({
     );
   });
 
+  const overBatchLimit = selectedUserIds.length > MAX_CHANNEL_MEMBER_BATCH;
+
+  // Workspace members by user ID, for naming the users in an addition result
+  const workspaceMembersByUserId = new Map(
+    workspaceMembers.map((m) => [m.userId, m])
+  );
+  const describeUser = (id: number) => {
+    const member = workspaceMembersByUserId.get(id);
+    return member ? `@${member.username}` : `User #${id}`;
+  };
+
   // Toggle selection for candidate user
   const toggleUserSelection = (candUserId: number) => {
     setSelectedUserIds((prev) =>
@@ -145,25 +160,17 @@ export default function ChannelDetailsModal({
   // Submit adding members
   const handleAddMembersSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedUserIds.length === 0) return;
+    if (selectedUserIds.length === 0 || overBatchLimit) return;
     setAddingMembers(true);
     setFeedback(null);
+    setAdditionResult(null);
 
     try {
-      if (selectedUserIds.length === 1) {
-        await addChannelMember(channel.id, selectedUserIds[0]);
-      } else {
-        await batchAddChannelMembers(channel.id, selectedUserIds);
-      }
-      setFeedback({
-        type: "success",
-        text: `Successfully added ${selectedUserIds.length} colleague${
-          selectedUserIds.length > 1 ? "s" : ""
-        } to #${channel.name}!`,
-      });
+      // One or many, an addition always reports added / already in / not in Workspace.
+      const result = await batchAddChannelMembers(channel.id, selectedUserIds);
+      setAdditionResult(result);
       setSelectedUserIds([]);
       await fetchChannelMembers();
-      setTab("members");
     } catch (err: any) {
       setFeedback({
         type: "error",
@@ -594,6 +601,15 @@ export default function ChannelDetailsModal({
             onSubmit={handleAddMembersSubmit}
             className="flex-1 flex flex-col min-h-0 overflow-hidden"
           >
+            {additionResult && (
+              <AdditionResultPanel
+                result={additionResult}
+                channelName={channel.name}
+                describeUser={describeUser}
+                onDismiss={() => setAdditionResult(null)}
+              />
+            )}
+
             {/* Search & Select All Header */}
             <div className="p-4 border-b border-outline-variant/15 bg-surface-container-low/20 space-y-2.5 shrink-0">
               <div className="relative">
@@ -699,6 +715,16 @@ export default function ChannelDetailsModal({
             </div>
 
             {/* Bottom Action Bar */}
+            {eligibleNonMembers.length > 0 && overBatchLimit && (
+              <p
+                role="alert"
+                className="mx-4 mt-3 p-3 rounded-2xl text-xs font-medium border bg-error-container/20 border-error/20 text-error shrink-0"
+              >
+                You can add at most {MAX_CHANNEL_MEMBER_BATCH} colleagues at a
+                time. Deselect{" "}
+                {selectedUserIds.length - MAX_CHANNEL_MEMBER_BATCH} to continue.
+              </p>
+            )}
             {eligibleNonMembers.length > 0 && (
               <div className="p-4 border-t border-outline-variant/15 bg-surface-container-low/50 flex items-center justify-between shrink-0">
                 <span className="text-xs text-outline font-semibold">
@@ -706,7 +732,11 @@ export default function ChannelDetailsModal({
                 </span>
                 <button
                   type="submit"
-                  disabled={addingMembers || selectedUserIds.length === 0}
+                  disabled={
+                    addingMembers ||
+                    selectedUserIds.length === 0 ||
+                    overBatchLimit
+                  }
                   className="px-5 py-2 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
                 >
                   <span className="material-symbols-outlined text-sm">
@@ -882,6 +912,88 @@ export default function ChannelDetailsModal({
           </form>
         )}
       </div>
+    </div>
+  );
+}
+
+interface AdditionResultPanelProps {
+  result: BatchAddChannelMembersResponse;
+  channelName: string;
+  describeUser: (userId: number) => string;
+  onDismiss: () => void;
+}
+
+/** The categorized outcome of a Channel Member addition, shown on the Add Members tab. */
+function AdditionResultPanel({
+  result,
+  channelName,
+  describeUser,
+  onDismiss,
+}: AdditionResultPanelProps) {
+  const groups = [
+    {
+      label: "Added",
+      ids: result.added,
+      tone: "text-emerald-600 dark:text-emerald-400",
+      hint: null,
+    },
+    {
+      label: "Already in the channel",
+      ids: result.alreadyMembers,
+      tone: "text-outline",
+      hint: null,
+    },
+    {
+      label: "Not in this Workspace",
+      ids: result.notWorkspaceMembers,
+      tone: "text-error",
+      hint: "Invite them by email instead.",
+    },
+  ].filter((g) => g.ids.length > 0);
+
+  return (
+    <div
+      role="status"
+      aria-label="Add members result"
+      className="mx-4 mt-3 p-3 rounded-2xl border border-outline-variant/20 bg-surface-container-low text-xs space-y-2 shrink-0"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-bold text-on-surface">
+          {result.added.length > 0
+            ? `Added ${result.added.length} colleague${
+                result.added.length > 1 ? "s" : ""
+              } to #${channelName}.`
+            : "No one was added."}
+        </p>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss add members result"
+          className="text-xs opacity-70 hover:opacity-100"
+        >
+          ✕
+        </button>
+      </div>
+      {groups.map((group) => (
+        <div key={group.label}>
+          <p className={`font-semibold ${group.tone}`}>
+            {group.label} ({group.ids.length})
+          </p>
+          <ul aria-label={group.label} className="flex flex-wrap gap-1.5 mt-1">
+            {group.ids.map((id) => (
+              <li
+                key={id}
+                className="px-2 py-0.5 rounded-lg bg-surface-container text-on-surface"
+              >
+                {describeUser(id)}
+              </li>
+            ))}
+          </ul>
+          {group.hint && (
+            <p className="text-[11px] text-outline mt-1">{group.hint}</p>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
