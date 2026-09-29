@@ -4,10 +4,6 @@ import com.example.chatapp.email.service.EmailService;
 import com.example.chatapp.exception.BadRequestException;
 import com.example.chatapp.exception.NotFoundException;
 import com.example.chatapp.exception.UnauthorizedException;
-import com.example.chatapp.message.mapper.MessageMapper;
-import com.example.chatapp.message.model.entity.Message;
-import com.example.chatapp.message.model.entity.MessageType;
-import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.user.repository.UserRepository;
 import com.example.chatapp.websocket.MessageBroker;
@@ -44,8 +40,7 @@ public class InvitationServiceImpl implements InvitationService {
     private final UserRepository userRepository;
     private final EmailService emailService;
     private final MessageBroker messageBroker;
-    private final MessageRepository messageRepository;
-    private final MessageMapper messageMapper;
+    private final ChannelActivityNoticePublisher channelActivityNoticePublisher;
 
 
     @Override
@@ -439,22 +434,7 @@ public class InvitationServiceImpl implements InvitationService {
                                             .build();
                                     channelMemberRepository.save(cm);
 
-                                    // Post in-channel system message: @username joined the channel
-                                    var convOpt = conversationRepository.findByChannelId(cId);
-                                    if (convOpt.isPresent()) {
-                                        Message sysMsg = Message.builder()
-                                                .conversation(convOpt.get())
-                                                .senderMember(newMember)
-                                                .content("@" + user.getUsername() + " joined the channel")
-                                                .messageType(MessageType.SYSTEM)
-                                                .isRead(false)
-                                                .isDeleted(false)
-                                                .sentAt(Instant.now())
-                                                .build();
-                                        sysMsg = messageRepository.save(sysMsg);
-                                        String channelTopic = String.format("/topic/workspace.%d.channel.%d", ws.getId(), cId);
-                                        messageBroker.publishToTopic(channelTopic, messageMapper.toMessageDto(sysMsg));
-                                    }
+                                    channelActivityNoticePublisher.memberJoined(ch, newMember);
 
                                     // Broadcast member added to private channel
                                     String eventsTopic = String.format("/topic/workspace.%d.events", ws.getId());

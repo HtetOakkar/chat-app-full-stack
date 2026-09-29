@@ -53,6 +53,7 @@ public class ChannelServiceImpl implements ChannelService {
     private final RedisMessageRepository redisMessageRepository;
     private final MessageBroker messageBroker;
     private final SessionRegistry sessionRegistry;
+    private final ChannelActivityNoticePublisher channelActivityNoticePublisher;
 
     @Override
     @Transactional
@@ -177,7 +178,6 @@ public class ChannelServiceImpl implements ChannelService {
                 .orElseThrow(() -> new NotFoundException("Channel not found with ID: " + channelId));
 
         Long workspaceId = channel.getWorkspace().getId();
-        Workspace ws = channel.getWorkspace();
         if (channel.getType() == ChannelType.PUBLIC) {
             throw new BadRequestException("Cannot explicitly add members to a public channel");
         }
@@ -192,7 +192,7 @@ public class ChannelServiceImpl implements ChannelService {
 
         List<Long> newlyAddedUserIds = new ArrayList<>();
         List<WorkspaceMemberDto> newlyAddedMembers = new ArrayList<>();
-        List<String> targetUsernames = new ArrayList<>();
+        List<WorkspaceMember> addedWorkspaceMembers = new ArrayList<>();
 
         if (request.getUserIds() != null) {
             Set<Long> uniqueIds = new java.util.LinkedHashSet<>(request.getUserIds());
@@ -214,15 +214,14 @@ public class ChannelServiceImpl implements ChannelService {
 
                     newlyAddedUserIds.add(targetUserId);
                     newlyAddedMembers.add(toWorkspaceMemberDto(targetMember));
-                    targetUsernames.add(targetMember.getUser().getUsername());
+                    addedWorkspaceMembers.add(targetMember);
                 }
             }
         }
 
-        if (!targetUsernames.isEmpty()) {
-            String notice = buildConsolidatedAddMessage(requestingMember.getUser().getUsername(), targetUsernames);
-            postSystemMessage(channel, ws, requestingMember, notice);
+        channelActivityNoticePublisher.membersAdded(channel, requestingMember, addedWorkspaceMembers);
 
+        if (!newlyAddedUserIds.isEmpty()) {
             java.util.Map<String, Object> event = new java.util.HashMap<>();
             event.put("type", "CHANNEL_MEMBER_ADDED");
             event.put("workspaceId", workspaceId);
@@ -251,7 +250,6 @@ public class ChannelServiceImpl implements ChannelService {
                 .orElseThrow(() -> new NotFoundException("Channel not found with ID: " + channelId));
 
         Long workspaceId = channel.getWorkspace().getId();
-        Workspace ws = channel.getWorkspace();
         if (channel.getType() == ChannelType.PUBLIC) {
             throw new BadRequestException("Cannot remove members from a public channel");
         }
@@ -274,10 +272,8 @@ public class ChannelServiceImpl implements ChannelService {
 
         channelMemberRepository.deleteByChannelIdAndWorkspaceMemberId(channelId, targetMember.getId());
 
-        // Uniform leave announcement: @member left the channel
-        String targetUsername = targetMember.getUser().getUsername();
-        String leaveNotice = "@" + targetUsername + " left the channel";
-        postSystemMessage(channel, ws, targetMember, leaveNotice);
+        // A removal reads exactly like a voluntary departure.
+        channelActivityNoticePublisher.memberLeft(channel, targetMember);
 
         java.util.Map<String, Object> event = new java.util.HashMap<>();
         event.put("type", "CHANNEL_MEMBER_REMOVED");
@@ -393,8 +389,7 @@ public class ChannelServiceImpl implements ChannelService {
         messageDto.setId(message.getId());
 
         // Broadcast to STOMP topic
-        String topic = String.format("/topic/workspace.%d.channel.%d", workspaceId, channelId);
-        messageBroker.publishToTopic(topic, messageDto);
+        messageBroker.publishToTopic(ChannelActivityNoticePublisher.channelTopic(workspaceId, channelId), messageDto);
 
         return messageDto;
     }
@@ -435,54 +430,6 @@ public class ChannelServiceImpl implements ChannelService {
                 .memberCount(memberCount)
                 .createdAt(channel.getCreatedAt())
                 .build();
-    }
-
-    private void postSystemMessage(Channel channel, Workspace ws, WorkspaceMember actorMember, String content) {
-        var convOpt = conversationRepository.findByChannelId(channel.getId());
-        if (convOpt.isEmpty()) {
-            return;
-        }
-        Conversation conv = convOpt.get();
-        Instant now = Instant.now();
-
-        Message message = Message.builder()
-                .conversation(conv)
-                .senderMember(actorMember)
-                .content(content)
-                .messageType(MessageType.SYSTEM)
-                .isRead(false)
-                .isDeleted(false)
-                .sentAt(now)
-                .build();
-        message = messageRepository.save(message);
-
-        MessageDto dto = messageMapper.toMessageDto(message);
-        String channelTopic = String.format("/topic/workspace.%d.channel.%d", ws.getId(), channel.getId());
-        messageBroker.publishToTopic(channelTopic, dto);
-    }
-
-    private String buildConsolidatedAddMessage(String actorUsername, List<String> targetUsernames) {
-        if (targetUsernames == null || targetUsernames.isEmpty()) {
-            return "@" + actorUsername + " added members to the channel";
-        }
-        if (targetUsernames.size() == 1) {
-            return "@" + actorUsername + " added @" + targetUsernames.get(0) + " to the channel";
-        }
-        if (targetUsernames.size() == 2) {
-            return "@" + actorUsername + " added @" + targetUsernames.get(0) + " and @" + targetUsernames.get(1) + " to the channel";
-        }
-        StringBuilder sb = new StringBuilder("@").append(actorUsername).append(" added ");
-        for (int i = 0; i < targetUsernames.size(); i++) {
-            if (i > 0) {
-                sb.append(", ");
-            }
-            if (i == targetUsernames.size() - 1) {
-                sb.append("and ");
-            }
-            sb.append("@").append(targetUsernames.get(i));
-        }
-        sb.append(" to the channel");
-        return sb.toString();
     }
 
     private WorkspaceMemberDto toWorkspaceMemberDto(WorkspaceMember member) {
