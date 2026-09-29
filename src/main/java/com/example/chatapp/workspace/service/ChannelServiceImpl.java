@@ -176,9 +176,11 @@ public class ChannelServiceImpl implements ChannelService {
 
     /**
      * Adds Workspace Members to a Private Channel and reports every requested user ID as added,
-     * already a Channel Member, or not a Workspace Member. Runs in a bounded number of queries
-     * whatever the batch size: one resolving the Workspace Members (with their Users), one for
-     * existing Channel Memberships and one batch save.
+     * already a Channel Member, or not a Workspace Member. The lookups don't grow with the batch
+     * size: one query resolves the Workspace Members (with their Users) and one finds existing
+     * Channel Memberships. The additions go through one {@code saveAll} call, but that still sends
+     * one INSERT per added Member: {@link ChannelMember} uses an IDENTITY id and JDBC batching is
+     * off. The 50-ID cap on the request bounds this at 50 INSERTs.
      */
     @Override
     @Transactional
