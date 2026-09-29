@@ -98,16 +98,14 @@ public class PresenceModuleImpl implements PresenceModule {
 
         Set<Long> receivers = presenceRepository.findEligiblePresenceReceivers(userId);
         List<Long> workspaceIds = new ArrayList<>();
-        if (workspaceMemberRepository != null) {
-            try {
-                for (WorkspaceMember wm : workspaceMemberRepository.findByUserId(userId)) {
-                    if (wm.getWorkspace() != null) {
-                        workspaceIds.add(wm.getWorkspace().getId());
-                    }
+        try {
+            for (WorkspaceMember wm : workspaceMemberRepository.findByUserId(userId)) {
+                if (wm.getWorkspace() != null) {
+                    workspaceIds.add(wm.getWorkspace().getId());
                 }
-            } catch (Exception e) {
-                log.warn("Error resolving workspaces for presence broadcast: {}", e.getMessage());
             }
+        } catch (Exception e) {
+            log.warn("Error resolving workspaces for presence broadcast: {}", e.getMessage());
         }
         return new PresenceAnnouncement(userId, payload, receivers, workspaceIds);
     }

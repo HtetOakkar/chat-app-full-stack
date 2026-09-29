@@ -109,6 +109,8 @@ class BackendPerformanceGuardrailTest {
         verify(workspaceMemberRepository, times(1)).findByWorkspaceIdAndUserId(anyLong(), anyLong()); // the requester only
         verify(channelMemberRepository, times(1)).findExistingWorkspaceMemberIds(eq(10L), anyCollection());
         verify(channelMemberRepository, never()).existsByChannelIdAndWorkspaceMemberId(anyLong(), anyLong());
+        // One saveAll call, not one save per Member. It is not one SQL statement: ChannelMember uses an
+        // IDENTITY id and JDBC batching is off, so Hibernate sends one INSERT per added Member (at most 50).
         verify(channelMemberRepository, times(1)).saveAll(anyIterable());
         verify(channelMemberRepository, never()).save(any());
         verify(noticePublisher, times(1)).membersAdded(eq(channel), eq(requester), anyList());
@@ -124,7 +126,7 @@ class BackendPerformanceGuardrailTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void connectAndDisconnectWithCachedPresenceSharingIssueNoDatabaseReads() {
+    void connectAndDisconnectOfMemberNotSharingPresenceWithCachedChoiceIssueNoDatabaseReads() {
         RedisTemplate<String, Object> redisTemplate = mock(RedisTemplate.class);
         ValueOperations<String, Object> valueOperations = mock(ValueOperations.class);
         SetOperations<String, Object> setOperations = mock(SetOperations.class);
@@ -143,6 +145,41 @@ class BackendPerformanceGuardrailTest {
         presenceModule.setUserOffline(7L, "hidden");
 
         verifyNoInteractions(userRepository, presenceRepository, workspaceMemberRepository, userSettingsRepository);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void connectAndDisconnectOfMemberSharingPresenceWithCachedChoiceReadOnlyReceiversAndMemberships() {
+        RedisTemplate<String, Object> redisTemplate = mock(RedisTemplate.class);
+        ValueOperations<String, Object> valueOperations = mock(ValueOperations.class);
+        SetOperations<String, Object> setOperations = mock(SetOperations.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        PresenceRepository presenceRepository = mock(PresenceRepository.class);
+        WorkspaceMemberRepository workspaceMemberRepository = mock(WorkspaceMemberRepository.class);
+        UserSettingsRepository userSettingsRepository = mock(UserSettingsRepository.class);
+        PresenceModuleImpl presenceModule = new PresenceModuleImpl(redisTemplate, userRepository, presenceRepository,
+                mock(SessionRegistry.class), mock(MessageBroker.class), workspaceMemberRepository, userSettingsRepository);
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        when(valueOperations.get("user:presence:sharing:7")).thenReturn(true);
+        when(presenceRepository.findEligiblePresenceReceivers(7L)).thenReturn(Set.of(8L, 9L));
+        when(workspaceMemberRepository.findByUserId(7L)).thenReturn(List.of());
+
+        // Presence Sharing comes from the cache, never the database. What remains is pinned so a
+        // regression or an improvement shows up here: each event reads the receivers and the
+        // memberships once, and nothing else.
+        presenceModule.setUserOnline(7L, "sharer");
+        verify(presenceRepository, times(1)).findEligiblePresenceReceivers(7L);
+        verify(workspaceMemberRepository, times(1)).findByUserId(7L);
+
+        presenceModule.setUserOffline(7L, "sharer");
+        verify(presenceRepository, times(2)).findEligiblePresenceReceivers(7L);
+        verify(workspaceMemberRepository, times(2)).findByUserId(7L);
+
+        verify(presenceRepository, never()).findSharePresence(any());
+        verifyNoInteractions(userRepository, userSettingsRepository);
+        verifyNoMoreInteractions(presenceRepository, workspaceMemberRepository);
     }
 
     @Test
