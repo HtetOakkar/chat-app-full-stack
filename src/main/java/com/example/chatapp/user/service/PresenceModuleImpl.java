@@ -1,5 +1,6 @@
 package com.example.chatapp.user.service;
 
+import com.example.chatapp.config.AfterCommit;
 import com.example.chatapp.exception.BadRequestException;
 import com.example.chatapp.exception.NotFoundException;
 import com.example.chatapp.message.model.dto.OnlineStatusDto;
@@ -21,8 +22,6 @@ import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -233,7 +232,8 @@ public class PresenceModuleImpl implements PresenceModule {
             announcement = presenceAnnouncement(userId, user.getUsername(), STATUS_ONLINE, Instant.now(), true);
         }
         PresenceAnnouncement toPublish = announcement;
-        afterCommit(() -> {
+        // Colleagues must never see, and the cache must never hold, a change that did not commit.
+        AfterCommit.run(() -> {
             refreshCachedSharing(userId, sharePresence);
             if (toPublish != null) {
                 publishPresence(toPublish);
@@ -243,23 +243,6 @@ public class PresenceModuleImpl implements PresenceModule {
         return UserSettingsDto.builder()
                 .sharePresence(settings.isSharePresence())
                 .build();
-    }
-
-    /**
-     * Colleagues must never see, and the cache must never hold, a Presence Sharing change that did not
-     * commit.
-     */
-    private void afterCommit(Runnable action) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            action.run();
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                action.run();
-            }
-        });
     }
 
     @Override

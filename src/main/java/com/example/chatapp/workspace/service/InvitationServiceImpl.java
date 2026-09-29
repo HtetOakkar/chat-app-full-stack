@@ -1,5 +1,6 @@
 package com.example.chatapp.workspace.service;
 
+import com.example.chatapp.config.AfterCommit;
 import com.example.chatapp.email.service.EmailService;
 import com.example.chatapp.exception.BadRequestException;
 import com.example.chatapp.exception.NotFoundException;
@@ -436,14 +437,15 @@ public class InvitationServiceImpl implements InvitationService {
 
                                     channelActivityNoticePublisher.memberJoined(ch, newMember);
 
-                                    // Broadcast member added to private channel
+                                    // Broadcast member added to private channel, once the acceptance commits
                                     String eventsTopic = String.format("/topic/workspace.%d.events", ws.getId());
-                                    messageBroker.publishToTopic(eventsTopic, Map.of(
+                                    Map<String, Object> channelEvent = Map.of(
                                             "type", "CHANNEL_MEMBER_ADDED",
                                             "workspaceId", ws.getId(),
                                             "channelId", cId,
                                             "userId", user.getId()
-                                    ));
+                                    );
+                                    AfterCommit.run(() -> messageBroker.publishToTopic(eventsTopic, channelEvent));
 
                                 }
                             }
@@ -458,16 +460,17 @@ public class InvitationServiceImpl implements InvitationService {
             }
             workspaceInvitationRepository.save(invitation);
 
-            // Broadcast member joined event
+            // Broadcast member joined event, once the acceptance commits
             String eventsTopic = String.format("/topic/workspace.%d.events", ws.getId());
-            messageBroker.publishToTopic(eventsTopic, Map.of(
+            Map<String, Object> joinedEvent = Map.of(
                     "type", "MEMBER_JOINED",
                     "workspaceId", ws.getId(),
                     "userId", user.getId(),
                     "username", user.getUsername(),
                     "fullName", user.getFullName() != null ? user.getFullName() : user.getUsername(),
                     "role", newMember.getRole()
-            ));
+            );
+            AfterCommit.run(() -> messageBroker.publishToTopic(eventsTopic, joinedEvent));
 
             log.info("User id={} username={} joined workspace id={} via invitation token={}",
                     user.getId(), user.getUsername(), ws.getId(), token);

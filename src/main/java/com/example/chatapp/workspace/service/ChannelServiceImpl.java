@@ -1,6 +1,7 @@
 package com.example.chatapp.workspace.service;
 
 import com.example.chatapp.chat.util.CursorCodec;
+import com.example.chatapp.config.AfterCommit;
 import com.example.chatapp.exception.BadRequestException;
 import com.example.chatapp.exception.NotFoundException;
 import com.example.chatapp.exception.UnauthorizedException;
@@ -243,7 +244,8 @@ public class ChannelServiceImpl implements ChannelService {
             }
             event.put("addedByUserId", requestingUserId);
             String eventsTopic = String.format("/topic/workspace.%d.events", workspaceId);
-            messageBroker.publishToTopic(eventsTopic, event);
+            // Clients refetch their Channel list on this event, so it must not arrive before the addition commits.
+            AfterCommit.run(() -> messageBroker.publishToTopic(eventsTopic, event));
         }
 
         return BatchAddChannelMembersResponse.builder()
@@ -298,7 +300,8 @@ public class ChannelServiceImpl implements ChannelService {
         event.put("userId", targetUserId);
         event.put("isSelfLeave", isSelfLeave);
         String eventsTopic = String.format("/topic/workspace.%d.events", workspaceId);
-        messageBroker.publishToTopic(eventsTopic, event);
+        // Clients refetch their Channel list on this event, so it must not arrive before the removal commits.
+        AfterCommit.run(() -> messageBroker.publishToTopic(eventsTopic, event));
     }
 
 

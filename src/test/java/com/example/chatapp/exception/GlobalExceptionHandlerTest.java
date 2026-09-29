@@ -11,6 +11,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -39,8 +40,8 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/missing-asset"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Resource not found."))
-                .andExpect(jsonPath("$.message", not(containsString("missing-asset"))))
-                .andExpect(jsonPath("$.message", not(containsString("<script>"))));
+                .andExpect(content().string(not(containsString("missing-asset"))))
+                .andExpect(content().string(not(containsString("<script>"))));
     }
 
     @RestController

@@ -1,5 +1,6 @@
 package com.example.chatapp.exception;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 
 import java.time.Instant;
@@ -10,6 +11,6 @@ public record ApiError(
         int status,
         String error,
         String message,
-        String path
+        @JsonInclude(JsonInclude.Include.NON_NULL) String path
 ) {
 }
