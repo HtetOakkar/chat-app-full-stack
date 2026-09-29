@@ -1,6 +1,8 @@
 package com.example.chatapp.workspace.controller;
 
 import com.example.chatapp.email.service.EmailService;
+import com.example.chatapp.message.model.dto.MessageDto;
+import com.example.chatapp.message.model.entity.MessageType;
 import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.user.repository.UserRepository;
@@ -12,6 +14,7 @@ import com.example.chatapp.workspace.model.request.CreateChannelRequest;
 import com.example.chatapp.workspace.model.request.CreateWorkspaceRequest;
 import com.example.chatapp.workspace.repository.*;
 import com.example.chatapp.workspace.service.ChannelService;
+import com.example.chatapp.websocket.MessageBroker;
 import com.example.chatapp.workspace.service.WorkspaceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +31,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.hamcrest.Matchers.*;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -77,6 +83,9 @@ class InvitationControllerIntegrationTest {
 
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     private EmailService emailService;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    private MessageBroker messageBroker;
 
     private String aliceToken;
     private String bobToken;
@@ -353,6 +362,48 @@ class InvitationControllerIntegrationTest {
                 .andExpect(jsonPath("$.messages[0].messageType").value("SYSTEM"));
     }
 
+
+    @Test
+    void acceptingInvitationWithPrivateChannelPostsJoinedChannelActivityNotice() throws Exception {
+        ChannelDto privateChannel = channelService.createChannel(workspace.getId(), alice.getId(),
+                CreateChannelRequest.builder().name("launch-room").type(ChannelType.PRIVATE).build());
+
+        mockMvc.perform(post("/api/workspaces/" + workspace.getId() + "/invitations/batch")
+                        .header("Authorization", aliceToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(String.format("""
+                                {
+                                  "emails": ["charlie_inv@example.com"],
+                                  "role": "MEMBER",
+                                  "initialChannelIds": [%d]
+                                }
+                                """, privateChannel.getId())))
+                .andExpect(status().isOk());
+
+        var invitation = workspaceInvitationRepository.findByWorkspaceIdAndEmailAndStatus(workspace.getId(),
+                "charlie_inv@example.com", com.example.chatapp.workspace.model.entity.InvitationStatus.PENDING).orElseThrow();
+
+        mockMvc.perform(post("/api/invitations/" + invitation.getToken() + "/accept")
+                        .header("Authorization", charlieToken))
+                .andExpect(status().isOk());
+
+        // Existing Channel Members see the notice live on the Channel topic...
+        verify(messageBroker).publishToTopic(
+                eq("/topic/workspace." + workspace.getId() + ".channel." + privateChannel.getId()),
+                argThat(payload -> payload instanceof MessageDto notice
+                        && "@charlie_inv joined the channel".equals(notice.getContent())
+                        && notice.getMessageType() == MessageType.SYSTEM
+                        && privateChannel.getId().equals(notice.getChannelId())));
+
+        // ...and in the Channel's history.
+        mockMvc.perform(get("/api/channels/" + privateChannel.getId() + "/messages")
+                        .header("Authorization", aliceToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages", hasSize(1)))
+                .andExpect(jsonPath("$.messages[0].content").value("@charlie_inv joined the channel"))
+                .andExpect(jsonPath("$.messages[0].messageType").value("SYSTEM"))
+                .andExpect(jsonPath("$.messages[0].senderUsername").value("charlie_inv"));
+    }
 
     @Test
     void shareableJoinLink_lifecycle_getToggleReset() throws Exception {
