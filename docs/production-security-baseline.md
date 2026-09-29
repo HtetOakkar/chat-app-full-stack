@@ -59,6 +59,7 @@ ADR-0004 records the selected browser auth transport: bearer access tokens are k
 - Unexpected server errors return a generic message to clients.
 - Exception details remain in server logs for operators.
 - Expected validation and domain errors may return safe user-facing messages.
+- The static-resource 404 (`NoResourceFoundException`) returns the fixed message "Resource not found." and omits the `path` field, so the attacker-controlled request path is never echoed back.
 
 ## Abuse Controls
 

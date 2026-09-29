@@ -27,6 +27,10 @@ import java.util.Map;
  * to the Channel topic (so connected Channel Members see it live). It is attributed to the
  * {@code actor} passed in, which becomes the message's sender. Publishing waits until the
  * surrounding transaction commits, and a rolled-back membership change publishes nothing.
+ *
+ * <p>It also sends the Removal Notice, which is <em>not</em> a Channel Activity Notice: a private
+ * message to the removed User alone, naming who removed them. It is neither saved nor posted to the
+ * Channel, and it reaches only a User connected at the time (ADR-0007).
  */
 @Component
 @RequiredArgsConstructor
@@ -38,8 +42,8 @@ public class ChannelActivityNoticePublisher {
     private final MessageBroker messageBroker;
 
     /**
-     * The removed User's personal queue for "removed from channel" notices. It is not scoped to a
-     * Workspace, so the removed User is told wherever they are in the app.
+     * The removed User's personal queue for Removal Notices. It is not scoped to a Workspace, so the
+     * removed User is told wherever they are in the app (ADR-0007).
      */
     public static final String CHANNEL_REMOVAL_QUEUE = "/queue/channel-removals";
 
@@ -77,7 +81,7 @@ public class ChannelActivityNoticePublisher {
     /**
      * {@code remover} removed {@code removedMember}. The Channel gets exactly the notice a
      * voluntary departure produces ("@member left the channel"). Only the removed User learns
-     * who removed them, through a "removed from channel" notice on their personal queue.
+     * who removed them, through a Removal Notice on their personal queue.
      */
     public void memberRemoved(Channel channel, WorkspaceMember removedMember, WorkspaceMember remover) {
         memberLeft(channel, removedMember);
