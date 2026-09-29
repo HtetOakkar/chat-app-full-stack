@@ -97,7 +97,6 @@ describe("WorkspaceChannelViewport", () => {
       members: [],
       presenceMap: {},
       getChannelMembers: jest.fn().mockResolvedValue([]),
-      addChannelMember: jest.fn().mockResolvedValue({}),
       batchAddChannelMembers: jest.fn().mockResolvedValue({}),
       removeChannelMember: jest.fn().mockResolvedValue({}),
       leaveChannel: jest.fn().mockResolvedValue({}),

@@ -76,7 +76,6 @@ describe("ChannelDetailsModal", () => {
   ];
 
   const mockGetChannelMembers = jest.fn();
-  const mockAddChannelMember = jest.fn();
   const mockBatchAddChannelMembers = jest.fn();
   const mockRemoveChannelMember = jest.fn();
   const mockLeaveChannel = jest.fn();
@@ -93,7 +92,6 @@ describe("ChannelDetailsModal", () => {
     });
 
     mockGetChannelMembers.mockResolvedValue(mockChannelMembers);
-    mockAddChannelMember.mockResolvedValue({});
     mockBatchAddChannelMembers.mockResolvedValue({
       added: [103, 104],
       alreadyMembers: [],
@@ -112,7 +110,6 @@ describe("ChannelDetailsModal", () => {
       members: mockAllWorkspaceMembers,
       presenceMap: { 101: "ONLINE", 102: "OFFLINE", 103: "ONLINE" },
       getChannelMembers: mockGetChannelMembers,
-      addChannelMember: mockAddChannelMember,
       batchAddChannelMembers: mockBatchAddChannelMembers,
       removeChannelMember: mockRemoveChannelMember,
       leaveChannel: mockLeaveChannel,
@@ -260,7 +257,6 @@ describe("ChannelDetailsModal", () => {
       members: mockAllWorkspaceMembers,
       presenceMap: {},
       getChannelMembers: mockGetChannelMembers,
-      addChannelMember: mockAddChannelMember,
       batchAddChannelMembers: mockBatchAddChannelMembers,
       removeChannelMember: mockRemoveChannelMember,
       leaveChannel: mockLeaveChannel,
@@ -332,6 +328,15 @@ describe("ChannelDetailsModal", () => {
         />
       );
 
+    /** The always-mounted result region, once the result has filled it. */
+    const findAdditionResult = async () => {
+      const region = screen.getByRole("status", {
+        name: "Add members result",
+      });
+      await waitFor(() => expect(region).not.toBeEmptyDOMElement());
+      return region;
+    };
+
     const submitAll = async () => {
       await waitFor(() => {
         expect(screen.getByText("Carol Danvers")).toBeInTheDocument();
@@ -341,6 +346,41 @@ describe("ChannelDetailsModal", () => {
         screen.getByRole("button", { name: /Add to Channel \(2\)/i })
       );
     };
+
+    it("announces the result in a live region that was already mounted before I submitted", async () => {
+      mockBatchAddChannelMembers.mockResolvedValue({
+        added: [103, 104],
+        alreadyMembers: [],
+        notWorkspaceMembers: [],
+      });
+      renderAddTab();
+
+      // Screen readers skip live regions inserted already filled, so the
+      // region must be waiting, empty, before the result comes in.
+      const region = screen.getByRole("status", {
+        name: "Add members result",
+      });
+      expect(region).toBeEmptyDOMElement();
+
+      await submitAll();
+
+      await waitFor(() =>
+        expect(region).toHaveTextContent("Added 2 colleagues to #secret-ops.")
+      );
+      expect(screen.getByRole("status", { name: "Add members result" })).toBe(
+        region
+      );
+
+      fireEvent.click(
+        within(region).getByRole("button", {
+          name: "Dismiss add members result",
+        })
+      );
+      expect(screen.getByRole("status", { name: "Add members result" })).toBe(
+        region
+      );
+      expect(region).toBeEmptyDOMElement();
+    });
 
     it("shows who was added, who was already a Channel Member and who isn't in the Workspace", async () => {
       mockBatchAddChannelMembers.mockResolvedValue({
@@ -352,9 +392,7 @@ describe("ChannelDetailsModal", () => {
 
       await submitAll();
 
-      const result = await screen.findByRole("status", {
-        name: "Add members result",
-      });
+      const result = await findAdditionResult();
       expect(
         within(within(result).getByRole("list", { name: "Added" })).getByText(
           "@carol"
@@ -383,9 +421,7 @@ describe("ChannelDetailsModal", () => {
 
       await submitAll();
 
-      const result = await screen.findByRole("status", {
-        name: "Add members result",
-      });
+      const result = await findAdditionResult();
       expect(within(result).getByText("No one was added.")).toBeInTheDocument();
       expect(
         within(result).queryByRole("list", { name: "Added" })
@@ -411,9 +447,7 @@ describe("ChannelDetailsModal", () => {
         screen.getByRole("button", { name: /Add to Channel \(1\)/i })
       );
 
-      const result = await screen.findByRole("status", {
-        name: "Add members result",
-      });
+      const result = await findAdditionResult();
       expect(mockBatchAddChannelMembers).toHaveBeenCalledWith(10, [103]);
       expect(
         within(

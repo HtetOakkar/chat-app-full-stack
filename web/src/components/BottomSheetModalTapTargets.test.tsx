@@ -23,21 +23,38 @@ jest.mock("@/context/CallContext");
  * target. jsdom has no layout, so the Tailwind sizing classes stand in for
  * the rendered size.
  */
+const meetsTapTarget = (el: Element) =>
+  el.classList.contains("min-h-[44px]") &&
+  el.classList.contains("min-w-[44px]");
+
+/**
+ * A checkbox or radio is tapped through its label row, so the row carries the
+ * 44px height; its width already spans the sheet. A bare control must be
+ * 44x44 on its own.
+ */
+const choiceMeetsTapTarget = (control: HTMLInputElement) => {
+  const label = control.closest("label") ?? control.labels?.[0] ?? null;
+  return label
+    ? label.classList.contains("min-h-[44px]")
+    : meetsTapTarget(control);
+};
+
+const describeAction = (el: Element) =>
+  el.getAttribute("aria-label") ||
+  el.getAttribute("title") ||
+  (el.closest("label") ?? el).textContent?.trim();
+
 function expectEveryActionToMeetTapTarget(root: HTMLElement = document.body) {
   const buttons = within(root).getAllByRole("button");
   expect(buttons.length).toBeGreaterThan(0);
-  const undersized = buttons
-    .filter(
-      (b) =>
-        !b.classList.contains("min-h-[44px]") ||
-        !b.classList.contains("min-w-[44px]")
-    )
-    .map(
-      (b) =>
-        b.getAttribute("aria-label") ||
-        b.getAttribute("title") ||
-        b.textContent?.trim()
-    );
+  const choices = [
+    ...within(root).queryAllByRole("checkbox"),
+    ...within(root).queryAllByRole("radio"),
+  ] as HTMLInputElement[];
+  const undersized = [
+    ...buttons.filter((b) => !meetsTapTarget(b)),
+    ...choices.filter((c) => !choiceMeetsTapTarget(c)),
+  ].map(describeAction);
   expect(undersized).toEqual([]);
 }
 
@@ -258,7 +275,9 @@ describe("Bottom-sheet modal tap targets (ADR-0006, #88)", () => {
       fireEvent.click(
         screen.getByRole("button", { name: /Add to Channel \(1\)/ })
       );
-      await screen.findByRole("status", { name: "Add members result" });
+      await screen.findByRole("button", {
+        name: "Dismiss add members result",
+      });
       expectEveryActionToMeetTapTarget();
     });
 
