@@ -12,6 +12,19 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { parseEmailTokens } from "@/lib/emailUtils";
 
+/** The Channel details tabs that list Members, and so have a search box. */
+type SearchableTab = "members" | "add";
+
+const EMPTY_SEARCHES: Record<SearchableTab, string> = { members: "", add: "" };
+
+function matchesMemberSearch(member: WorkspaceMemberDto, query: string) {
+  const q = query.toLowerCase();
+  return (
+    member.username.toLowerCase().includes(q) ||
+    (member.fullName?.toLowerCase().includes(q) ?? false)
+  );
+}
+
 interface ChannelDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -43,7 +56,10 @@ export default function ChannelDetailsModal({
     []
   );
   const [loadingMembers, setLoadingMembers] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  // Each searchable tab keeps its own query, so one tab's search never filters another.
+  const [searchByTab, setSearchByTab] = useState(EMPTY_SEARCHES);
+  const setTabSearch = (searchTab: SearchableTab, query: string) =>
+    setSearchByTab((prev) => ({ ...prev, [searchTab]: query }));
 
   // Add Members Tab State
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
@@ -95,6 +111,7 @@ export default function ChannelDetailsModal({
     if (isOpen && channel?.id) {
       fetchChannelMembers();
       setTab(initialTab);
+      setSearchByTab(EMPTY_SEARCHES);
       setSelectedUserIds([]);
       setAdditionResult(null);
       setFeedback(null);
@@ -112,22 +129,14 @@ export default function ChannelDetailsModal({
   );
 
   // Filtered members for "members" tab
-  const filteredChannelMembers = channelMembers.filter((m) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      m.username.toLowerCase().includes(q) ||
-      (m.fullName && m.fullName.toLowerCase().includes(q))
-    );
-  });
+  const filteredChannelMembers = channelMembers.filter((m) =>
+    matchesMemberSearch(m, searchByTab.members)
+  );
 
   // Filtered eligible candidates for "add" tab
-  const filteredCandidates = eligibleNonMembers.filter((m) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      m.username.toLowerCase().includes(q) ||
-      (m.fullName && m.fullName.toLowerCase().includes(q))
-    );
-  });
+  const filteredCandidates = eligibleNonMembers.filter((m) =>
+    matchesMemberSearch(m, searchByTab.add)
+  );
 
   const overBatchLimit = selectedUserIds.length > MAX_CHANNEL_MEMBER_BATCH;
 
@@ -344,7 +353,7 @@ export default function ChannelDetailsModal({
             type="button"
             onClick={onClose}
             aria-label="Close channel details"
-            className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors shrink-0"
+            className="min-w-[44px] min-h-[44px] rounded-xl text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors shrink-0"
           >
             <span className="material-symbols-outlined text-base">close</span>
           </button>
@@ -354,11 +363,8 @@ export default function ChannelDetailsModal({
         <div className="flex border-b border-outline-variant/15 px-6 gap-6 bg-surface-container-low/30 shrink-0">
           <button
             type="button"
-            onClick={() => {
-              setTab("members");
-              setSearchQuery("");
-            }}
-            className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+            onClick={() => setTab("members")}
+            className={`min-w-[44px] min-h-[44px] py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
               tab === "members"
                 ? "border-primary text-primary"
                 : "border-transparent text-outline hover:text-on-surface"
@@ -374,11 +380,8 @@ export default function ChannelDetailsModal({
             <>
               <button
                 type="button"
-                onClick={() => {
-                  setTab("add");
-                  setSearchQuery("");
-                }}
-                className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                onClick={() => setTab("add")}
+                className={`min-w-[44px] min-h-[44px] py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
                   tab === "add"
                     ? "border-primary text-primary"
                     : "border-transparent text-outline hover:text-on-surface"
@@ -394,11 +397,8 @@ export default function ChannelDetailsModal({
 
               <button
                 type="button"
-                onClick={() => {
-                  setTab("email");
-                  setSearchQuery("");
-                }}
-                className={`py-3 text-xs font-bold border-b-2 transition-all ${
+                onClick={() => setTab("email")}
+                className={`min-w-[44px] min-h-[44px] py-3 text-xs font-bold border-b-2 transition-all ${
                   tab === "email"
                     ? "border-primary text-primary"
                     : "border-transparent text-outline hover:text-on-surface"
@@ -423,7 +423,8 @@ export default function ChannelDetailsModal({
             <button
               type="button"
               onClick={() => setFeedback(null)}
-              className="text-xs opacity-70 hover:opacity-100"
+              aria-label="Dismiss message"
+              className="min-w-[44px] min-h-[44px] -my-3 -mr-2 flex items-center justify-center shrink-0 rounded-xl text-xs opacity-70 hover:opacity-100"
             >
               ✕
             </button>
@@ -444,7 +445,7 @@ export default function ChannelDetailsModal({
               <button
                 type="button"
                 onClick={() => setShowLeaveConfirm(false)}
-                className="px-3 py-1.5 text-xs font-bold text-outline hover:text-on-surface"
+                className="min-w-[44px] min-h-[44px] px-3 py-1.5 text-xs font-bold text-outline hover:text-on-surface rounded-xl"
               >
                 Cancel
               </button>
@@ -452,7 +453,7 @@ export default function ChannelDetailsModal({
                 type="button"
                 onClick={handleConfirmLeave}
                 disabled={actionLoading}
-                className="px-4 py-1.5 bg-error text-white text-xs font-bold rounded-xl hover:bg-error/90 transition-colors disabled:opacity-50"
+                className="min-w-[44px] min-h-[44px] px-4 py-1.5 bg-error text-white text-xs font-bold rounded-xl hover:bg-error/90 transition-colors disabled:opacity-50"
               >
                 {actionLoading ? "Leaving..." : "Confirm Leave"}
               </button>
@@ -473,7 +474,7 @@ export default function ChannelDetailsModal({
               <button
                 type="button"
                 onClick={() => setMemberToRemove(null)}
-                className="px-3 py-1.5 text-xs font-bold text-outline hover:text-on-surface"
+                className="min-w-[44px] min-h-[44px] px-3 py-1.5 text-xs font-bold text-outline hover:text-on-surface rounded-xl"
               >
                 Cancel
               </button>
@@ -481,7 +482,7 @@ export default function ChannelDetailsModal({
                 type="button"
                 onClick={handleConfirmRemove}
                 disabled={actionLoading}
-                className="px-4 py-1.5 bg-error text-white text-xs font-bold rounded-xl hover:bg-error/90 transition-colors disabled:opacity-50"
+                className="min-w-[44px] min-h-[44px] px-4 py-1.5 bg-error text-white text-xs font-bold rounded-xl hover:bg-error/90 transition-colors disabled:opacity-50"
               >
                 {actionLoading ? "Removing..." : "Confirm Removal"}
               </button>
@@ -501,8 +502,8 @@ export default function ChannelDetailsModal({
                 <input
                   type="text"
                   placeholder="Search channel members..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={searchByTab.members}
+                  onChange={(e) => setTabSearch("members", e.target.value)}
                   className="w-full pl-9 pr-3 py-2 bg-surface-container rounded-xl border border-outline-variant/30 text-xs focus:outline-none focus:border-primary transition-colors"
                 />
               </div>
@@ -565,7 +566,7 @@ export default function ChannelDetailsModal({
                           <button
                             type="button"
                             onClick={() => setShowLeaveConfirm(true)}
-                            className="px-3 py-1.5 rounded-xl bg-error/10 text-error hover:bg-error/20 text-xs font-bold transition-colors flex items-center gap-1"
+                            className="min-w-[44px] min-h-[44px] px-3 py-1.5 rounded-xl bg-error/10 text-error hover:bg-error/20 text-xs font-bold transition-colors flex items-center gap-1"
                           >
                             <span className="material-symbols-outlined text-sm">
                               logout
@@ -579,7 +580,7 @@ export default function ChannelDetailsModal({
                             type="button"
                             onClick={() => setMemberToRemove(member)}
                             title={`Remove @${member.username} from channel`}
-                            className="w-8 h-8 rounded-xl bg-surface-container-high hover:bg-error/10 text-outline hover:text-error flex items-center justify-center transition-colors"
+                            className="min-w-[44px] min-h-[44px] rounded-xl bg-surface-container-high hover:bg-error/10 text-outline hover:text-error flex items-center justify-center transition-colors"
                           >
                             <span className="material-symbols-outlined text-base">
                               person_remove
@@ -619,8 +620,8 @@ export default function ChannelDetailsModal({
                 <input
                   type="text"
                   placeholder="Search colleagues to add..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={searchByTab.add}
+                  onChange={(e) => setTabSearch("add", e.target.value)}
                   className="w-full pl-9 pr-3 py-2 bg-surface-container rounded-xl border border-outline-variant/30 text-xs focus:outline-none focus:border-primary transition-colors"
                 />
               </div>
@@ -630,7 +631,7 @@ export default function ChannelDetailsModal({
                   <button
                     type="button"
                     onClick={toggleSelectAllCandidates}
-                    className="text-primary font-bold hover:underline text-[11px]"
+                    className="min-w-[44px] min-h-[44px] -my-2 text-primary font-bold hover:underline text-[11px]"
                   >
                     {selectedUserIds.length === filteredCandidates.length
                       ? "Deselect All"
@@ -737,7 +738,7 @@ export default function ChannelDetailsModal({
                     selectedUserIds.length === 0 ||
                     overBatchLimit
                   }
-                  className="px-5 py-2 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                  className="min-w-[44px] min-h-[44px] px-5 py-2 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
                 >
                   <span className="material-symbols-outlined text-sm">
                     person_add
@@ -784,7 +785,8 @@ export default function ChannelDetailsModal({
                           prev.filter((_, i) => i !== idx)
                         )
                       }
-                      className="text-outline hover:text-error transition-colors flex items-center justify-center w-3.5 h-3.5"
+                      aria-label={`Remove ${chipEmail}`}
+                      className="min-w-[44px] min-h-[44px] -my-3.5 -mr-3.5 text-outline hover:text-error transition-colors flex items-center justify-center"
                     >
                       <span className="material-symbols-outlined text-xs">
                         close
@@ -894,7 +896,7 @@ export default function ChannelDetailsModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-bold text-outline hover:text-on-surface hover:bg-surface-container rounded-xl transition-colors"
+                className="min-w-[44px] min-h-[44px] px-4 py-2 text-xs font-bold text-outline hover:text-on-surface hover:bg-surface-container rounded-xl transition-colors"
               >
                 Close
               </button>
@@ -904,7 +906,7 @@ export default function ChannelDetailsModal({
                   sendingInvites ||
                   (emailChips.length === 0 && !currentEmailInput.trim())
                 }
-                className="px-5 py-2 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                className="min-w-[44px] min-h-[44px] px-5 py-2 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
               >
                 {sendingInvites ? "Sending..." : "Send Invitations"}
               </button>
@@ -969,7 +971,7 @@ function AdditionResultPanel({
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss add members result"
-          className="text-xs opacity-70 hover:opacity-100"
+          className="min-w-[44px] min-h-[44px] -my-3 -mr-2 flex items-center justify-center shrink-0 rounded-xl text-xs opacity-70 hover:opacity-100"
         >
           ✕
         </button>

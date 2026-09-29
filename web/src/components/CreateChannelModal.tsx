@@ -62,7 +62,7 @@ export default function CreateChannelModal({
             type="button"
             onClick={onClose}
             aria-label="Close create channel modal"
-            className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors"
+            className="min-w-[44px] min-h-[44px] rounded-xl text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors"
           >
             <span className="material-symbols-outlined text-base">close</span>
           </button>
@@ -123,16 +123,23 @@ export default function CreateChannelModal({
             </div>
             <button
               type="button"
+              role="switch"
+              aria-checked={isPrivate}
+              aria-label="Private Channel"
               onClick={() => setIsPrivate(!isPrivate)}
-              className={`w-11 h-6 rounded-full transition-colors relative ${
-                isPrivate ? "bg-primary" : "bg-outline-variant/50"
-              }`}
+              className="min-w-[44px] min-h-[44px] -my-2 flex items-center justify-center shrink-0"
             >
-              <div
-                className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                  isPrivate ? "translate-x-6" : "translate-x-1"
+              <span
+                className={`w-11 h-6 rounded-full transition-colors flex items-center ${
+                  isPrivate ? "bg-primary" : "bg-outline-variant/50"
                 }`}
-              />
+              >
+                <span
+                  className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                    isPrivate ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </span>
             </button>
           </div>
 
@@ -140,14 +147,14 @@ export default function CreateChannelModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-outline hover:text-on-surface hover:bg-surface-container rounded-xl transition-colors"
+              className="min-w-[44px] min-h-[44px] px-4 py-2 text-xs font-bold text-outline hover:text-on-surface hover:bg-surface-container rounded-xl transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading || !name.trim()}
-              className="px-5 py-2 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50"
+              className="min-w-[44px] min-h-[44px] px-5 py-2 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50"
             >
               {loading ? "Creating..." : "Create Channel"}
             </button>

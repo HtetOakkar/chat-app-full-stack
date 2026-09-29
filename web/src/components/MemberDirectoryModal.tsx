@@ -144,7 +144,7 @@ export default function MemberDirectoryModal({
               <button
                 type="button"
                 onClick={onOpenInvite}
-                className="px-3 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 text-xs font-bold transition-colors flex items-center gap-1.5"
+                className="min-w-[44px] min-h-[44px] px-3 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 text-xs font-bold transition-colors flex items-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-sm">
                   person_add
@@ -156,7 +156,7 @@ export default function MemberDirectoryModal({
               type="button"
               onClick={onClose}
               aria-label="Close directory"
-              className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors"
+              className="min-w-[44px] min-h-[44px] rounded-xl text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors"
             >
               <span className="material-symbols-outlined text-base">close</span>
             </button>
@@ -169,7 +169,7 @@ export default function MemberDirectoryModal({
             <button
               type="button"
               onClick={() => setTab("members")}
-              className={`py-3 text-xs font-bold border-b-2 transition-all ${
+              className={`min-w-[44px] min-h-[44px] py-3 text-xs font-bold border-b-2 transition-all ${
                 tab === "members"
                   ? "border-primary text-primary"
                   : "border-transparent text-outline hover:text-on-surface"
@@ -180,7 +180,7 @@ export default function MemberDirectoryModal({
             <button
               type="button"
               onClick={() => setTab("pending")}
-              className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+              className={`min-w-[44px] min-h-[44px] py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
                 tab === "pending"
                   ? "border-primary text-primary"
                   : "border-transparent text-outline hover:text-on-surface"
@@ -223,7 +223,8 @@ export default function MemberDirectoryModal({
             <button
               type="button"
               onClick={() => setToastMessage(null)}
-              className="text-xs text-outline hover:text-on-surface"
+              aria-label="Dismiss notification"
+              className="min-w-[44px] min-h-[44px] -my-2.5 flex items-center justify-center rounded-xl text-xs text-outline hover:text-on-surface"
             >
               ✕
             </button>
@@ -274,7 +275,7 @@ export default function MemberDirectoryModal({
                         type="button"
                         onClick={() => initiateCall(member.userId, "AUDIO")}
                         title="Audio Call"
-                        className="w-8 h-8 rounded-xl bg-surface-container-high hover:bg-primary/10 text-outline hover:text-primary flex items-center justify-center transition-colors"
+                        className="min-w-[44px] min-h-[44px] rounded-xl bg-surface-container-high hover:bg-primary/10 text-outline hover:text-primary flex items-center justify-center transition-colors"
                       >
                         <span className="material-symbols-outlined text-base">
                           call
@@ -284,7 +285,7 @@ export default function MemberDirectoryModal({
                         type="button"
                         onClick={() => initiateCall(member.userId, "VIDEO")}
                         title="Video Call"
-                        className="w-8 h-8 rounded-xl bg-surface-container-high hover:bg-primary/10 text-outline hover:text-primary flex items-center justify-center transition-colors"
+                        className="min-w-[44px] min-h-[44px] rounded-xl bg-surface-container-high hover:bg-primary/10 text-outline hover:text-primary flex items-center justify-center transition-colors"
                       >
                         <span className="material-symbols-outlined text-base">
                           videocam
@@ -293,7 +294,7 @@ export default function MemberDirectoryModal({
                       <button
                         type="button"
                         onClick={() => handleMessage(member.userId)}
-                        className="px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-colors shadow-xs"
+                        className="min-w-[44px] min-h-[44px] px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-colors shadow-xs"
                       >
                         Message
                       </button>
@@ -341,7 +342,7 @@ export default function MemberDirectoryModal({
                     onClick={() => handleResend(inv.id, inv.email)}
                     disabled={actionLoadingId === inv.id}
                     title="Resend Invitation Email"
-                    className="px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-primary/10 text-outline hover:text-primary text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1"
+                    className="min-w-[44px] min-h-[44px] px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-primary/10 text-outline hover:text-primary text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1"
                   >
                     <span className="material-symbols-outlined text-sm">
                       send
@@ -353,7 +354,7 @@ export default function MemberDirectoryModal({
                     onClick={() => handleRevoke(inv.id, inv.email)}
                     disabled={actionLoadingId === inv.id}
                     title="Revoke Invitation"
-                    className="px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-error/10 text-outline hover:text-error text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1"
+                    className="min-w-[44px] min-h-[44px] px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-error/10 text-outline hover:text-error text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1"
                   >
                     <span className="material-symbols-outlined text-sm">
                       cancel
