@@ -95,6 +95,9 @@ public class ChatController {
             @Valid @Payload OnlineStatusDto onlineStatusDto,
             Principal principal) {
         UserPrincipal authenticatedUser = getAuthenticatedUser(principal);
+        if (!presenceModule.sharesPresence(authenticatedUser.getId())) {
+            return;
+        }
         Map<String, Object> map = new HashMap<>();
         map.put("workspaceId", workspaceId);
         map.put("userId", authenticatedUser.getId());

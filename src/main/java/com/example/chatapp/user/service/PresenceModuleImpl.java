@@ -20,6 +20,8 @@ import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -40,89 +42,93 @@ public class PresenceModuleImpl implements PresenceModule {
 
     private static final String PRESENCE_KEY_PREFIX = "user:presence:";
     private static final String OFFLINE_SYNC_QUEUE = "user:presence:offline_sync";
+    private static final String STATUS_ONLINE = "ONLINE";
+    private static final String STATUS_OFFLINE = "OFFLINE";
 
     @Override
     public void setUserOnline(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
-
-        // Register session logic should be in event listener or here, let's keep it safe
         redisTemplate.opsForValue().set(PRESENCE_KEY_PREFIX + userId, "Online");
         redisTemplate.opsForSet().remove(OFFLINE_SYNC_QUEUE, String.valueOf(userId));
 
-        // Broadcast ONLINE status
-        Map<String, Object> map = new HashMap<>();
-        map.put("userId", userId);
-        map.put("status", "ONLINE");
-        map.put("timestamp", Instant.now());
-        map.put("username", user.getUsername());
-
-        Set<Long> receivers = getEligiblePresenceReceivers(userId);
-        for (Long receiverId : receivers) {
-            messageBroker.publishToUser(receiverId.toString(), "/queue/online", map);
-        }
-        messageBroker.publishToUser(userId.toString(), "/queue/online", map);
-
-        if (workspaceMemberRepository != null) {
-            try {
-                List<WorkspaceMember> memberships = workspaceMemberRepository.findByUserId(userId);
-                for (WorkspaceMember wm : memberships) {
-                    if (wm.getWorkspace() != null) {
-                        messageBroker.publishToTopic("/topic/workspace." + wm.getWorkspace().getId() + ".presence", map);
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Error broadcasting online presence to workspace topics: {}", e.getMessage());
-            }
-        }
+        announcePresence(userId, STATUS_ONLINE, Instant.now());
     }
 
     @Override
     public void setUserOffline(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
-
         Instant now = Instant.now();
         redisTemplate.opsForValue().set(PRESENCE_KEY_PREFIX + userId, now.toString());
         redisTemplate.opsForSet().add(OFFLINE_SYNC_QUEUE, String.valueOf(userId));
 
-        // Broadcast OFFLINE status
-        Map<String, Object> map = new HashMap<>();
-        map.put("userId", userId);
-        map.put("status", "OFFLINE");
-        map.put("timestamp", now);
-        map.put("username", user.getUsername());
+        announcePresence(userId, STATUS_OFFLINE, now);
+    }
 
-        Set<Long> receivers = getEligiblePresenceReceivers(userId);
-        for (Long receiverId : receivers) {
-            messageBroker.publishToUser(receiverId.toString(), "/queue/online", map);
+    /**
+     * Tells the User's colleagues about a Presence change, unless the User has Presence Sharing off.
+     * The User's own queue is always told, so their other sessions stay consistent.
+     */
+    private void announcePresence(Long userId, String status, Instant timestamp) {
+        publishPresence(presenceAnnouncement(userId, status, timestamp, sharesPresence(userId)));
+    }
+
+    /**
+     * Resolves who hears about a Presence change. Reads the database, so inside a transaction
+     * it must run before commit; publishing it is a separate step.
+     */
+    private PresenceAnnouncement presenceAnnouncement(Long userId, String status, Instant timestamp, boolean toColleagues) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("userId", userId);
+        payload.put("status", status);
+        payload.put("timestamp", timestamp);
+        payload.put("username", user.getUsername());
+
+        if (!toColleagues) {
+            return new PresenceAnnouncement(userId, payload, Set.of(), List.of());
         }
-        messageBroker.publishToUser(userId.toString(), "/queue/online", map);
 
+        Set<Long> receivers = presenceRepository.findEligiblePresenceReceivers(userId);
+        List<Long> workspaceIds = new ArrayList<>();
         if (workspaceMemberRepository != null) {
             try {
-                List<WorkspaceMember> memberships = workspaceMemberRepository.findByUserId(userId);
-                for (WorkspaceMember wm : memberships) {
+                for (WorkspaceMember wm : workspaceMemberRepository.findByUserId(userId)) {
                     if (wm.getWorkspace() != null) {
-                        messageBroker.publishToTopic("/topic/workspace." + wm.getWorkspace().getId() + ".presence", map);
+                        workspaceIds.add(wm.getWorkspace().getId());
                     }
                 }
             } catch (Exception e) {
-                log.warn("Error broadcasting offline presence to workspace topics: {}", e.getMessage());
+                log.warn("Error resolving workspaces for presence broadcast: {}", e.getMessage());
             }
         }
+        return new PresenceAnnouncement(userId, payload, receivers, workspaceIds);
+    }
+
+    private void publishPresence(PresenceAnnouncement announcement) {
+        for (Long receiverId : announcement.receiverIds()) {
+            messageBroker.publishToUser(receiverId.toString(), "/queue/online", announcement.payload());
+        }
+        messageBroker.publishToUser(announcement.userId().toString(), "/queue/online", announcement.payload());
+        for (Long workspaceId : announcement.workspaceIds()) {
+            messageBroker.publishToTopic("/topic/workspace." + workspaceId + ".presence", announcement.payload());
+        }
+    }
+
+    private record PresenceAnnouncement(Long userId, Map<String, Object> payload,
+                                        Set<Long> receiverIds, List<Long> workspaceIds) {
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<OnlineStatusDto> getOnlineUsers(Long currentUserId) {
-        List<User> visibleUsers = getEligiblePresenceUsers(currentUserId);
-        Set<Long> onlineUserIds = sessionRegistry.getOnlineUserIds();
-        return visibleUsers.stream()
-                .filter(user -> onlineUserIds.contains(user.getId()))
+        List<User> colleagues = presenceRepository.findEligiblePresenceUsers(currentUserId);
+        Set<Long> appearingOnline = findUsersAppearingOnlineTo(
+                currentUserId, colleagues.stream().map(User::getId).toList());
+        return colleagues.stream()
+                .filter(user -> appearingOnline.contains(user.getId()))
                 .map(user -> {
                     OnlineStatusDto dto = new OnlineStatusDto();
-                    dto.setStatus("ONLINE");
+                    dto.setStatus(STATUS_ONLINE);
                     dto.setUserId(String.valueOf(user.getId()));
                     dto.setUsername(user.getUsername());
                     return dto;
@@ -193,11 +199,9 @@ public class PresenceModuleImpl implements PresenceModule {
 
     @Override
     @Transactional
-    public UserSettingsDto togglePresenceSharing(Long userId, boolean sharePresence) {
+    public UserSettingsDto setPresenceSharing(Long userId, boolean sharePresence) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-
-        Set<Long> receiversBefore = getEligiblePresenceReceivers(userId);
 
         UserSettings settings = user.getSettings();
         if (settings == null) {
@@ -212,62 +216,30 @@ public class PresenceModuleImpl implements PresenceModule {
 
         userRepository.save(user);
 
+        // Turning sharing off hides the User at once; turning it on reveals them only if connected.
         if (!sharePresence) {
-            Map<String, Object> map = new HashMap<>();
-            map.put("userId", userId);
-            map.put("status", "OFFLINE");
-            map.put("timestamp", Instant.now());
-            map.put("username", user.getUsername());
-
-            for (Long receiverId : receiversBefore) {
-                messageBroker.publishToUser(receiverId.toString(), "/queue/online", map);
-            }
-            messageBroker.publishToUser(userId.toString(), "/queue/online", map);
-
-            if (workspaceMemberRepository != null) {
-                try {
-                    List<WorkspaceMember> memberships = workspaceMemberRepository.findByUserId(userId);
-                    for (WorkspaceMember wm : memberships) {
-                        if (wm.getWorkspace() != null) {
-                            messageBroker.publishToTopic("/topic/workspace." + wm.getWorkspace().getId() + ".presence", map);
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warn("Error broadcasting offline presence to workspace topics: {}", e.getMessage());
-                }
-            }
-        } else {
-            if (sessionRegistry != null && sessionRegistry.isOnline(userId)) {
-                Map<String, Object> map = new HashMap<>();
-                map.put("userId", userId);
-                map.put("status", "ONLINE");
-                map.put("timestamp", Instant.now());
-                map.put("username", user.getUsername());
-
-                Set<Long> receiversAfter = getEligiblePresenceReceivers(userId);
-                for (Long receiverId : receiversAfter) {
-                    messageBroker.publishToUser(receiverId.toString(), "/queue/online", map);
-                }
-                messageBroker.publishToUser(userId.toString(), "/queue/online", map);
-
-                if (workspaceMemberRepository != null) {
-                    try {
-                        List<WorkspaceMember> memberships = workspaceMemberRepository.findByUserId(userId);
-                        for (WorkspaceMember wm : memberships) {
-                            if (wm.getWorkspace() != null) {
-                                messageBroker.publishToTopic("/topic/workspace." + wm.getWorkspace().getId() + ".presence", map);
-                            }
-                        }
-                    } catch (Exception e) {
-                        log.warn("Error broadcasting online presence to workspace topics: {}", e.getMessage());
-                    }
-                }
-            }
+            publishAfterCommit(presenceAnnouncement(userId, STATUS_OFFLINE, Instant.now(), true));
+        } else if (sessionRegistry.isOnline(userId)) {
+            publishAfterCommit(presenceAnnouncement(userId, STATUS_ONLINE, Instant.now(), true));
         }
 
         return UserSettingsDto.builder()
                 .sharePresence(settings.isSharePresence())
                 .build();
+    }
+
+    /** Colleagues must never see a Presence Sharing change that did not commit. */
+    private void publishAfterCommit(PresenceAnnouncement announcement) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            publishPresence(announcement);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                publishPresence(announcement);
+            }
+        });
     }
 
     @Override
@@ -283,30 +255,34 @@ public class PresenceModuleImpl implements PresenceModule {
 
     @Override
     @Transactional(readOnly = true)
-    public boolean canUserSharePresence(Long userId) {
-        return userRepository.findById(userId)
-                .map(u -> {
-                    if (u.getSettings() != null) {
-                        return u.getSettings().isSharePresence();
-                    }
-                    return true;
-                })
-                .orElse(false);
+    public Set<Long> findUsersAppearingOnlineTo(Long viewerId, Collection<Long> targetUserIds) {
+        if (targetUserIds == null || targetUserIds.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> connected = new HashSet<>(targetUserIds);
+        connected.retainAll(sessionRegistry.getOnlineUserIds());
+
+        // Presence Sharing is the target's choice; a viewer always sees their own Presence.
+        Set<Long> othersConnected = new HashSet<>(connected);
+        othersConnected.remove(viewerId);
+        if (!othersConnected.isEmpty()) {
+            connected.removeAll(presenceRepository.findUserIdsNotSharingPresence(othersConnected));
+        }
+        return connected;
+    }
+
+    @Override
+    public boolean sharesPresence(Long userId) {
+        return presenceRepository.findSharePresence(userId).orElse(true);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Set<Long> getEligiblePresenceReceivers(Long userId) {
-        if (!canUserSharePresence(userId)) {
+        if (!sharesPresence(userId)) {
             return Collections.emptySet();
         }
         return presenceRepository.findEligiblePresenceReceivers(userId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<User> getEligiblePresenceUsers(Long userId) {
-        return presenceRepository.findEligiblePresenceUsers(userId);
     }
 
     @Scheduled(fixedDelayString = "${presence.sync.delay:60000}")
