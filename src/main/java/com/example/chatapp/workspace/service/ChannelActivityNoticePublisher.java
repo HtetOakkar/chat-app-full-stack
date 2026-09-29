@@ -1,6 +1,8 @@
 package com.example.chatapp.workspace.service;
 
+import com.example.chatapp.config.AfterCommit;
 import com.example.chatapp.message.mapper.MessageMapper;
+import com.example.chatapp.message.model.dto.MessageDto;
 import com.example.chatapp.message.model.entity.Message;
 import com.example.chatapp.message.model.entity.MessageType;
 import com.example.chatapp.message.repository.MessageRepository;
@@ -23,7 +25,8 @@ import java.util.Map;
  *
  * <p>Each notice is saved to the Channel's conversation (so it appears in history) and published
  * to the Channel topic (so connected Channel Members see it live). It is attributed to the
- * {@code actor} passed in, which becomes the message's sender.
+ * {@code actor} passed in, which becomes the message's sender. Publishing waits until the
+ * surrounding transaction commits, and a rolled-back membership change publishes nothing.
  */
 @Component
 @RequiredArgsConstructor
@@ -88,7 +91,8 @@ public class ChannelActivityNoticePublisher {
         notice.put("removedByUserId", removerUser.getId());
         notice.put("removedByUsername", removerUser.getUsername());
         notice.put("removedByFullName", removerUser.getFullName() != null ? removerUser.getFullName() : removerUser.getUsername());
-        messageBroker.publishToUser(removedMember.getUser().getId().toString(), CHANNEL_REMOVAL_QUEUE, notice);
+        String removedUserId = removedMember.getUser().getId().toString();
+        AfterCommit.run(() -> messageBroker.publishToUser(removedUserId, CHANNEL_REMOVAL_QUEUE, notice));
     }
 
     private void publish(Channel channel, WorkspaceMember actor, String content) {
@@ -107,8 +111,9 @@ public class ChannelActivityNoticePublisher {
                 .sentAt(Instant.now())
                 .build());
 
-        messageBroker.publishToTopic(channelTopic(channel.getWorkspace().getId(), channel.getId()),
-                messageMapper.toMessageDto(notice));
+        String topic = channelTopic(channel.getWorkspace().getId(), channel.getId());
+        MessageDto noticeDto = messageMapper.toMessageDto(notice);
+        AfterCommit.run(() -> messageBroker.publishToTopic(topic, noticeDto));
     }
 
     private static String username(WorkspaceMember member) {
