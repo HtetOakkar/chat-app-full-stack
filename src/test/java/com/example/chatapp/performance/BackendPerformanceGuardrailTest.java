@@ -19,12 +19,22 @@ import com.example.chatapp.workspace.repository.ConversationParticipantRepositor
 import com.example.chatapp.workspace.repository.WorkspaceMemberRepository;
 import com.example.chatapp.workspace.service.ChannelActivityNoticePublisher;
 import com.example.chatapp.workspace.service.ChannelServiceImpl;
+import com.example.chatapp.user.repository.PresenceRepository;
+import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.user.repository.UserSettingsRepository;
+import com.example.chatapp.user.service.PresenceModuleImpl;
+import com.example.chatapp.websocket.SessionRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.SetOperations;
+import org.springframework.data.redis.core.ValueOperations;
+
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -110,5 +120,57 @@ class BackendPerformanceGuardrailTest {
                 .workspace(workspace)
                 .user(User.builder().id(userId).username("user" + userId).build())
                 .build();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void connectAndDisconnectWithCachedPresenceSharingIssueNoDatabaseReads() {
+        RedisTemplate<String, Object> redisTemplate = mock(RedisTemplate.class);
+        ValueOperations<String, Object> valueOperations = mock(ValueOperations.class);
+        SetOperations<String, Object> setOperations = mock(SetOperations.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        PresenceRepository presenceRepository = mock(PresenceRepository.class);
+        WorkspaceMemberRepository workspaceMemberRepository = mock(WorkspaceMemberRepository.class);
+        UserSettingsRepository userSettingsRepository = mock(UserSettingsRepository.class);
+        PresenceModuleImpl presenceModule = new PresenceModuleImpl(redisTemplate, userRepository, presenceRepository,
+                mock(SessionRegistry.class), mock(MessageBroker.class), workspaceMemberRepository, userSettingsRepository);
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        when(valueOperations.get("user:presence:sharing:7")).thenReturn(false);
+
+        presenceModule.setUserOnline(7L, "hidden");
+        presenceModule.setUserOffline(7L, "hidden");
+
+        verifyNoInteractions(userRepository, presenceRepository, workspaceMemberRepository, userSettingsRepository);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void presenceSharingForManyTargetsIsResolvedInOneBatchedLookup() {
+        RedisTemplate<String, Object> redisTemplate = mock(RedisTemplate.class);
+        ValueOperations<String, Object> valueOperations = mock(ValueOperations.class);
+        PresenceRepository presenceRepository = mock(PresenceRepository.class);
+        SessionRegistry sessionRegistry = mock(SessionRegistry.class);
+        PresenceModuleImpl presenceModule = new PresenceModuleImpl(redisTemplate, mock(UserRepository.class),
+                presenceRepository, sessionRegistry, mock(MessageBroker.class),
+                mock(WorkspaceMemberRepository.class), mock(UserSettingsRepository.class));
+
+        List<Long> targets = LongStream.rangeClosed(2, 51).boxed().toList();
+        when(sessionRegistry.getOnlineUserIds()).thenReturn(Set.copyOf(targets));
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.multiGet(anyCollection())).thenAnswer(inv -> {
+            Collection<String> keys = inv.getArgument(0);
+            return keys.stream().map(key -> (Object) null).toList();
+        });
+        when(presenceRepository.findUserIdsNotSharingPresence(any())).thenReturn(Set.of());
+
+        Set<Long> visible = presenceModule.findUsersAppearingOnlineTo(1L, targets);
+
+        assertEquals(50, visible.size());
+        verify(presenceRepository, times(1)).findUserIdsNotSharingPresence(any());
+        verify(presenceRepository, never()).findSharePresence(any());
+        verify(valueOperations, times(1)).multiGet(anyCollection());
+        verify(valueOperations, never()).get(any());
     }
 }

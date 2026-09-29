@@ -30,6 +30,7 @@ import java.util.Set;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -106,6 +107,9 @@ class UserSettingsIntegrationTest {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @Autowired
+    private jakarta.persistence.EntityManagerFactory entityManagerFactory;
+
     private String userToken;
 
     @BeforeEach
@@ -135,6 +139,25 @@ class UserSettingsIntegrationTest {
 
         Map<?, ?> responseMap = objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
         userToken = "Bearer " + responseMap.get("token");
+    }
+
+    @Test
+    void loadingAUserDoesNotQueryTheirSettings() throws Exception {
+        updateSharePresence(userToken, false);   // the User now has stored settings
+        org.hibernate.stat.Statistics statistics =
+                entityManagerFactory.unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        boolean statisticsWereEnabled = statistics.isStatisticsEnabled();
+        statistics.setStatisticsEnabled(true);
+        statistics.clear();
+        try {
+            userRepository.findByUsername("testuser").orElseThrow();
+
+            assertEquals(1, statistics.getPrepareStatementCount(), "only the User row should be queried");
+            assertEquals(0, statistics.getEntityStatistics(
+                    com.example.chatapp.user.model.entity.UserSettings.class.getName()).getLoadCount());
+        } finally {
+            statistics.setStatisticsEnabled(statisticsWereEnabled);
+        }
     }
 
     @Test

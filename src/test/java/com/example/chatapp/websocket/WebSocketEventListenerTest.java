@@ -54,7 +54,7 @@ class WebSocketEventListenerTest {
 
         // Assert
         verify(sessionRegistry).register(eq(42L), eq("session-2"));
-        verify(presenceModule).setUserOnline(eq(42L));
+        verify(presenceModule).setUserOnline(eq(42L), eq("testuser"));
     }
 
     @Test
@@ -76,7 +76,7 @@ class WebSocketEventListenerTest {
 
         // Assert
         verify(sessionRegistry).unregister(eq(42L));
-        verify(presenceModule).setUserOffline(eq(42L));
+        verify(presenceModule).setUserOffline(eq(42L), eq("testuser"));
         verify(callService).handleUserDisconnect(eq(42L));
     }
 }
