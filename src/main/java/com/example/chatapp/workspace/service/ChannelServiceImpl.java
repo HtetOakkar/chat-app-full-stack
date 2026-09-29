@@ -272,18 +272,20 @@ public class ChannelServiceImpl implements ChannelService {
 
         channelMemberRepository.deleteByChannelIdAndWorkspaceMemberId(channelId, targetMember.getId());
 
-        // A removal reads exactly like a voluntary departure.
-        channelActivityNoticePublisher.memberLeft(channel, targetMember);
+        boolean isSelfLeave = requestingUserId.equals(targetUserId);
+        if (isSelfLeave) {
+            channelActivityNoticePublisher.memberLeft(channel, targetMember);
+        } else {
+            channelActivityNoticePublisher.memberRemoved(channel, targetMember, requestingMember);
+        }
 
+        // Every Workspace Member receives this event, so it never names the remover (#82).
         java.util.Map<String, Object> event = new java.util.HashMap<>();
         event.put("type", "CHANNEL_MEMBER_REMOVED");
         event.put("workspaceId", workspaceId);
         event.put("channelId", channelId);
         event.put("userId", targetUserId);
-        event.put("removedByUserId", requestingUserId);
-        event.put("removedByUsername", requestingMember.getUser().getUsername());
-        event.put("removedByFullName", requestingMember.getUser().getFullName() != null ? requestingMember.getUser().getFullName() : requestingMember.getUser().getUsername());
-        event.put("isSelfLeave", requestingUserId.equals(targetUserId));
+        event.put("isSelfLeave", isSelfLeave);
         String eventsTopic = String.format("/topic/workspace.%d.events", workspaceId);
         messageBroker.publishToTopic(eventsTopic, event);
     }

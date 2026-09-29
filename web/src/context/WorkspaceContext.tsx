@@ -98,6 +98,22 @@ export interface BatchAddChannelMembersResponse {
   addedMembers: WorkspaceMemberDto[];
 }
 
+/**
+ * Sent only to a removed User, on their personal queue, when an Owner or Admin
+ * removes them from a Private Channel. Nobody else learns who removed them (#82).
+ */
+export interface ChannelRemovalNotice {
+  type: "REMOVED_FROM_CHANNEL";
+  workspaceId: number;
+  channelId: number;
+  channelName: string;
+  removedByUserId: number;
+  removedByUsername: string;
+  removedByFullName: string;
+}
+
+const CHANNEL_REMOVAL_QUEUE = "/user/queue/channel-removals";
+
 interface WorkspaceContextType {
   workspaces: WorkspaceDto[];
   currentWorkspace: WorkspaceDto | null;
@@ -161,6 +177,8 @@ interface WorkspaceContextType {
   refreshDirectMessages: () => Promise<void>;
   refreshMembers: () => Promise<void>;
   clearActiveConversation: () => void;
+  channelRemovalNotice: ChannelRemovalNotice | null;
+  dismissChannelRemovalNotice: () => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | null>(null);
@@ -168,7 +186,7 @@ const WorkspaceContext = createContext<WorkspaceContextType | null>(null);
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { isAuthenticated, userId, username } = useAuth();
+  const { isAuthenticated, userId } = useAuth();
   const { connected, subscribe, stompClientRef } = useConnection();
 
   const [workspaces, setWorkspaces] = useState<WorkspaceDto[]>([]);
@@ -187,8 +205,35 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const [typingMap, setTypingMap] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
 
+  const [channelRemovalNotice, setChannelRemovalNotice] =
+    useState<ChannelRemovalNotice | null>(null);
+
   const currentWorkspaceIdRef = useRef<number | null>(null);
   currentWorkspaceIdRef.current = currentWorkspace?.id || null;
+  const channelsRef = useRef<ChannelDto[]>(channels);
+  channelsRef.current = channels;
+
+  /**
+   * Drops a Channel I no longer belong to from the sidebar. If I was viewing
+   * it, navigate away: to the sidebar on mobile (ADR-0006), or to #general on
+   * wide layouts.
+   */
+  const dropChannelLocally = useCallback((channelId: number) => {
+    setChannels((prev) => prev.filter((c) => c.id !== channelId));
+    setCurrentChannel((prev) => {
+      if (prev?.id !== channelId) return prev;
+      if (!isWideLayout()) return null;
+      return (
+        channelsRef.current.find(
+          (c) => c.slug === "general" && c.id !== channelId
+        ) || null
+      );
+    });
+  }, []);
+
+  const dismissChannelRemovalNotice = useCallback(() => {
+    setChannelRemovalNotice(null);
+  }, []);
 
   const refreshWorkspaces = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -284,6 +329,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       setCurrentDirectMessage(null);
       setMembers([]);
       setPresenceMap({});
+      setChannelRemovalNotice(null);
     }
   }, [isAuthenticated, refreshWorkspaces]);
 
@@ -379,36 +425,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         ) {
           refreshChannels();
         } else if (payload.type === "CHANNEL_MEMBER_REMOVED") {
-          refreshChannels();
-          if (
-            payload.userId === userId &&
-            currentChannel?.id === payload.channelId
-          ) {
-            setChannels((prevChannels) => {
-              const fallback =
-                prevChannels.find(
-                  (c) => c.slug === "general" && c.id !== payload.channelId
-                ) || null;
-              setCurrentChannel(fallback);
-              return prevChannels;
-            });
-            if (
-              payload.removedByUsername &&
-              payload.removedByUsername !== username
-            ) {
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(
-                  new CustomEvent("toast-notification", {
-                    detail: {
-                      title: "Channel Access Removed",
-                      message: `You were removed from this channel by @${payload.removedByUsername}`,
-                      type: "info",
-                    },
-                  })
-                );
-              }
-            }
+          // Workspace-wide and deliberately anonymous: who removed the
+          // Member reaches only them, on CHANNEL_REMOVAL_QUEUE.
+          if (payload.userId === userId) {
+            dropChannelLocally(payload.channelId);
           }
+          refreshChannels();
         }
       } catch {}
     });
@@ -483,7 +505,26 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     refreshWorkspaces,
     refreshDirectMessages,
     refreshChannels,
+    userId,
+    dropChannelLocally,
   ]);
+
+  // "Removed from channel" notices. The queue is personal and not scoped to a
+  // Workspace, so the notice reaches me wherever I am in the app.
+  useEffect(() => {
+    if (!connected || !isAuthenticated) return;
+
+    return subscribe(CHANNEL_REMOVAL_QUEUE, (frame) => {
+      try {
+        const notice: ChannelRemovalNotice = JSON.parse(frame.body);
+        if (notice.type !== "REMOVED_FROM_CHANNEL") return;
+        setChannelRemovalNotice(notice);
+        if (notice.workspaceId === currentWorkspaceIdRef.current) {
+          dropChannelLocally(notice.channelId);
+        }
+      } catch {}
+    });
+  }, [connected, isAuthenticated, subscribe, dropChannelLocally]);
 
   const createWorkspace = async (
     name: string,
@@ -781,6 +822,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         refreshDirectMessages,
         refreshMembers,
         clearActiveConversation,
+        channelRemovalNotice,
+        dismissChannelRemovalNotice,
       }}
     >
       {children}

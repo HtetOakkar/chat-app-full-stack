@@ -12,6 +12,7 @@ import WorkspaceOnboardingModal from "./WorkspaceOnboardingModal";
 import CreateChannelModal from "./CreateChannelModal";
 import InviteMembersModal from "./InviteMembersModal";
 import MemberDirectoryModal from "./MemberDirectoryModal";
+import ChannelRemovalNotice from "./ChannelRemovalNotice";
 import type { ActiveChat } from "./Sidebar";
 import ChatViewport from "./ChatViewport";
 import MyProfileCard from "./MyProfileCard";
@@ -290,6 +291,9 @@ export default function ChatDashboard() {
           </>
         )}
       </div>
+
+      {/* Shown over any view, so a removed Member learns who removed them wherever they are */}
+      <ChannelRemovalNotice />
 
       {/* Modals */}
       <WorkspaceOnboardingModal

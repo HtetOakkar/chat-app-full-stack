@@ -12,7 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Builds and publishes every Channel Activity Notice: the system-generated entry recording a
@@ -31,6 +33,12 @@ public class ChannelActivityNoticePublisher {
     private final MessageRepository messageRepository;
     private final MessageMapper messageMapper;
     private final MessageBroker messageBroker;
+
+    /**
+     * The removed User's personal queue for "removed from channel" notices. It is not scoped to a
+     * Workspace, so the removed User is told wherever they are in the app.
+     */
+    public static final String CHANNEL_REMOVAL_QUEUE = "/queue/channel-removals";
 
     /** The STOMP topic carrying a Channel's messages, including its Channel Activity Notices. */
     public static String channelTopic(Long workspaceId, Long channelId) {
@@ -61,6 +69,26 @@ public class ChannelActivityNoticePublisher {
      */
     public void memberLeft(Channel channel, WorkspaceMember departedMember) {
         publish(channel, departedMember, "@" + username(departedMember) + " left the channel");
+    }
+
+    /**
+     * {@code remover} removed {@code removedMember}. The Channel gets exactly the notice a
+     * voluntary departure produces ("@member left the channel"). Only the removed User learns
+     * who removed them, through a "removed from channel" notice on their personal queue.
+     */
+    public void memberRemoved(Channel channel, WorkspaceMember removedMember, WorkspaceMember remover) {
+        memberLeft(channel, removedMember);
+
+        var removerUser = remover.getUser();
+        Map<String, Object> notice = new LinkedHashMap<>();
+        notice.put("type", "REMOVED_FROM_CHANNEL");
+        notice.put("workspaceId", channel.getWorkspace().getId());
+        notice.put("channelId", channel.getId());
+        notice.put("channelName", channel.getName());
+        notice.put("removedByUserId", removerUser.getId());
+        notice.put("removedByUsername", removerUser.getUsername());
+        notice.put("removedByFullName", removerUser.getFullName() != null ? removerUser.getFullName() : removerUser.getUsername());
+        messageBroker.publishToUser(removedMember.getUser().getId().toString(), CHANNEL_REMOVAL_QUEUE, notice);
     }
 
     private void publish(Channel channel, WorkspaceMember actor, String content) {
