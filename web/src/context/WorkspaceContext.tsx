@@ -11,6 +11,7 @@ import React, {
 import { useAuth } from "./AuthContext";
 import { useConnection } from "./ConnectionContext";
 import { apiFetch } from "@/lib/api";
+import { isWideLayout } from "@/lib/layout";
 
 export interface WorkspaceDto {
   id: number;
@@ -210,17 +211,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       );
       const list = data || [];
       setChannels(list);
+      // #general is auto-selected only on wide layouts. In mobile stack
+      // navigation the Workspace Sidebar is the root view (ADR-0006), so no
+      // conversation opens until the Member picks one.
+      const autoSelect = isWideLayout();
       setCurrentChannel((prev) => {
-        if (!prev) {
-          if (!currentDirectMessage && list.length > 0) {
-            return list.find((c) => c.slug === "general") || list[0];
-          }
-          return null;
-        }
-        const updated = list.find((c) => c.id === prev.id);
-        return (
-          updated || list.find((c) => c.slug === "general") || list[0] || null
-        );
+        const updated = prev && list.find((c) => c.id === prev.id);
+        if (updated) return updated;
+        if (!autoSelect || (!prev && currentDirectMessage)) return null;
+        return list.find((c) => c.slug === "general") || list[0] || null;
       });
     } catch (err) {
       console.warn("Failed to fetch channels:", err);
