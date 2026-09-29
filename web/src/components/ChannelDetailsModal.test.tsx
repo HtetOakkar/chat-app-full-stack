@@ -1,5 +1,11 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import ChannelDetailsModal from "./ChannelDetailsModal";
 import {
   useWorkspace,
@@ -89,9 +95,9 @@ describe("ChannelDetailsModal", () => {
     mockGetChannelMembers.mockResolvedValue(mockChannelMembers);
     mockAddChannelMember.mockResolvedValue({});
     mockBatchAddChannelMembers.mockResolvedValue({
-      addedCount: 2,
-      addedUserIds: [103, 104],
-      addedMembers: [],
+      added: [103, 104],
+      alreadyMembers: [],
+      notWorkspaceMembers: [],
     });
     mockRemoveChannelMember.mockResolvedValue({});
     mockLeaveChannel.mockResolvedValue({});
@@ -258,6 +264,143 @@ describe("ChannelDetailsModal", () => {
 
     await waitFor(() => {
       expect(mockBatchAddChannelMembers).toHaveBeenCalledWith(10, [103, 104]);
+    });
+  });
+
+  describe("Add Members result", () => {
+    const renderAddTab = () =>
+      render(
+        <ChannelDetailsModal
+          isOpen={true}
+          onClose={mockOnClose}
+          channel={mockChannel}
+          initialTab="add"
+        />
+      );
+
+    const submitAll = async () => {
+      await waitFor(() => {
+        expect(screen.getByText("Carol Danvers")).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText("Select All"));
+      fireEvent.click(
+        screen.getByRole("button", { name: /Add to Channel \(2\)/i })
+      );
+    };
+
+    it("shows who was added, who was already a Channel Member and who isn't in the Workspace", async () => {
+      mockBatchAddChannelMembers.mockResolvedValue({
+        added: [103],
+        alreadyMembers: [104],
+        notWorkspaceMembers: [999],
+      });
+      renderAddTab();
+
+      await submitAll();
+
+      const result = await screen.findByRole("status", {
+        name: "Add members result",
+      });
+      expect(
+        within(within(result).getByRole("list", { name: "Added" })).getByText(
+          "@carol"
+        )
+      ).toBeInTheDocument();
+      expect(
+        within(
+          within(result).getByRole("list", { name: "Already in the channel" })
+        ).getByText("@david")
+      ).toBeInTheDocument();
+      expect(
+        within(
+          within(result).getByRole("list", { name: "Not in this Workspace" })
+        ).getByText("User #999")
+      ).toBeInTheDocument();
+      expect(mockGetChannelMembers).toHaveBeenCalledTimes(2);
+    });
+
+    it("says clearly when nobody was added", async () => {
+      mockBatchAddChannelMembers.mockResolvedValue({
+        added: [],
+        alreadyMembers: [103, 104],
+        notWorkspaceMembers: [],
+      });
+      renderAddTab();
+
+      await submitAll();
+
+      const result = await screen.findByRole("status", {
+        name: "Add members result",
+      });
+      expect(within(result).getByText("No one was added.")).toBeInTheDocument();
+      expect(
+        within(result).queryByRole("list", { name: "Added" })
+      ).not.toBeInTheDocument();
+      expect(
+        within(result).queryByRole("list", { name: "Not in this Workspace" })
+      ).not.toBeInTheDocument();
+    });
+
+    it("uses the same batch addition and result for a single selection", async () => {
+      mockBatchAddChannelMembers.mockResolvedValue({
+        added: [],
+        alreadyMembers: [],
+        notWorkspaceMembers: [103],
+      });
+      renderAddTab();
+
+      await waitFor(() => {
+        expect(screen.getByText("Carol Danvers")).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText("Carol Danvers"));
+      fireEvent.click(
+        screen.getByRole("button", { name: /Add to Channel \(1\)/i })
+      );
+
+      const result = await screen.findByRole("status", {
+        name: "Add members result",
+      });
+      expect(mockBatchAddChannelMembers).toHaveBeenCalledWith(10, [103]);
+      expect(
+        within(
+          within(result).getByRole("list", { name: "Not in this Workspace" })
+        ).getByText("@carol")
+      ).toBeInTheDocument();
+    });
+
+    it("blocks submission and explains the limit when more than 50 colleagues are selected", async () => {
+      const manyCandidates: WorkspaceMemberDto[] = Array.from(
+        { length: 51 },
+        (_, i) => ({
+          id: 1000 + i,
+          workspaceId: 1,
+          userId: 2000 + i,
+          username: `colleague${i}`,
+          fullName: `Colleague ${i}`,
+          role: "MEMBER",
+          joinedAt: "2026-08-19T00:00:00Z",
+        })
+      );
+      (useWorkspace as jest.Mock).mockReturnValue({
+        ...(useWorkspace as jest.Mock)(),
+        members: [...mockChannelMembers, ...manyCandidates],
+      });
+      renderAddTab();
+
+      await waitFor(() => {
+        expect(screen.getByText("Colleague 50")).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText("Select All"));
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "You can add at most 50 colleagues at a time"
+      );
+      const submitBtn = screen.getByRole("button", {
+        name: /Add to Channel \(51\)/i,
+      });
+      expect(submitBtn).toBeDisabled();
+      fireEvent.click(submitBtn);
+      expect(mockBatchAddChannelMembers).not.toHaveBeenCalled();
     });
   });
 

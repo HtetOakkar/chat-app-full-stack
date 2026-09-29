@@ -49,12 +49,11 @@ public class ChannelController {
     }
 
     @PostMapping({"/api/channels/{channelId}/members", "/api/v1/channels/{channelId}/members"})
-    public ResponseEntity<Void> addChannelMember(
+    public ResponseEntity<BatchAddChannelMembersResponse> addChannelMember(
             @AuthenticationPrincipal UserPrincipal currentUser,
             @PathVariable Long channelId,
             @Valid @RequestBody AddChannelMemberRequest request) {
-        channelService.addChannelMember(channelId, currentUser.getId(), request.getUserId());
-        return ResponseEntity.status(HttpStatus.CREATED).build();
+        return additionResult(channelService.addChannelMember(channelId, currentUser.getId(), request.getUserId()));
     }
 
     @PostMapping({"/api/channels/{channelId}/members/batch", "/api/v1/channels/{channelId}/members/batch"})
@@ -62,8 +61,13 @@ public class ChannelController {
             @AuthenticationPrincipal UserPrincipal currentUser,
             @PathVariable Long channelId,
             @Valid @RequestBody BatchAddChannelMembersRequest request) {
-        BatchAddChannelMembersResponse response = channelService.batchAddChannelMembers(channelId, currentUser.getId(), request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return additionResult(channelService.batchAddChannelMembers(channelId, currentUser.getId(), request));
+    }
+
+    /** 201 when at least one Member was added, otherwise 200; the body always reports each category. */
+    private static ResponseEntity<BatchAddChannelMembersResponse> additionResult(BatchAddChannelMembersResponse result) {
+        HttpStatus status = result.getAdded().isEmpty() ? HttpStatus.OK : HttpStatus.CREATED;
+        return ResponseEntity.status(status).body(result);
     }
 
 

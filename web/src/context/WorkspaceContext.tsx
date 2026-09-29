@@ -92,11 +92,15 @@ export interface InvitationDto {
   createdAt?: string;
 }
 
+/** The result of a Channel Member addition: every requested user ID in exactly one group. */
 export interface BatchAddChannelMembersResponse {
-  addedCount: number;
-  addedUserIds: number[];
-  addedMembers: WorkspaceMemberDto[];
+  added: number[];
+  alreadyMembers: number[];
+  notWorkspaceMembers: number[];
 }
+
+/** The most colleagues one Channel Member addition may carry (enforced by the server too). */
+export const MAX_CHANNEL_MEMBER_BATCH = 50;
 
 interface WorkspaceContextType {
   workspaces: WorkspaceDto[];
@@ -120,7 +124,10 @@ interface WorkspaceContextType {
   openDirectMessage: (targetUserId: number) => Promise<DirectMessageDto>;
   switchDirectMessage: (targetUserId: number) => void;
   getChannelMembers: (channelId: number) => Promise<WorkspaceMemberDto[]>;
-  addChannelMember: (channelId: number, targetUserId: number) => Promise<void>;
+  addChannelMember: (
+    channelId: number,
+    targetUserId: number
+  ) => Promise<BatchAddChannelMembersResponse>;
   batchAddChannelMembers: (
     channelId: number,
     userIds: number[]
@@ -596,12 +603,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     return await apiFetch(`/api/channels/${channelId}/members`);
   };
 
-  const addChannelMember = async (channelId: number, targetUserId: number) => {
-    await apiFetch(`/api/channels/${channelId}/members`, {
-      method: "POST",
-      body: JSON.stringify({ userId: targetUserId }),
-    });
+  const addChannelMember = async (
+    channelId: number,
+    targetUserId: number
+  ): Promise<BatchAddChannelMembersResponse> => {
+    const res: BatchAddChannelMembersResponse = await apiFetch(
+      `/api/channels/${channelId}/members`,
+      {
+        method: "POST",
+        body: JSON.stringify({ userId: targetUserId }),
+      }
+    );
     refreshChannels();
+    return res;
   };
 
   const batchAddChannelMembers = async (

@@ -14,7 +14,7 @@ public interface ChannelService {
     ChannelDto createChannel(Long workspaceId, Long userId, CreateChannelRequest request);
     List<ChannelDto> getWorkspaceChannels(Long workspaceId, Long userId);
     ChannelDto getChannelById(Long channelId, Long userId);
-    void addChannelMember(Long channelId, Long requestingUserId, Long targetUserId);
+    BatchAddChannelMembersResponse addChannelMember(Long channelId, Long requestingUserId, Long targetUserId);
     BatchAddChannelMembersResponse batchAddChannelMembers(Long channelId, Long requestingUserId, BatchAddChannelMembersRequest request);
     void removeChannelMember(Long channelId, Long requestingUserId, Long targetUserId);
     List<WorkspaceMemberDto> getChannelMembers(Long channelId, Long userId);
