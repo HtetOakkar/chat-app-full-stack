@@ -520,13 +520,13 @@ export default function InviteMembersModal({
                   New members will automatically join these channels upon
                   accepting.
                 </p>
-                <div className="max-h-28 overflow-y-auto p-2 bg-surface-container rounded-2xl border border-outline-variant/30 space-y-1 custom-scrollbar">
+                <div className="max-h-40 overflow-y-auto p-2 bg-surface-container rounded-2xl border border-outline-variant/30 space-y-1 custom-scrollbar">
                   {eligibleChannels.map((ch) => {
                     const isChecked = selectedChannelIds.includes(ch.id);
                     return (
                       <label
                         key={ch.id}
-                        className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-surface-container-high transition-colors cursor-pointer text-xs"
+                        className="flex items-center gap-2 min-h-[44px] px-2 py-1 rounded-xl hover:bg-surface-container-high transition-colors cursor-pointer text-xs"
                       >
                         <input
                           type="checkbox"

@@ -674,7 +674,7 @@ export default function ChannelDetailsModal({
                   return (
                     <label
                       key={cand.id}
-                      className={`flex items-center justify-between p-3 rounded-2xl border transition-colors cursor-pointer select-none ${
+                      className={`flex items-center justify-between min-h-[44px] p-3 rounded-2xl border transition-colors cursor-pointer select-none ${
                         isSelected
                           ? "bg-primary/5 border-primary/30"
                           : "bg-surface-container-low hover:bg-surface-container border-outline-variant/10"
