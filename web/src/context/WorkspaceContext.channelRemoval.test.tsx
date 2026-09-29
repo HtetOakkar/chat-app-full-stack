@@ -292,7 +292,7 @@ describe("Removed-from-channel notice (#82, #96)", () => {
       )
     );
     // The Workspace-wide event never names the remover, so no notice yet.
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("leaves my view alone when someone else is removed", async () => {
@@ -312,6 +312,26 @@ describe("Removed-from-channel notice (#82, #96)", () => {
     expect(screen.getByTestId("channels")).toHaveTextContent(
       "general,random,secret-ops"
     );
+  });
+
+  it("announces the notice in a live region that was already mounted before it arrived", async () => {
+    setLayout("wide");
+    await renderWorkspace();
+
+    // Screen readers skip live regions inserted already filled, so the
+    // region must be waiting, empty, before the notice comes in.
+    const region = screen.getByRole("status");
+    expect(region).toBeEmptyDOMElement();
+
+    serverRemovesMeFromSecretOps();
+    await deliver(REMOVAL_QUEUE, removalNotice);
+
+    expect(screen.getByRole("status")).toBe(region);
+    expect(region).toHaveTextContent("@carol removed you from #secret-ops");
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.getByRole("status")).toBe(region);
+    expect(region).toBeEmptyDOMElement();
   });
 
   it("can be dismissed", async () => {

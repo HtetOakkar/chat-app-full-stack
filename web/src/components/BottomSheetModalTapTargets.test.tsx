@@ -275,7 +275,9 @@ describe("Bottom-sheet modal tap targets (ADR-0006, #88)", () => {
       fireEvent.click(
         screen.getByRole("button", { name: /Add to Channel \(1\)/ })
       );
-      await screen.findByRole("status", { name: "Add members result" });
+      await screen.findByRole("button", {
+        name: "Dismiss add members result",
+      });
       expectEveryActionToMeetTapTarget();
     });
 

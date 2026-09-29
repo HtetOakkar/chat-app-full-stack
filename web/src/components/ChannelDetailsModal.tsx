@@ -602,14 +602,22 @@ export default function ChannelDetailsModal({
             onSubmit={handleAddMembersSubmit}
             className="flex-1 flex flex-col min-h-0 overflow-hidden"
           >
-            {additionResult && (
-              <AdditionResultPanel
-                result={additionResult}
-                channelName={channel.name}
-                describeUser={describeUser}
-                onDismiss={() => setAdditionResult(null)}
-              />
-            )}
+            {/* Kept mounted, empty, until there is a result: screen readers
+                often skip a live region that is inserted already filled. */}
+            <div
+              role="status"
+              aria-label="Add members result"
+              className="shrink-0"
+            >
+              {additionResult && (
+                <AdditionResultPanel
+                  result={additionResult}
+                  channelName={channel.name}
+                  describeUser={describeUser}
+                  onDismiss={() => setAdditionResult(null)}
+                />
+              )}
+            </div>
 
             {/* Search & Select All Header */}
             <div className="p-4 border-b border-outline-variant/15 bg-surface-container-low/20 space-y-2.5 shrink-0">
@@ -954,11 +962,7 @@ function AdditionResultPanel({
   ].filter((g) => g.ids.length > 0);
 
   return (
-    <div
-      role="status"
-      aria-label="Add members result"
-      className="mx-4 mt-3 p-3 rounded-2xl border border-outline-variant/20 bg-surface-container-low text-xs space-y-2 shrink-0"
-    >
+    <div className="mx-4 mt-3 p-3 rounded-2xl border border-outline-variant/20 bg-surface-container-low text-xs space-y-2">
       <div className="flex items-start justify-between gap-2">
         <p className="font-bold text-on-surface">
           {result.added.length > 0
