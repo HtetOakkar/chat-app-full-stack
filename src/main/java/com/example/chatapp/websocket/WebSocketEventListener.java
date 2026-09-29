@@ -32,7 +32,7 @@ public class WebSocketEventListener {
                 String sessionId = headerAccessor.getSessionId();
                 sessionRegistry.register(userPrincipal.getId(), sessionId);
 
-                presenceModule.setUserOnline(userPrincipal.getId());
+                presenceModule.setUserOnline(userPrincipal.getId(), userPrincipal.getUsername());
             } catch (Exception e) {
                 log.warn("Error handling WebSocket connect: {}", e.getMessage());
             }
@@ -54,7 +54,7 @@ public class WebSocketEventListener {
             }
 
             try {
-                presenceModule.setUserOffline(userPrincipal.getId());
+                presenceModule.setUserOffline(userPrincipal.getId(), userPrincipal.getUsername());
             } catch (Exception e) {
                 log.warn("Error setting user offline on disconnect: {}", e.getMessage());
             }

@@ -67,6 +67,21 @@ class FlywayMigrationIntegrationTest {
                 assertTrue(columnNames.contains("user_id"), "user_settings should have user_id column");
                 assertTrue(columnNames.contains("share_presence"), "user_settings should have share_presence column");
             }
+
+            // The unique constraint's index is the only index needed on user_settings.user_id.
+            Set<String> userIdIndexes = new HashSet<>();
+            boolean userIdIndexedUniquely = false;
+            try (ResultSet indexes = metaData.getIndexInfo(null, null, "user_settings", false, false)) {
+                while (indexes.next()) {
+                    if ("user_id".equalsIgnoreCase(indexes.getString("COLUMN_NAME"))) {
+                        userIdIndexes.add(indexes.getString("INDEX_NAME").toLowerCase());
+                        userIdIndexedUniquely |= !indexes.getBoolean("NON_UNIQUE");
+                    }
+                }
+            }
+            assertFalse(userIdIndexes.contains("idx_user_settings_user_id"),
+                    "the index duplicating the unique constraint should be dropped, found " + userIdIndexes);
+            assertTrue(userIdIndexedUniquely, "user_settings.user_id should stay uniquely indexed, found " + userIdIndexes);
         }
     }
 }

@@ -14,11 +14,15 @@ import java.util.Set;
  * appears offline to every other Member, while still seeing colleagues who share theirs.
  */
 public interface PresenceModule {
-    /** Connect: records the User online and tells colleagues, unless the User has Presence Sharing off. */
-    void setUserOnline(Long userId);
+    /**
+     * Connect: records the User online and tells colleagues, unless the User has Presence Sharing off.
+     * The username comes from the authenticated session, and Presence Sharing from its cache, so a
+     * connect doesn't read the User or their settings from the database (ADR-0002).
+     */
+    void setUserOnline(Long userId, String username);
 
     /** Disconnect: records "last seen" and tells colleagues, unless the User has Presence Sharing off. */
-    void setUserOffline(Long userId);
+    void setUserOffline(Long userId, String username);
 
     /** Workspace colleagues of the viewer who appear online to them. */
     List<OnlineStatusDto> getOnlineUsers(Long currentUserId);
@@ -35,7 +39,10 @@ public interface PresenceModule {
 
     UserSettingsDto getPrivacySettings(Long userId);
 
-    /** The User's Presence Sharing choice; on for Users who never set it. */
+    /**
+     * The User's Presence Sharing choice; on for Users who never set it. Answered from the cache kept
+     * next to the Presence keys, falling back to the stored value on a miss.
+     */
     boolean sharesPresence(Long userId);
 
     /**
