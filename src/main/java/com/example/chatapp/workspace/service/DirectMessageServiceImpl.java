@@ -12,7 +12,7 @@ import com.example.chatapp.message.model.entity.MessageType;
 import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.websocket.MessageBroker;
-import com.example.chatapp.websocket.SessionRegistry;
+import com.example.chatapp.workspace.mapper.WorkspaceMemberMapper;
 import com.example.chatapp.workspace.model.dto.DirectMessageDto;
 import com.example.chatapp.workspace.model.dto.WorkspaceMemberDto;
 import com.example.chatapp.workspace.model.entity.*;
@@ -41,7 +41,7 @@ public class DirectMessageServiceImpl implements DirectMessageService {
     private final MessageRepository messageRepository;
     private final MessageMapper messageMapper;
     private final MessageBroker messageBroker;
-    private final SessionRegistry sessionRegistry;
+    private final WorkspaceMemberMapper workspaceMemberMapper;
 
     @Override
     @Transactional
@@ -86,7 +86,7 @@ public class DirectMessageServiceImpl implements DirectMessageService {
         return DirectMessageDto.builder()
                 .conversationId(conversation.getId())
                 .workspaceId(workspaceId)
-                .targetMember(toWorkspaceMemberDto(member2))
+                .targetMember(workspaceMemberMapper.toDto(userId, member2))
                 .unreadCount(0)
                 .createdAt(conversation.getCreatedAt())
                 .updatedAt(conversation.getUpdatedAt())
@@ -100,7 +100,8 @@ public class DirectMessageServiceImpl implements DirectMessageService {
                 .orElseThrow(() -> new UnauthorizedException("You are not a member of this workspace"));
 
         List<ConversationParticipant> myParticipations = conversationParticipantRepository.findByWorkspaceMemberId(currentMember.getId());
-        List<DirectMessageDto> result = new ArrayList<>();
+        List<Conversation> conversations = new ArrayList<>();
+        List<WorkspaceMember> otherMembers = new ArrayList<>();
 
         for (ConversationParticipant cp : myParticipations) {
             Conversation conv = cp.getConversation();
@@ -118,15 +119,22 @@ public class DirectMessageServiceImpl implements DirectMessageService {
                     .findFirst()
                     .orElse(currentMember); // Self-DM fallback
 
+            conversations.add(conv);
+            otherMembers.add(otherMember);
+        }
+
+        List<WorkspaceMemberDto> targetMembers = workspaceMemberMapper.toDtos(userId, otherMembers);
+        List<DirectMessageDto> result = new ArrayList<>();
+        for (int i = 0; i < conversations.size(); i++) {
+            Conversation conv = conversations.get(i);
             result.add(DirectMessageDto.builder()
                     .conversationId(conv.getId())
                     .workspaceId(workspaceId)
-                    .targetMember(toWorkspaceMemberDto(otherMember))
+                    .targetMember(targetMembers.get(i))
                     .createdAt(conv.getCreatedAt())
                     .updatedAt(conv.getUpdatedAt())
                     .build());
         }
-
         return result;
     }
 
@@ -211,20 +219,5 @@ public class DirectMessageServiceImpl implements DirectMessageService {
         messageBroker.publishToUser(senderId.toString(), dmQueue, messageDto);
 
         return messageDto;
-    }
-
-    private WorkspaceMemberDto toWorkspaceMemberDto(WorkspaceMember member) {
-        User user = member.getUser();
-        boolean isOnline = sessionRegistry != null && sessionRegistry.isOnline(user.getId());
-        return WorkspaceMemberDto.builder()
-                .id(member.getId())
-                .workspaceId(member.getWorkspace().getId())
-                .userId(user.getId())
-                .username(user.getUsername())
-                .fullName(user.getFullName())
-                .role(member.getRole())
-                .joinedAt(member.getJoinedAt())
-                .presenceStatus(isOnline ? "ONLINE" : "OFFLINE")
-                .build();
     }
 }

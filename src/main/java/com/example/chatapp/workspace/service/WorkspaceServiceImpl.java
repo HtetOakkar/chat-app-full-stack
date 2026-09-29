@@ -5,12 +5,12 @@ import com.example.chatapp.exception.NotFoundException;
 import com.example.chatapp.exception.UnauthorizedException;
 import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.user.repository.UserRepository;
+import com.example.chatapp.workspace.mapper.WorkspaceMemberMapper;
 import com.example.chatapp.workspace.model.dto.WorkspaceDto;
 import com.example.chatapp.workspace.model.dto.WorkspaceMemberDto;
 import com.example.chatapp.workspace.model.entity.*;
 import com.example.chatapp.workspace.model.request.CreateWorkspaceRequest;
 import com.example.chatapp.workspace.repository.*;
-import com.example.chatapp.websocket.SessionRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,7 +31,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     private final ChannelRepository channelRepository;
     private final ConversationRepository conversationRepository;
     private final UserRepository userRepository;
-    private final SessionRegistry sessionRegistry;
+    private final WorkspaceMemberMapper workspaceMemberMapper;
 
     @Override
     @Transactional
@@ -125,9 +125,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
             throw new UnauthorizedException("You are not a member of this workspace");
         }
 
-        return workspaceMemberRepository.findByWorkspaceId(workspaceId).stream()
-                .map(this::toWorkspaceMemberDto)
-                .collect(Collectors.toList());
+        return workspaceMemberMapper.toDtos(userId, workspaceMemberRepository.findByWorkspaceId(workspaceId));
     }
 
     @Override
@@ -135,7 +133,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     public WorkspaceMemberDto getWorkspaceMember(Long workspaceId, Long userId) {
         WorkspaceMember member = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, userId)
                 .orElseThrow(() -> new UnauthorizedException("You are not a member of this workspace"));
-        return toWorkspaceMemberDto(member);
+        return workspaceMemberMapper.toDto(userId, member);
     }
 
     private String resolveUniqueSlug(String name, String customSlug) {
@@ -181,21 +179,6 @@ public class WorkspaceServiceImpl implements WorkspaceService {
                 .channelCount(channelCount)
                 .createdAt(ws.getCreatedAt())
                 .updatedAt(ws.getUpdatedAt())
-                .build();
-    }
-
-    private WorkspaceMemberDto toWorkspaceMemberDto(WorkspaceMember member) {
-        User user = member.getUser();
-        boolean isOnline = sessionRegistry != null && sessionRegistry.isOnline(user.getId());
-        return WorkspaceMemberDto.builder()
-                .id(member.getId())
-                .workspaceId(member.getWorkspace().getId())
-                .userId(user.getId())
-                .username(user.getUsername())
-                .fullName(user.getFullName())
-                .role(member.getRole())
-                .joinedAt(member.getJoinedAt())
-                .presenceStatus(isOnline ? "ONLINE" : "OFFLINE")
                 .build();
     }
 }
