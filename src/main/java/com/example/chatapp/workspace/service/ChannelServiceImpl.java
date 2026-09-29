@@ -13,7 +13,7 @@ import com.example.chatapp.message.repository.MessageRepository;
 import com.example.chatapp.message.repository.RedisMessageRepository;
 import com.example.chatapp.user.model.entity.User;
 import com.example.chatapp.websocket.MessageBroker;
-import com.example.chatapp.websocket.SessionRegistry;
+import com.example.chatapp.workspace.mapper.WorkspaceMemberMapper;
 import com.example.chatapp.workspace.model.dto.BatchAddChannelMembersResponse;
 import com.example.chatapp.workspace.model.dto.ChannelDto;
 import com.example.chatapp.workspace.model.dto.WorkspaceMemberDto;
@@ -52,7 +52,7 @@ public class ChannelServiceImpl implements ChannelService {
     private final MessageMapper messageMapper;
     private final RedisMessageRepository redisMessageRepository;
     private final MessageBroker messageBroker;
-    private final SessionRegistry sessionRegistry;
+    private final WorkspaceMemberMapper workspaceMemberMapper;
     private final ChannelActivityNoticePublisher channelActivityNoticePublisher;
 
     @Override
@@ -191,7 +191,6 @@ public class ChannelServiceImpl implements ChannelService {
                 .orElseThrow(() -> new UnauthorizedException("You are not a member of this workspace"));
 
         List<Long> newlyAddedUserIds = new ArrayList<>();
-        List<WorkspaceMemberDto> newlyAddedMembers = new ArrayList<>();
         List<WorkspaceMember> addedWorkspaceMembers = new ArrayList<>();
 
         if (request.getUserIds() != null) {
@@ -213,7 +212,6 @@ public class ChannelServiceImpl implements ChannelService {
                     channelMemberRepository.save(cm);
 
                     newlyAddedUserIds.add(targetUserId);
-                    newlyAddedMembers.add(toWorkspaceMemberDto(targetMember));
                     addedWorkspaceMembers.add(targetMember);
                 }
             }
@@ -238,7 +236,7 @@ public class ChannelServiceImpl implements ChannelService {
         return BatchAddChannelMembersResponse.builder()
                 .addedCount(newlyAddedUserIds.size())
                 .addedUserIds(newlyAddedUserIds)
-                .addedMembers(newlyAddedMembers)
+                .addedMembers(workspaceMemberMapper.toDtos(requestingUserId, addedWorkspaceMembers))
                 .build();
     }
 
@@ -300,15 +298,12 @@ public class ChannelServiceImpl implements ChannelService {
             throw new UnauthorizedException("You do not have access to this private channel");
         }
 
-        if (channel.getType() == ChannelType.PUBLIC) {
-            return workspaceMemberRepository.findByWorkspaceId(workspaceId).stream()
-                    .map(this::toWorkspaceMemberDto)
-                    .collect(Collectors.toList());
-        } else {
-            return channelMemberRepository.findByChannelId(channelId).stream()
-                    .map(cm -> toWorkspaceMemberDto(cm.getWorkspaceMember()))
-                    .collect(Collectors.toList());
-        }
+        List<WorkspaceMember> members = channel.getType() == ChannelType.PUBLIC
+                ? workspaceMemberRepository.findByWorkspaceId(workspaceId)
+                : channelMemberRepository.findByChannelId(channelId).stream()
+                        .map(ChannelMember::getWorkspaceMember)
+                        .toList();
+        return workspaceMemberMapper.toDtos(userId, members);
     }
 
     @Override
@@ -431,20 +426,4 @@ public class ChannelServiceImpl implements ChannelService {
                 .createdAt(channel.getCreatedAt())
                 .build();
     }
-
-    private WorkspaceMemberDto toWorkspaceMemberDto(WorkspaceMember member) {
-        User user = member.getUser();
-        boolean isOnline = sessionRegistry != null && sessionRegistry.isOnline(user.getId());
-        return WorkspaceMemberDto.builder()
-                .id(member.getId())
-                .workspaceId(member.getWorkspace().getId())
-                .userId(user.getId())
-                .username(user.getUsername())
-                .fullName(user.getFullName())
-                .role(member.getRole())
-                .joinedAt(member.getJoinedAt())
-                .presenceStatus(isOnline ? "ONLINE" : "OFFLINE")
-                .build();
-    }
 }
-
