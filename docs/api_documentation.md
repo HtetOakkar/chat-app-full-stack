@@ -2,6 +2,8 @@
 
 This document outlines the API endpoints and architectural design for the newly implemented **User Search** and **Address Book Contacts** features. It is intended for the Design and Frontend Development teams to integrate these features into the UI.
 
+For Channel membership, Presence Sharing and the related STOMP events, see [Channel Membership & Presence Sharing API](api/workspace-channel-presence.md).
+
 ---
 
 ## 1. Architectural Overview

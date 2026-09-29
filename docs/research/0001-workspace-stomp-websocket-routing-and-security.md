@@ -13,6 +13,7 @@
 The existing WebSocket implementation in this repository operates on a single-tenant, unpartitioned paradigm:
 - Global public channel: `/topic/public`
 - User-specific queues: `/user/queue/messages`, `/user/queue/requests`, `/user/queue/online`, `/user/queue/typing`, `/user/queue/call`
+  - *Update (2026-09-29, #89):* `/user/queue/channel-removals` was added later as a deliberate exception to Workspace-scoped user queues. See ADR-0007 and the table in 2.2.
 - Single Redis Pub/Sub channel: `websocket:messages`
 - Interceptor authorization: Authentication only (`AuthChannelInterceptor` checks JWT on `CONNECT`, but does not inspect `SUBSCRIBE` or `SEND` destinations).
 
@@ -54,6 +55,7 @@ public void configureMessageBroker(MessageBrokerRegistry registry) {
 | **User DM Typing Indicator** | `/user/queue/workspace.{workspaceId}.typing` | `/app/workspace.{workspaceId}.dm.typing` | `/user/{userId}/queue/workspace.{workspaceId}.typing` |
 | **User Notifications & Invites** | `/user/queue/workspace.{workspaceId}.notifications` | Server-initiated only | `/user/{userId}/queue/workspace.{workspaceId}.notifications` |
 | **Call Signaling** *(WebRTC 1:1 Call)* | `/user/queue/workspace.{workspaceId}.calls` | `/app/workspace.{workspaceId}.call.{action}` | `/user/{userId}/queue/workspace.{workspaceId}.calls` |
+| **Channel Removal Notice** *(exception: not Workspace-scoped, see ADR-0007)* | `/user/queue/channel-removals` | Server-initiated only | `/user/{userId}/queue/channel-removals` |
 
 ---
 
@@ -87,6 +89,7 @@ Client WebSocket Frame
 | `SUBSCRIBE` | `/topic/workspace.{wId}.channel.{cId}` | 1. User is an active `Workspace Member` of `wId`.<br>2. If channel is `Public`, membership in `wId` is sufficient.<br>3. If channel is `Private`, user must be an explicit member of `cId`. |
 | `SUBSCRIBE` | `/topic/workspace.{wId}.presence`<br>`/topic/workspace.{wId}.events` | User is an active `Workspace Member` of `wId`. |
 | `SUBSCRIBE` | `/user/queue/workspace.{wId}.*` | User is an active `Workspace Member` of `wId`. |
+| `SUBSCRIBE` | `/user/queue/channel-removals` | None beyond authentication. The path has no Workspace, and user-destination resolution confines it to the subscriber's own sessions (ADR-0007). |
 | `SUBSCRIBE` | `/queue/workspace.{wId}.user.{userId}` *(direct queue path)* | 1. `userId == principal.getId()` (anti-hijacking).<br>2. User is an active `Workspace Member` of `wId`. |
 | `SEND` | `/app/workspace.{wId}.channel.{cId}.*` | 1. User is an active `Workspace Member` of `wId`.<br>2. User has write permission in `cId` (not muted, channel not archived).<br>3. `senderId` matches `principal.getId()`. |
 | `SEND` | `/app/workspace.{wId}.dm.*` | 1. Sender and Recipient are both active `Workspace Members` of `wId`.<br>2. Sender is not blocked by Recipient. |
