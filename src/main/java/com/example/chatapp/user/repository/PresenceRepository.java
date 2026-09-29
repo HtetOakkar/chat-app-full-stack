@@ -10,7 +10,9 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Repository
@@ -25,6 +27,14 @@ public interface PresenceRepository extends JpaRepository<User, Long> {
            "JOIN WorkspaceMember wm2 ON wm1.workspace.id = wm2.workspace.id " +
            "WHERE wm1.user.id = :userId AND wm2.user.id != :userId")
     List<User> findEligiblePresenceUsers(@Param("userId") Long userId);
+
+    /** The stored Presence Sharing choice; empty when the User never set one (sharing by default). */
+    @Query("SELECT s.sharePresence FROM UserSettings s WHERE s.user.id = :userId")
+    Optional<Boolean> findSharePresence(@Param("userId") Long userId);
+
+    /** Of the given Users, those who turned Presence Sharing off. Users without settings share by default. */
+    @Query("SELECT s.user.id FROM UserSettings s WHERE s.user.id IN :userIds AND s.sharePresence = false")
+    Set<Long> findUserIdsNotSharingPresence(@Param("userIds") Collection<Long> userIds);
 
     @Modifying
     @Transactional(propagation = Propagation.REQUIRES_NEW)

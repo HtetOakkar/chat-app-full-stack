@@ -90,6 +90,6 @@ public class UserController {
     public ResponseEntity<UserSettingsDto> updateUserSettings(
             @AuthenticationPrincipal UserPrincipal currentUser,
             @Valid @RequestBody UpdateUserSettingsRequest request) {
-        return ResponseEntity.ok(presenceModule.togglePresenceSharing(currentUser.getId(), request.getSharePresence()));
+        return ResponseEntity.ok(presenceModule.setPresenceSharing(currentUser.getId(), request.getSharePresence()));
     }
 }

@@ -55,7 +55,7 @@ class PresenceModuleTest {
     private PresenceModuleImpl presenceModule;
 
     @Test
-    void setUserOnline_ShouldSetRedisKeyAndBroadcast() {
+    void connectOfSharingMember_SetsRedisKeyAndBroadcastsToColleaguesAndWorkspace() {
         // Arrange
         Long userId = 1L;
         User user = User.builder().id(userId).username("testuser").build();
@@ -65,7 +65,7 @@ class PresenceModuleTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(redisTemplate.opsForSet()).thenReturn(setOperations);
-        when(presenceRepository.findEligiblePresenceReceivers(userId)).thenReturn(Collections.emptySet());
+        when(presenceRepository.findEligiblePresenceReceivers(userId)).thenReturn(Set.of(2L));
         when(workspaceMemberRepository.findByUserId(userId)).thenReturn(List.of(wm));
 
         // Act
@@ -75,11 +75,12 @@ class PresenceModuleTest {
         verify(valueOperations).set("user:presence:1", "Online");
         verify(setOperations).remove("user:presence:offline_sync", "1");
         verify(messageBroker).publishToUser(eq("1"), eq("/queue/online"), any(Map.class));
+        verify(messageBroker).publishToUser(eq("2"), eq("/queue/online"), any(Map.class));
         verify(messageBroker).publishToTopic(eq("/topic/workspace.100.presence"), any(Map.class));
     }
 
     @Test
-    void setUserOffline_ShouldSetRedisKeyAndBroadcast() {
+    void disconnectOfSharingMember_SetsRedisKeyAndBroadcastsToColleaguesAndWorkspace() {
         // Arrange
         Long userId = 1L;
         User user = User.builder().id(userId).username("testuser").build();
@@ -89,7 +90,7 @@ class PresenceModuleTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(redisTemplate.opsForSet()).thenReturn(setOperations);
-        when(presenceRepository.findEligiblePresenceReceivers(userId)).thenReturn(Collections.emptySet());
+        when(presenceRepository.findEligiblePresenceReceivers(userId)).thenReturn(Set.of(2L));
         when(workspaceMemberRepository.findByUserId(userId)).thenReturn(List.of(wm));
 
         // Act
@@ -99,7 +100,86 @@ class PresenceModuleTest {
         verify(valueOperations).set(eq("user:presence:1"), any(String.class));
         verify(setOperations).add("user:presence:offline_sync", "1");
         verify(messageBroker).publishToUser(eq("1"), eq("/queue/online"), any(Map.class));
+        verify(messageBroker).publishToUser(eq("2"), eq("/queue/online"), any(Map.class));
         verify(messageBroker).publishToTopic(eq("/topic/workspace.100.presence"), any(Map.class));
+    }
+
+    @Test
+    void connectOfMemberNotSharingPresence_PublishesNothingToWorkspaceOrColleagues() {
+        Long userId = 1L;
+        when(presenceRepository.findSharePresence(userId)).thenReturn(Optional.of(false));
+        lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(User.builder().id(userId).username("hidden").build()));
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        lenient().when(presenceRepository.findEligiblePresenceReceivers(userId)).thenReturn(Set.of(2L, 3L));
+        lenient().when(workspaceMemberRepository.findByUserId(userId)).thenReturn(List.of(membershipIn(100L, userId)));
+
+        presenceModule.setUserOnline(userId);
+
+        verify(messageBroker, never()).publishToTopic(any(), any());
+        verify(messageBroker, never()).publishToUser(eq("2"), any(), any());
+        verify(messageBroker, never()).publishToUser(eq("3"), any(), any());
+    }
+
+    @Test
+    void disconnectOfMemberNotSharingPresence_PublishesNothingToWorkspaceOrColleagues() {
+        Long userId = 1L;
+        when(presenceRepository.findSharePresence(userId)).thenReturn(Optional.of(false));
+        lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(User.builder().id(userId).username("hidden").build()));
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        lenient().when(presenceRepository.findEligiblePresenceReceivers(userId)).thenReturn(Set.of(2L, 3L));
+        lenient().when(workspaceMemberRepository.findByUserId(userId)).thenReturn(List.of(membershipIn(100L, userId)));
+
+        presenceModule.setUserOffline(userId);
+
+        verify(messageBroker, never()).publishToTopic(any(), any());
+        verify(messageBroker, never()).publishToUser(eq("2"), any(), any());
+        verify(messageBroker, never()).publishToUser(eq("3"), any(), any());
+    }
+
+    @Test
+    void usersAppearingOnline_FollowEachTargetsOwnPresenceSharing_InOneBatchedLookup() {
+        Long hiddenViewer = 1L;    // connected, Presence Sharing off
+        Long sharingOnline = 2L;   // connected, sharing
+        Long hiddenOnline = 3L;    // connected, Presence Sharing off
+        Long sharingOffline = 4L;  // not connected, sharing
+        when(sessionRegistry.getOnlineUserIds()).thenReturn(Set.of(hiddenViewer, sharingOnline, hiddenOnline));
+        when(presenceRepository.findUserIdsNotSharingPresence(any())).thenAnswer(inv -> {
+            Collection<Long> asked = inv.getArgument(0);
+            Set<Long> hidden = new HashSet<>(asked);
+            hidden.retainAll(Set.of(hiddenViewer, hiddenOnline));
+            return hidden;
+        });
+
+        Set<Long> visibleToHiddenViewer = presenceModule.findUsersAppearingOnlineTo(
+                hiddenViewer, List.of(hiddenViewer, sharingOnline, hiddenOnline, sharingOffline));
+        Set<Long> visibleToSharingViewer = presenceModule.findUsersAppearingOnlineTo(
+                sharingOnline, List.of(hiddenViewer, sharingOnline, hiddenOnline, sharingOffline));
+
+        // A viewer always sees themselves; others follow their own choice, not the viewer's.
+        assertEquals(Set.of(hiddenViewer, sharingOnline), visibleToHiddenViewer);
+        assertEquals(Set.of(sharingOnline), visibleToSharingViewer);
+        verify(presenceRepository, times(2)).findUserIdsNotSharingPresence(any());
+        verify(presenceRepository, never()).findSharePresence(any());
+        verify(sessionRegistry, never()).isOnline(any());
+    }
+
+    @Test
+    void usersAppearingOnline_SkipsTheSharingLookupWhenNoTargetIsConnected() {
+        when(sessionRegistry.getOnlineUserIds()).thenReturn(Set.of());
+
+        Set<Long> visible = presenceModule.findUsersAppearingOnlineTo(1L, List.of(2L, 3L));
+
+        assertTrue(visible.isEmpty());
+        verify(presenceRepository, never()).findUserIdsNotSharingPresence(any());
+    }
+
+    private static com.example.chatapp.workspace.model.entity.WorkspaceMember membershipIn(Long workspaceId, Long userId) {
+        return com.example.chatapp.workspace.model.entity.WorkspaceMember.builder()
+                .workspace(com.example.chatapp.workspace.model.entity.Workspace.builder().id(workspaceId).build())
+                .user(User.builder().id(userId).build())
+                .build();
     }
 
     @Test
@@ -181,14 +261,14 @@ class PresenceModuleTest {
     }
 
     @Test
-    void togglePresenceSharing_ShouldUpdateSettingsAndBroadcastOffline() {
+    void setPresenceSharing_ShouldUpdateSettingsAndBroadcastOffline() {
         Long userId = 1L;
         User user = User.builder().id(userId).username("testuser").build();
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(presenceRepository.findEligiblePresenceReceivers(userId)).thenReturn(Set.of(2L));
 
-        com.example.chatapp.user.model.dto.UserSettingsDto result = presenceModule.togglePresenceSharing(userId, false);
+        com.example.chatapp.user.model.dto.UserSettingsDto result = presenceModule.setPresenceSharing(userId, false);
 
         assertFalse(result.isSharePresence());
         verify(userRepository).save(user);
@@ -197,7 +277,7 @@ class PresenceModuleTest {
     }
 
     @Test
-    void togglePresenceSharing_ShouldBroadcastOnlineIfUserIsOnline() {
+    void setPresenceSharing_ShouldBroadcastOnlineIfUserIsOnline() {
         Long userId = 1L;
         User user = User.builder().id(userId).username("testuser").build();
 
@@ -205,7 +285,7 @@ class PresenceModuleTest {
         when(sessionRegistry.isOnline(userId)).thenReturn(true);
         when(presenceRepository.findEligiblePresenceReceivers(userId)).thenReturn(Set.of(2L));
 
-        com.example.chatapp.user.model.dto.UserSettingsDto result = presenceModule.togglePresenceSharing(userId, true);
+        com.example.chatapp.user.model.dto.UserSettingsDto result = presenceModule.setPresenceSharing(userId, true);
 
         assertTrue(result.isSharePresence());
         verify(userRepository).save(user);

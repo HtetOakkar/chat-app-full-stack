@@ -86,4 +86,26 @@ class ChatControllerTest {
                 })
         );
     }
+
+    @Test
+    void workspacePresenceFromMemberNotSharingPresenceIsNotBroadcast() {
+        when(presenceModule.sharesPresence(1L)).thenReturn(false);
+        com.example.chatapp.message.model.dto.OnlineStatusDto online = new com.example.chatapp.message.model.dto.OnlineStatusDto();
+        online.setStatus("ONLINE");
+
+        chatController.sendWorkspacePresence(100L, online, senderPrincipal);
+
+        verify(messageBroker, never()).publishToTopic(any(), any());
+    }
+
+    @Test
+    void workspacePresenceFromSharingMemberIsBroadcastToTheWorkspace() {
+        when(presenceModule.sharesPresence(1L)).thenReturn(true);
+        com.example.chatapp.message.model.dto.OnlineStatusDto online = new com.example.chatapp.message.model.dto.OnlineStatusDto();
+        online.setStatus("ONLINE");
+
+        chatController.sendWorkspacePresence(100L, online, senderPrincipal);
+
+        verify(messageBroker).publishToTopic(eq("/topic/workspace.100.presence"), any());
+    }
 }
