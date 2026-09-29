@@ -167,6 +167,60 @@ describe("ChannelDetailsModal", () => {
     expect(screen.getByText("Bob Jones")).toBeInTheDocument();
   });
 
+  it("keeps a separate search per tab, so a query typed on one tab doesn't filter another", async () => {
+    render(
+      <ChannelDetailsModal
+        isOpen={true}
+        onClose={mockOnClose}
+        channel={mockChannel}
+        initialTab="members"
+      />
+    );
+    await waitFor(() => {
+      expect(screen.getByText("Alice Smith")).toBeInTheDocument();
+    });
+
+    // Members tab: search for bob
+    fireEvent.change(screen.getByPlaceholderText("Search channel members..."), {
+      target: { value: "bob" },
+    });
+    expect(screen.queryByText("Alice Smith")).not.toBeInTheDocument();
+
+    // Add tab starts with its own, empty search
+    fireEvent.click(screen.getByRole("button", { name: /^Add Members/ }));
+    const addSearch = screen.getByPlaceholderText(
+      "Search colleagues to add..."
+    );
+    expect(addSearch).toHaveValue("");
+    expect(screen.getByText("Carol Danvers")).toBeInTheDocument();
+    expect(screen.getByText("David Clark")).toBeInTheDocument();
+
+    fireEvent.change(addSearch, { target: { value: "carol" } });
+    expect(screen.queryByText("David Clark")).not.toBeInTheDocument();
+
+    // Invite tab doesn't inherit either query
+    fireEvent.click(screen.getByRole("button", { name: "Invite by Email" }));
+    expect(
+      screen.getByPlaceholderText("Enter emails separated by comma or space...")
+    ).toHaveValue("");
+
+    // Members tab still has its own query
+    fireEvent.click(screen.getByRole("button", { name: /^Members/ }));
+    expect(
+      screen.getByPlaceholderText("Search channel members...")
+    ).toHaveValue("bob");
+    expect(screen.queryByText("Alice Smith")).not.toBeInTheDocument();
+    expect(screen.getByText("Bob Jones")).toBeInTheDocument();
+
+    // ...and so does the Add tab
+    fireEvent.click(screen.getByRole("button", { name: /^Add Members/ }));
+    expect(
+      screen.getByPlaceholderText("Search colleagues to add...")
+    ).toHaveValue("carol");
+    expect(screen.getByText("Carol Danvers")).toBeInTheDocument();
+    expect(screen.queryByText("David Clark")).not.toBeInTheDocument();
+  });
+
   it("allows an admin/owner to remove another member with confirmation", async () => {
     render(
       <ChannelDetailsModal

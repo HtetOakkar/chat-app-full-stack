@@ -66,7 +66,7 @@ export default function WorkspaceOnboardingModal({
             type="button"
             onClick={handleClose}
             aria-label="Close"
-            className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container transition-colors"
+            className="min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container transition-colors"
           >
             <span className="material-symbols-outlined text-lg">close</span>
           </button>
@@ -121,14 +121,14 @@ export default function WorkspaceOnboardingModal({
               <button
                 type="button"
                 onClick={handleClose}
-                className="px-4 py-2 text-xs font-bold text-outline hover:text-on-surface hover:bg-surface-container rounded-xl transition-colors"
+                className="min-w-[44px] min-h-[44px] px-4 py-2 text-xs font-bold text-outline hover:text-on-surface hover:bg-surface-container rounded-xl transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading || !workspaceName.trim()}
-                className="px-5 py-2 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50"
+                className="min-w-[44px] min-h-[44px] px-5 py-2 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50"
               >
                 {loading ? "Creating..." : "Create Workspace"}
               </button>

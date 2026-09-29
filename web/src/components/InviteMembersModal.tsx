@@ -269,7 +269,7 @@ export default function InviteMembersModal({
             type="button"
             onClick={onClose}
             aria-label="Close invite modal"
-            className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors"
+            className="min-w-[44px] min-h-[44px] rounded-xl text-outline hover:text-on-surface hover:bg-surface-container-high flex items-center justify-center transition-colors"
           >
             <span className="material-symbols-outlined text-base">close</span>
           </button>
@@ -280,7 +280,7 @@ export default function InviteMembersModal({
           <button
             type="button"
             onClick={() => setTab("email")}
-            className={`py-3 text-xs font-bold border-b-2 transition-all ${
+            className={`min-w-[44px] min-h-[44px] py-3 text-xs font-bold border-b-2 transition-all ${
               tab === "email"
                 ? "border-primary text-primary"
                 : "border-transparent text-outline hover:text-on-surface"
@@ -294,7 +294,7 @@ export default function InviteMembersModal({
               setTab("link");
               if (!shareableLink) fetchJoinLink();
             }}
-            className={`py-3 text-xs font-bold border-b-2 transition-all ${
+            className={`min-w-[44px] min-h-[44px] py-3 text-xs font-bold border-b-2 transition-all ${
               tab === "link"
                 ? "border-primary text-primary"
                 : "border-transparent text-outline hover:text-on-surface"
@@ -352,7 +352,7 @@ export default function InviteMembersModal({
                         type="button"
                         onClick={handleToggleLinkActive}
                         disabled={linkLoading}
-                        className={`px-3 py-1 text-xs font-bold rounded-xl transition-all ${
+                        className={`min-w-[44px] min-h-[44px] px-3 py-1 text-xs font-bold rounded-xl transition-all ${
                           shareableLink.status === "PENDING"
                             ? "bg-error/10 text-error hover:bg-error/20"
                             : "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
@@ -381,7 +381,7 @@ export default function InviteMembersModal({
                         type="button"
                         onClick={handleCopyLink}
                         disabled={shareableLink.status !== "PENDING"}
-                        className="px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary/90 transition-colors shrink-0 flex items-center gap-1.5 disabled:opacity-50"
+                        className="min-w-[44px] min-h-[44px] px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary/90 transition-colors shrink-0 flex items-center gap-1.5 disabled:opacity-50"
                       >
                         <span className="material-symbols-outlined text-sm">
                           {copied ? "check" : "content_copy"}
@@ -404,7 +404,7 @@ export default function InviteMembersModal({
                             <button
                               type="button"
                               onClick={() => setShowResetConfirm(false)}
-                              className="px-3 py-1 text-xs font-bold text-outline hover:text-on-surface"
+                              className="min-w-[44px] min-h-[44px] px-3 py-1 text-xs font-bold text-outline hover:text-on-surface rounded-xl"
                             >
                               Cancel
                             </button>
@@ -412,7 +412,7 @@ export default function InviteMembersModal({
                               type="button"
                               onClick={handleResetLink}
                               disabled={linkLoading}
-                              className="px-3 py-1 bg-error text-white text-xs font-bold rounded-xl hover:bg-error/90"
+                              className="min-w-[44px] min-h-[44px] px-3 py-1 bg-error text-white text-xs font-bold rounded-xl hover:bg-error/90"
                             >
                               Confirm Reset
                             </button>
@@ -422,7 +422,7 @@ export default function InviteMembersModal({
                         <button
                           type="button"
                           onClick={() => setShowResetConfirm(true)}
-                          className="text-xs font-bold text-outline hover:text-error transition-colors flex items-center gap-1.5"
+                          className="min-w-[44px] min-h-[44px] text-xs font-bold text-outline hover:text-error transition-colors flex items-center gap-1.5"
                         >
                           <span className="material-symbols-outlined text-sm">
                             refresh
@@ -453,7 +453,8 @@ export default function InviteMembersModal({
                       <button
                         type="button"
                         onClick={() => removeChip(idx)}
-                        className="text-outline hover:text-error transition-colors flex items-center justify-center w-3.5 h-3.5"
+                        aria-label={`Remove ${chipEmail}`}
+                        className="min-w-[44px] min-h-[44px] -my-3.5 -mr-3.5 text-outline hover:text-error transition-colors flex items-center justify-center"
                       >
                         <span className="material-symbols-outlined text-xs">
                           close
@@ -613,7 +614,7 @@ export default function InviteMembersModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 text-xs font-bold text-outline hover:text-on-surface hover:bg-surface-container rounded-xl transition-colors"
+                  className="min-w-[44px] min-h-[44px] px-4 py-2 text-xs font-bold text-outline hover:text-on-surface hover:bg-surface-container rounded-xl transition-colors"
                 >
                   Close
                 </button>
@@ -623,7 +624,7 @@ export default function InviteMembersModal({
                     loading ||
                     (emailChips.length === 0 && !currentEmailInput.trim())
                   }
-                  className="px-5 py-2 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                  className="min-w-[44px] min-h-[44px] px-5 py-2 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {loading ? (
                     "Sending..."
