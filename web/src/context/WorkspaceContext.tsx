@@ -140,10 +140,6 @@ interface WorkspaceContextType {
   openDirectMessage: (targetUserId: number) => Promise<DirectMessageDto>;
   switchDirectMessage: (targetUserId: number) => void;
   getChannelMembers: (channelId: number) => Promise<WorkspaceMemberDto[]>;
-  addChannelMember: (
-    channelId: number,
-    targetUserId: number
-  ) => Promise<BatchAddChannelMembersResponse>;
   batchAddChannelMembers: (
     channelId: number,
     userIds: number[]
@@ -644,21 +640,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     return await apiFetch(`/api/channels/${channelId}/members`);
   };
 
-  const addChannelMember = async (
-    channelId: number,
-    targetUserId: number
-  ): Promise<BatchAddChannelMembersResponse> => {
-    const res: BatchAddChannelMembersResponse = await apiFetch(
-      `/api/channels/${channelId}/members`,
-      {
-        method: "POST",
-        body: JSON.stringify({ userId: targetUserId }),
-      }
-    );
-    refreshChannels();
-    return res;
-  };
-
   const batchAddChannelMembers = async (
     channelId: number,
     userIds: number[]
@@ -814,7 +795,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         openDirectMessage,
         switchDirectMessage,
         getChannelMembers,
-        addChannelMember,
         batchAddChannelMembers,
         removeChannelMember,
         leaveChannel,

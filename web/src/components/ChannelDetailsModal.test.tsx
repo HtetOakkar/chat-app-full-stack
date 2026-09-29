@@ -76,7 +76,6 @@ describe("ChannelDetailsModal", () => {
   ];
 
   const mockGetChannelMembers = jest.fn();
-  const mockAddChannelMember = jest.fn();
   const mockBatchAddChannelMembers = jest.fn();
   const mockRemoveChannelMember = jest.fn();
   const mockLeaveChannel = jest.fn();
@@ -93,7 +92,6 @@ describe("ChannelDetailsModal", () => {
     });
 
     mockGetChannelMembers.mockResolvedValue(mockChannelMembers);
-    mockAddChannelMember.mockResolvedValue({});
     mockBatchAddChannelMembers.mockResolvedValue({
       added: [103, 104],
       alreadyMembers: [],
@@ -112,7 +110,6 @@ describe("ChannelDetailsModal", () => {
       members: mockAllWorkspaceMembers,
       presenceMap: { 101: "ONLINE", 102: "OFFLINE", 103: "ONLINE" },
       getChannelMembers: mockGetChannelMembers,
-      addChannelMember: mockAddChannelMember,
       batchAddChannelMembers: mockBatchAddChannelMembers,
       removeChannelMember: mockRemoveChannelMember,
       leaveChannel: mockLeaveChannel,
@@ -260,7 +257,6 @@ describe("ChannelDetailsModal", () => {
       members: mockAllWorkspaceMembers,
       presenceMap: {},
       getChannelMembers: mockGetChannelMembers,
-      addChannelMember: mockAddChannelMember,
       batchAddChannelMembers: mockBatchAddChannelMembers,
       removeChannelMember: mockRemoveChannelMember,
       leaveChannel: mockLeaveChannel,
